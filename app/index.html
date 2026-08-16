@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Finca - Dashboard Administrativo</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+
+    <!-- SheetJS (Excel Parser) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+    <!-- App Styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dark-theme">
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- Layout Container -->
+    <div id="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header" style="text-align: center; margin-bottom: 2rem;">
+                <img src="public/logo.png" alt="La Finca Logo" style="max-width: 100%; height: auto; max-height: 120px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">
+            </div>
+
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-target="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-target="movimientos">
+                    <i data-lucide="arrow-right-left"></i>
+                    <span>Movimientos</span>
+                </a>
+                <a href="#" class="nav-item sub-nav-item" data-target="bodega-linea">
+                    <i data-lucide="list"></i>
+                    <span>Bodega Línea Temporal</span>
+                </a>
+                <a href="#" class="nav-item" data-target="compras">
+                    <i data-lucide="shopping-cart"></i>
+                    <span>Compras</span>
+                </a>
+                <a href="#" class="nav-item" data-target="ventas">
+                    <i data-lucide="dollar-sign"></i>
+                    <span>Ventas</span>
+                </a>
+                <a href="#" class="nav-item" data-target="recetas">
+                    <i data-lucide="chef-hat"></i>
+                    <span>Recetas</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="data-status" id="data-status">
+                    <div class="status-indicator red"></div>
+                    <span>Sin datos cargados</span>
+                </div>
+                <div style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-muted); text-align: center; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+                    Elaborado por: Eliana Garces 2026
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                    <button id="sidebar-toggle" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.5rem; margin-top: 0.2rem;">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <div class="header-title">
+                        <h1 id="current-view-title">Dashboard General</h1>
+                        <p class="subtitle" id="current-view-subtitle">Resumen ejecutivo del restaurante</p>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <span class="badge" style="margin-left:0; background-color: var(--bg-surface-solid); border: 1px solid var(--border-color); color: var(--text-secondary);">
+                                <i data-lucide="calendar" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;"></i>
+                                <span id="last-update-text">Actualizado hasta:</span>
+                            </span>
+                            <input type="date" id="global-end-date" class="form-control" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--bg-surface-solid); cursor: pointer;" title="Seleccionar fecha límite">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="header-actions">
+                    <label for="excel-upload" class="btn btn-primary" id="btn-upload">
+                        <i data-lucide="upload-cloud"></i>
+                        <span>Cargar Base de Datos</span>
+                    </label>
+                    <input type="file" id="excel-upload" accept=".xlsx, .xls" style="display: none;">
+                </div>
+            </header>
+
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="hidden">
+                <div class="spinner"></div>
+                <p>Procesando información...</p>
+            </div>
+
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view-section active">
+                <div class="empty-state" id="dashboard-empty">
+                    <i data-lucide="database"></i>
+                    <h3>No hay datos disponibles</h3>
+                    <p>Por favor, carga el archivo Excel de Conteo Bodega para visualizar la información.</p>
+                </div>
+
+                <div class="dashboard-content hidden" id="dashboard-data">
+                    <!-- KPIs -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                            <div class="kpi-tooltip">
+                                <strong>Costo Inventario Actual:</strong><br>
+                                Sumatoria del valor de todos los insumos que actualmente están en bodega. Se multiplica la cantidad en bodega (kg) por su último costo unitario de compra.
+                            </div>
+                            <div class="kpi-icon"><i data-lucide="boxes"></i></div>
+                            <div class="kpi-info">
+                                <h4>Costo Inventario Actual</h4>
+                                <h2 id="kpi-inventario">$0</h2>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                            <div class="kpi-tooltip">
+                                <strong>Ingresos:</strong><br>
+                                Es el dinero total que ha ingresado por la venta de platos en el rango de tiempo seleccionado, calculado multiplicando la cantidad de cada plato por su precio de venta.
+                            </div>
+                            <div class="kpi-icon"><i data-lucide="trending-up"></i></div>
+                            <div class="kpi-info">
+                                <h4>Ingresos (Mes a la fecha)</h4>
+                                <h2 id="kpi-ingresos">$0</h2>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                            <div class="kpi-tooltip">
+                                <strong>Total Compras:</strong><br>
+                                El gasto acumulado en compras de insumos para abastecer el restaurante, según las facturas de proveedores.
+                            </div>
+                            <div class="kpi-icon"><i data-lucide="shopping-bag"></i></div>
+                            <div class="kpi-info">
+                                <h4>Total Compras (Mes)</h4>
+                                <h2 id="kpi-compras">$0</h2>
+                                <p class="kpi-subtitle" id="kpi-compras-qty">0 compras</p>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                            <div class="kpi-tooltip">
+                                <strong>Margen Bruto Estimado:</strong><br>
+                                Calcula el % de ganancia neta estimada de las ventas menos el costo directo de los ingredientes (insumos) usados en esos platos.
+                            </div>
+                            <div class="kpi-icon"><i data-lucide="pie-chart"></i></div>
+                            <div class="kpi-info">
+                                <h4>Rentabilidad Bruta (Mes)</h4>
+                                <h2 id="kpi-rentabilidad">0%</h2>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="charts-grid">
+                        <div class="chart-card large">
+                            <div class="card-header">
+                                <h3>Tendencia Diaria: Ingresos vs Costo de Ventas</h3>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Category Cards -->
+                    <div class="section-title mt-4">
+                        <h3>Rendimiento y Costos por Categoría</h3>
+                    </div>
+                    <div class="kpi-grid" id="category-cards">
+                        <!-- Generated by JS -->
+                    </div>
+
+                    <!-- Insumos Table -->
+                    <div class="table-card mt-4" style="margin-bottom: 3rem;">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; position: relative;">
+                                <h3 style="margin: 0;">Rendimiento y Costos por Insumo</h3>
+                                <button id="btn-help-rendimiento" class="btn" style="background: transparent; border: none; padding: 4px; color: var(--text-muted); cursor: help; display: inline-flex; align-items: center; justify-content: center;" title="Explicación de rendimiento">
+                                    <i data-lucide="help-circle" style="width: 18px; height: 18px;"></i>
+                                </button>
+                                <div id="popover-rendimiento" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 8px; width: 340px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); z-index: 100; padding: 1rem; text-align: left; font-weight: normal; cursor: default;">
+                                    <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">¿Qué es el Rendimiento?</h4>
+                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                                        El rendimiento mide el porcentaje de un insumo que realmente se aprovecha al preparar un plato, descontando la merma (huesos, grasa, cáscaras, etc.) y las porciones que se pierden.
+                                    </p>
+                                    <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-primary); font-weight: 600;">
+                                        Fórmula: <span style="font-weight: normal; color: var(--text-secondary);">(Peso Útil / Peso Bruto) × 100</span>
+                                    </p>
+                                    <div style="background: var(--bg-surface-hover); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                        <strong style="font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 0.25rem;">Ejemplo Práctico:</strong>
+                                        <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+                                            Si compras <strong>10 Kg</strong> de lomo (Peso Bruto), pero después de limpiarlo y porcionarlo logras aprovechar solo <strong>8 Kg</strong> útiles para cocina. Tu rendimiento será del <strong>80%</strong>. El 20% restante es merma o desperdicio.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="filter-group" style="min-width: auto; flex-direction: row; align-items: center; gap: 1rem;">
+                                <input type="text" id="insumos-search" class="form-control" placeholder="Buscar insumo por nombre..." style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid); min-width: 200px;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <label style="margin: 0;">Categoría:</label>
+                                    <select id="insumos-category-filter" class="select-modern" style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid);">
+                                        <option value="ALL">Todas las Categorías</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="insumos-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-sort="categoria" style="cursor: pointer; user-select: none;">Categoría <i data-lucide="arrow-up-down" style="width: 12px; height:12px; opacity:0.5;"></i></th>
+                                        <th class="sortable" data-sort="insumo" style="cursor: pointer; user-select: none;">Insumo <i data-lucide="arrow-up-down" style="width: 12px; height:12px; opacity:0.5;"></i></th>
+                                        <th class="sortable" data-sort="stockKg" style="cursor: pointer; user-select: none;">Stock (Kg) <i data-lucide="arrow-up-down" style="width: 12px; height:12px; opacity:0.5;"></i></th>
+                                        <th class="sortable" data-sort="costoStock" style="cursor: pointer; user-select: none;">Costo Stock <i data-lucide="arrow-up-down" style="width: 12px; height:12px; opacity:0.5;"></i></th>
+                                        <th class="sortable" data-sort="ingresos" style="cursor: pointer; user-select: none;">Ingresos (Mes) <i data-lucide="arrow-up-down" style="width: 12px; height:12px; opacity:0.5;"></i></th>
+                                        <th class="sortable" data-sort="platos" style="cursor: pointer; user-select: none;">Platos Vendidos <i data-lucide="arrow-up-down" style="width: 12px; height:12px; opacity:0.5;"></i></th>
+                                        <th class="sortable" data-sort="rendimiento" style="cursor: pointer; user-select: none;">Rendimiento <i data-lucide="arrow-up-down" style="width: 12px; height:12px; opacity:0.5;"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Rows generated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="pagination-controls" style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 1.5rem;">
+                            <button id="insumos-prev-page" class="btn" style="padding: 0.4rem 0.8rem; background: var(--bg-surface-hover); color: var(--text-primary); border: 1px solid var(--border-color);">Anterior</button>
+                            <span id="insumos-page-info" style="font-size: 0.875rem; color: var(--text-secondary);">Página 1 de 1</span>
+                            <button id="insumos-next-page" class="btn" style="padding: 0.4rem 0.8rem; background: var(--bg-surface-hover); color: var(--text-primary); border: 1px solid var(--border-color);">Siguiente</button>
+                        </div>
+                    </div>
+
+                    <!-- Recent Table -->
+                    <div class="table-card">
+                        <div class="card-header">
+                            <h3>Histórico Reciente de Movimientos (Último Día)</h3>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="dashboard-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Categoría</th>
+                                        <th>Insumo</th>
+                                        <th>Estado</th>
+                                        <th>Bodega (Kg)</th>
+                                        <th>Consumo/Merma</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Rows generated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Movimientos View -->
+            <section id="view-movimientos" class="view-section">
+                <div class="empty-state" id="movimientos-empty">
+                    <i data-lucide="database"></i>
+                    <h3>No hay datos disponibles</h3>
+                    <p>Por favor, carga el archivo Excel para utilizar los filtros de movimientos.</p>
+                </div>
+
+                <div class="movimientos-content hidden" id="movimientos-data">
+                    
+                    <!-- Filters -->
+                    <div class="filters-bar glass-panel">
+                        <div class="filter-group">
+                            <label>Fecha</label>
+                            <select id="filter-fecha" class="select-modern"></select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Categoría</label>
+                            <select id="filter-categoria" class="select-modern">
+                                <option value="ALL">Todas las Categorías</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Insumo</label>
+                            <select id="filter-insumo" class="select-modern">
+                                <option value="ALL">Todos los Insumos</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="insumo-details" class="hidden">
+                        <!-- Initial State -->
+                        <div class="section-title">
+                            <h3>Estado Inicial <span class="badge" id="badge-fecha-inicial"></span></h3>
+                        </div>
+                        <div class="kpi-grid mini">
+                            <div class="kpi-card mini-card">
+                                <h5>Stock Inicial (Porciones)</h5>
+                                <h3 id="mov-ini-porc">0</h3>
+                            </div>
+                            <div class="kpi-card mini-card">
+                                <h5>Peso Porciones (Kg)</h5>
+                                <h3 id="mov-ini-peso-porc">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card">
+                                <h5>Stock Sin Porcionar (Kg)</h5>
+                                <h3 id="mov-ini-sin-porc">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card highlight">
+                                <h5>Total en Bodega (Kg)</h5>
+                                <h3 id="mov-ini-total">0.00</h3>
+                            </div>
+                        </div>
+
+                        <!-- Movements Totals -->
+                        <div class="section-title mt-4">
+                            <h3>Totalización de Movimientos del Día</h3>
+                        </div>
+                        <div class="kpi-grid mini">
+                            <div class="kpi-card mini-card error">
+                                <h5>Porciones a Cocina</h5>
+                                <h3 id="mov-tot-out-porc">0</h3>
+                            </div>
+                            <div class="kpi-card mini-card error">
+                                <h5>Peso a Cocina (Kg)</h5>
+                                <h3 id="mov-tot-out-peso">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card success">
+                                <h5>Devueltas a Bodega</h5>
+                                <h3 id="mov-tot-in-porc">0</h3>
+                            </div>
+                            <div class="kpi-card mini-card success">
+                                <h5>Peso Devueltas (Kg)</h5>
+                                <h3 id="mov-tot-in-peso">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card info">
+                                <h5>Ingreso Compra Día (Kg)</h5>
+                                <h3 id="mov-tot-ingreso">0.00</h3>
+                            </div>
+                        </div>
+
+                        <!-- Final State -->
+                        <div class="section-title mt-4">
+                            <h3>Estado Final (Inventario Actualizado en Bodega) <span class="badge" id="badge-fecha-final"></span></h3>
+                        </div>
+                        <div class="kpi-grid mini">
+                            <div class="kpi-card mini-card">
+                                <h5>Stock Final (Porciones)</h5>
+                                <h3 id="mov-fin-porc">0</h3>
+                            </div>
+                            <div class="kpi-card mini-card">
+                                <h5>Peso Porciones (Kg)</h5>
+                                <h3 id="mov-fin-peso-porc">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card">
+                                <h5>Stock Sin Porcionar (Kg)</h5>
+                                <h3 id="mov-fin-sin-porc">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card highlight">
+                                <h5>Total en Bodega (Kg)</h5>
+                                <h3 id="mov-fin-total">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card warning">
+                                <h5>Stock Mínimo (Kg)</h5>
+                                <h3 id="mov-fin-min">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card" id="mov-estado-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                                <h5>Estado de Bodega</h5>
+                                <div id="mov-estado-icon" style="margin-top: 0.5rem; display: flex; align-items: center; justify-content: center;"></div>
+                                <h4 id="mov-estado-text" style="margin-top: 0.5rem; font-size: 0.9rem;">-</h4>
+                            </div>
+                        </div>
+
+                        <!-- Estado Cocina -->
+                        <div class="section-title mt-4">
+                            <h3>Estado Cocina (Balance del Día) <span class="badge" id="badge-cocina-fecha"></span></h3>
+                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Porciones y Kgs de insumo que sobraron en la cocina durante el día seleccionado.</p>
+                        </div>
+                        <div class="kpi-grid mini">
+                            <div class="kpi-card mini-card info">
+                                <h5>Stock Actual Cocina (Porciones)</h5>
+                                <h3 id="mov-cocina-porc">0</h3>
+                            </div>
+                            <div class="kpi-card mini-card info">
+                                <h5>Peso Actual Cocina (Kg)</h5>
+                                <h3 id="mov-cocina-peso">0.00</h3>
+                            </div>
+                            <div class="kpi-card mini-card" style="border: 1px dashed var(--border-color);">
+                                <h5>Porciones Vendidas del Día</h5>
+                                <h3 id="mov-cocina-vendidas">0</h3>
+                            </div>
+                            <div class="kpi-card mini-card" style="border: 1px dashed var(--border-color);">
+                                <h5>Peso Vendido del Día (Kg)</h5>
+                                <h3 id="mov-cocina-peso-vendido">0.00</h3>
+                            </div>
+                        </div>
+
+                        <!-- Timeline Table -->
+                        <div class="table-card mt-4">
+                            <div class="card-header">
+                                <h3>Línea de Tiempo del Insumo</h3>
+                            </div>
+                            <div class="table-container">
+                                <table class="data-table" id="movimientos-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Estado / Tipo de Corte</th>
+                                            <th>Bodega Total (Kg)</th>
+                                            <th>Porciones Bodega</th>
+                                            <th>A Cocina (Porc)</th>
+                                            <th>Devueltas (Porc)</th>
+                                            <th>Consumo / Merma</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Rows generated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="movimientos-select-prompt" class="empty-state mini">
+                        <i data-lucide="mouse-pointer-click"></i>
+                        <h4>Selecciona un insumo específico para ver sus detalles</h4>
+                    </div>
+                </div>
+            </section>
+            <!-- =========================
+                 VISTA: COMPRAS
+            ========================== -->
+            <section id="view-compras" class="view-section">
+                
+                <!-- Filtros de Compras -->
+                <div class="filters-bar" style="display: flex; gap: 1rem; margin-bottom: 2rem; background: var(--bg-surface); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="compras-fecha-inicio" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Desde:</label>
+                        <input type="date" id="compras-fecha-inicio" class="date-picker">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="compras-fecha-fin" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Hasta (opcional para buscar 1 día):</label>
+                        <input type="date" id="compras-fecha-fin" class="date-picker">
+                    </div>
+                    <button id="compras-btn-filtrar" class="btn btn-primary" style="margin-left: auto;">
+                        <i data-lucide="filter"></i> Filtrar
+                    </button>
+                    <button id="compras-btn-limpiar" class="btn btn-secondary">
+                        Limpiar Filtro
+                    </button>
+                </div>
+
+                <!-- TAGS DE DIAS CON COMPRAS -->
+                <div style="margin-bottom: 2rem;">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                        <i data-lucide="calendar" style="width: 14px; height: 14px; margin-right: 4px; display: inline-block; vertical-align: middle;"></i>
+                        O selecciona un día específico en el que efectivamente hubo compras registradas:
+                    </p>
+                    <div id="compras-date-tags" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <!-- Inserted by JS -->
+                    </div>
+                </div>
+
+                <!-- KPIs Compras -->
+                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 2rem;">
+                    
+                    <div class="kpi-card highlight">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip">
+                            <strong>Total Invertido en Insumos/Carnes:</strong><br>
+                            Muestra el monto total de dinero desembolsado para pagar todas las facturas de proveedores por concepto de carnes e insumos en las fechas seleccionadas.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="dollar-sign"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Total Invertido en Insumos/Carnes</h4>
+                            <h2 id="kpi-compras-total">$0</h2>
+                            <p class="kpi-subtitle">Dinero pagado</p>
+                        </div>
+                    </div>
+                    
+                    <div class="kpi-card">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip">
+                            <strong>Peso Total Comprado (Kg):</strong><br>
+                            Suma absolutamente todos los kilogramos (Kg) de carnes y materia prima que te entregaron tus proveedores en el rango de fechas.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="package"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Peso Total Comprado (Kg)</h4>
+                            <h2 id="kpi-compras-items">0</h2>
+                            <p class="kpi-subtitle">Kg ingresados por factura</p>
+                        </div>
+                    </div>
+                    
+                    <div class="kpi-card">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip">
+                            <strong>Peso en Bodega (Último Día):</strong><br>
+                            Te dice cuántos kilogramos totales había físicamente en la bodega en la última fecha del rango que seleccionaste.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="archive"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Peso Total en Bodega (Kg)</h4>
+                            <h2 id="kpi-bodega-peso">0</h2>
+                            <p class="kpi-subtitle">Stock físico</p>
+                        </div>
+                    </div>
+                    
+                    <div class="kpi-card">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip">
+                            <strong>Total de Insumos Porcionados:</strong><br>
+                            Suma la cantidad total de "Porciones" (cortes, unidades) que se armaron y entregaron a la cocina durante estas fechas.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="scissors"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Total Insumos Porcionados</h4>
+                            <h2 id="kpi-bodega-porciones">0</h2>
+                            <p class="kpi-subtitle">Unidades entregadas</p>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip" style="width: 250px; left: -100px;">
+                            <strong>Ticket Promedio (Explicación):</strong><br>
+                            Imagínate que vas 5 veces al mes al supermercado y en total gastas $500. Tu "Ticket Promedio" sería $100.<br><br>
+                            Este número te dice <strong>cuánto sueles gastar normalmente cada vez que haces un pedido</strong> a tus proveedores de carne.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="receipt"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Ticket Promedio de Compra</h4>
+                            <h2 id="kpi-compras-ticket">$0</h2>
+                            <p class="kpi-subtitle">Gasto promedio por pedido</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Tarjetas por Categoría -->
+                <div class="card-header">
+                    <h3>Gasto por Categoría</h3>
+                </div>
+                <div id="compras-category-cards" class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin-bottom: 2rem;">
+                    <!-- Insertadas por JS -->
+                </div>
+
+                <!-- Tabla de Compras -->
+                <div class="table-card">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <h3>Registro Detallado de Compras</h3>
+                        <div class="filter-group" style="min-width: auto; flex-direction: row; align-items: center; gap: 1rem;">
+                            <input type="text" id="compras-table-search" class="form-control" placeholder="Buscar insumo por nombre..." style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid); min-width: 200px;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label style="margin: 0;">Categoría:</label>
+                                <select id="compras-table-category" class="form-control" style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid);">
+                                    <option value="ALL">Todas las Categorías</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="tabla-compras">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-sort="fecha" style="cursor:pointer;">Fecha <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="categoria" style="cursor:pointer;">Categoría <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="insumo" style="cursor:pointer;">Insumo Comprado <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="cantidad" style="cursor:pointer;">Cantidad (Kg) <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="costoUnitario" style="cursor:pointer;">Costo Unit. <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="total" style="cursor:pointer;">Total <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Insertadas por JS -->
+                            </tbody>
+                            <tfoot>
+                                <tr style="background-color: var(--bg-surface-hover); font-weight: 600;">
+                                    <td colspan="3" style="text-align: right; padding: 1rem;">Total Compras:</td>
+                                    <td id="compras-footer-cantidad" style="padding: 1rem;">0</td>
+                                    <td></td>
+                                    <td id="compras-footer-total" style="padding: 1rem; color: var(--danger);">$0</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación -->
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 1rem;">
+                        <span id="compras-page-info" style="font-size: 0.875rem; color: var(--text-secondary);">Página 1 de 1</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button id="compras-prev-page" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" disabled><i data-lucide="chevron-left"></i></button>
+                            <button id="compras-next-page" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" disabled><i data-lucide="chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- =========================
+                 VISTA: VENTAS
+            ========================== -->
+            <section id="view-ventas" class="view-section">
+                <!-- Filtros de Ventas -->
+                <div class="filters-bar" style="display: flex; gap: 1rem; margin-bottom: 2rem; background: var(--bg-surface); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="ventas-fecha-inicio" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Desde:</label>
+                        <input type="date" id="ventas-fecha-inicio" class="date-picker">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="ventas-fecha-fin" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Hasta (opcional para buscar 1 día):</label>
+                        <input type="date" id="ventas-fecha-fin" class="date-picker">
+                    </div>
+                    <button id="ventas-btn-filtrar" class="btn btn-primary" style="margin-left: auto;">
+                        <i data-lucide="filter"></i> Filtrar
+                    </button>
+                    <button id="ventas-btn-limpiar" class="btn btn-secondary">
+                        Limpiar Filtro
+                    </button>
+                </div>
+
+                <!-- TAGS DE DIAS CON VENTAS -->
+                <div style="margin-bottom: 2rem;">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                        <i data-lucide="calendar" style="width: 14px; height: 14px; margin-right: 4px; display: inline-block; vertical-align: middle;"></i>
+                        O selecciona un día específico en el que hubo ventas:
+                    </p>
+                    <div id="ventas-date-tags" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <!-- Inserted by JS -->
+                    </div>
+                </div>
+
+                <!-- KPIs Ventas -->
+                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 2rem;">
+                    
+                    <div class="kpi-card highlight">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip">
+                            <strong>Total Ingresos:</strong><br>
+                            Monto total generado por la venta de todos los platos en el rango de tiempo seleccionado.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="dollar-sign"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Total Ingresos</h4>
+                            <h2 id="kpi-ventas-total">$0</h2>
+                            <p class="kpi-subtitle">Dinero recaudado</p>
+                        </div>
+                    </div>
+                    
+                    <div class="kpi-card">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip">
+                            <strong>Platos Vendidos:</strong><br>
+                            Cantidad total de unidades (platos) vendidas en el periodo de tiempo.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="utensils"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Platos Vendidos</h4>
+                            <h2 id="kpi-ventas-items">0</h2>
+                            <p class="kpi-subtitle">Total de porciones vendidas</p>
+                        </div>
+                    </div>
+                    
+                    <div class="kpi-card">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip">
+                            <strong>Ticket Promedio:</strong><br>
+                            Monto promedio de venta por cada plato o unidad vendida.
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="receipt"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Ticket Promedio (Por Plato)</h4>
+                            <h2 id="kpi-ventas-ticket">$0</h2>
+                            <p class="kpi-subtitle">Ingreso promedio unitario</p>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <button class="kpi-info-btn" onclick="this.nextElementSibling.classList.toggle('show')"><i data-lucide="help-circle"></i></button>
+                        <div class="kpi-tooltip" style="width: 250px; left: -100px;">
+                            <strong>Rentabilidad Bruta:</strong><br>
+                            Calcula el porcentaje de ganancias que queda luego de restar el costo del insumo de la venta obtenida.<br><br>
+                            Rentabilidad = (Ingresos - Costos Insumos) / Ingresos
+                        </div>
+                        <div class="kpi-icon"><i data-lucide="percent"></i></div>
+                        <div class="kpi-info">
+                            <h4 style="font-size: 0.8rem;">Rentabilidad Bruta</h4>
+                            <h2 id="kpi-ventas-rentabilidad">0%</h2>
+                            <p class="kpi-subtitle">Margen sobre insumos</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Tarjetas por Categoría -->
+                <div class="card-header">
+                    <h3>Ingresos por Categoría</h3>
+                </div>
+                <div id="ventas-category-cards" class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin-bottom: 2rem;">
+                    <!-- Insertadas por JS -->
+                </div>
+
+                <!-- Tabla de Ventas -->
+                <div class="table-card">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <h3>Registro Detallado de Ventas</h3>
+                        <div class="filter-group" style="min-width: auto; flex-direction: row; align-items: center; gap: 1rem;">
+                            <input type="text" id="ventas-table-search" class="form-control" placeholder="Buscar plato..." style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid); min-width: 200px;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label style="margin: 0;">Categoría:</label>
+                                <select id="ventas-table-category" class="form-control" style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid);">
+                                    <option value="ALL">Todas las Categorías</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="tabla-ventas">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-sort="fecha" style="cursor:pointer;">Fecha <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="categoria" style="cursor:pointer;">Categoría <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="plato" style="cursor:pointer;">Plato Vendido <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="cantPlatos" style="cursor:pointer;">Cant. Platos <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="costoInsumo" style="cursor:pointer;">Costo Insumos <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="ingreso" style="cursor:pointer;">Ingreso Total <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Insertadas por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación -->
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 1rem;">
+                        <span id="ventas-page-info" style="font-size: 0.875rem; color: var(--text-secondary);">Página 1 de 1</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button id="ventas-prev-page" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" disabled><i data-lucide="chevron-left"></i></button>
+                            <button id="ventas-next-page" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" disabled><i data-lucide="chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- =========================
+                 VISTA: RECETAS
+            ========================== -->
+            <section id="view-recetas" class="view-section">
+                
+                <!-- Filtros de Recetas -->
+                <div class="filters-bar" style="display: flex; gap: 1rem; margin-bottom: 2rem; background: var(--bg-surface); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+                        <i data-lucide="search" style="color: var(--text-muted); width: 18px;"></i>
+                        <input type="text" id="recetas-search" class="form-control" placeholder="Buscar plato por nombre..." style="flex: 1; max-width: 400px; padding: 0.5rem;">
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="recetas-category" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Filtrar por Carne:</label>
+                        <select id="recetas-category" class="form-control" style="min-width: 150px;">
+                            <option value="ALL">Todas</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Grid de Recetas -->
+                <div id="recetas-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                    <!-- Inserted by JS -->
+                </div>
+            </section>
+            <!-- =========================
+                 VISTA: BODEGA LÍNEA TEMPORAL
+            ========================== -->
+            <section id="view-bodega-linea" class="view-section">
+                
+                <!-- Filtros Bodega Linea -->
+                <div class="filters-bar" style="display: flex; gap: 1rem; margin-bottom: 0.5rem; background: var(--bg-surface); padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="bl-fecha-inicio" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Desde:</label>
+                        <input type="date" id="bl-fecha-inicio" class="date-picker">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="bl-fecha-fin" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Hasta (opcional):</label>
+                        <input type="date" id="bl-fecha-fin" class="date-picker">
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="bl-tipo" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Tipo:</label>
+                        <select id="bl-tipo" class="form-control" style="min-width: 150px;">
+                            <option value="ALL">Todos los Tipos</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="bl-insumo" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Insumo:</label>
+                        <select id="bl-insumo" class="form-control" style="min-width: 150px;">
+                            <option value="ALL">Todos los Insumos</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; position: relative;" id="bl-tipo-mov-container">
+                        <label for="bl-tipo-movimiento" style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600;">Movimiento:</label>
+                        <select id="bl-tipo-movimiento" class="form-control" style="min-width: 130px;">
+                            <option value="ALL">Todos</option>
+                            <option value="INICIAL">Inicial</option>
+                            <option value="ENTRADA">Entrada</option>
+                            <option value="SALIDA">Salida</option>
+                            <option value="DEVOLUCION">Devolución</option>
+                            <option value="FINAL">Final</option>
+                        </select>
+                        <button id="bl-btn-help" class="btn" style="background: transparent; border: none; padding: 4px; color: var(--text-muted); cursor: help; display: flex; align-items: center; justify-content: center;" title="Explicación de estados">
+                            <i data-lucide="help-circle" style="width: 18px; height: 18px;"></i>
+                        </button>
+                        
+                        <div id="bl-help-popover" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 8px; width: 300px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); z-index: 100; padding: 1rem;">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Estados de Movimiento</h4>
+                            <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.85rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.5rem;">
+                                <li><strong style="color: #4f46e5;">INICIAL:</strong> Inventario inicial del insumo.</li>
+                                <li><strong style="color: #059669;">ENTRADA:</strong> Compras o ingresos a bodega.</li>
+                                <li><strong style="color: #dc2626;">SALIDA:</strong> Entregas de insumos a cocina.</li>
+                                <li><strong style="color: #d97706;">DEVOLUCION:</strong> Retornos de cocina hacia bodega.</li>
+                                <li><strong style="color: #4b5563;">FINAL:</strong> Inventario de cierre al final del día.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <button id="bl-btn-filtrar" class="btn btn-primary" style="margin-left: auto;">
+                        <i data-lucide="filter"></i> Filtrar
+                    </button>
+                    <button id="bl-btn-limpiar" class="btn btn-secondary">
+                        Limpiar Filtro
+                    </button>
+                    <button id="bl-btn-toggle-view" class="btn btn-secondary" style="background: var(--bg-surface-hover); color: var(--text-primary); border-color: var(--border-color);">
+                        <i data-lucide="table"></i> <span id="bl-toggle-text">Vista Horizontal</span>
+                    </button>
+                </div>
+                <!-- Data Table -->
+                <div class="card" style="padding: 0.5rem;">
+                    <!-- Scroll superior horizontal -->
+                    <div id="bl-top-scroll" style="width: 100%; overflow-x: scroll; overflow-y: hidden; height: 18px; margin-bottom: 5px;">
+                        <div id="bl-top-scroll-content" style="height: 18px;"></div>
+                    </div>
+                    <!-- Unificamos el contenedor de scroll X e Y para que los sticky headers funcionen correctamente -->
+                    <div id="bl-table-container" style="width: 100%; max-height: calc(100vh - 280px); overflow: auto; position: relative;">
+                        <table class="data-table" id="bodega-linea-table">
+                            <thead>
+                                <!-- Insertadas por JS -->
+                            </thead>
+                            <tbody>
+                                <!-- Insertadas por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación Bodega Línea -->
+                    <div class="pagination-controls" style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 1.5rem;">
+                        <button id="bl-prev-page" class="btn" style="padding: 0.4rem 0.8rem; background: var(--bg-surface-hover); color: var(--text-primary); border: 1px solid var(--border-color);">Anterior</button>
+                        <span id="bl-page-info" style="font-size: 0.875rem; color: var(--text-secondary);">Página 1 de 1</span>
+                        <button id="bl-next-page" class="btn" style="padding: 0.4rem 0.8rem; background: var(--bg-surface-hover); color: var(--text-primary); border: 1px solid var(--border-color);">Siguiente</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/lucide-icons.js?v=2"></script>
+    <script src="js/excelParser.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/movimientos.js"></script>
+    <script src="js/bodega-linea.js"></script>
+    <script src="js/compras.js"></script>
+    <script src="js/ventas.js"></script>
+    <script src="js/recetas.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
