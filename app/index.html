@@ -20,6 +20,9 @@
     <!-- SheetJS (Excel Parser) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <!-- App Styles -->
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -37,7 +40,11 @@
 
             
             <nav class="sidebar-nav">
-                <a href="#" class="nav-item active" data-target="dashboard">
+                <a href="#" class="nav-item active" data-target="bodeguero" style="background: linear-gradient(90deg, rgba(249, 115, 22, 0.15), transparent); border-left: 3px solid var(--accent-primary);">
+                    <i data-lucide="boxes" style="color: var(--accent-primary);"></i>
+                    <span style="font-weight: 700;">Terminal Bodega</span>
+                </a>
+                <a href="#" class="nav-item" data-target="dashboard">
                     <i data-lucide="layout-dashboard"></i>
                     <span>Dashboard</span>
                 </a>
@@ -95,11 +102,10 @@
                 </div>
                 
                 <div class="header-actions">
-                    <label for="excel-upload" class="btn btn-primary" id="btn-upload">
-                        <i data-lucide="upload-cloud"></i>
-                        <span>Cargar Base de Datos</span>
-                    </label>
-                    <input type="file" id="excel-upload" accept=".xlsx, .xls" style="display: none;">
+                    <button type="button" class="btn btn-secondary" id="btn-sync-db" style="background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem;">
+                        <i data-lucide="refresh-cw"></i>
+                        <span>Sincronizar Datos</span>
+                    </button>
                 </div>
             </header>
 
@@ -109,15 +115,322 @@
                 <p>Procesando información...</p>
             </div>
 
-            <!-- Dashboard View -->
-            <section id="view-dashboard" class="view-section active">
-                <div class="empty-state" id="dashboard-empty">
-                    <i data-lucide="database"></i>
-                    <h3>No hay datos disponibles</h3>
-                    <p>Por favor, carga el archivo Excel de Conteo Bodega para visualizar la información.</p>
-                </div>
+            <!-- 1. NUEVA VISTA OPERATIVA: TERMINAL BODEGUERO -->
+            <section id="view-bodeguero" class="view-section active">
+                <div class="bodeguero-container">
+                    <!-- Panel de Operaciones Rápidas (4 Movimientos Clave) -->
+                    <div class="bodeguero-ops-panel">
+                        <div class="bodeguero-op-tabs">
+                            <div class="bodeguero-op-tab tab-compra active" data-tab="entrada-compra">
+                                <i data-lucide="plus-circle"></i>
+                                <span>1. Entrada por Compra</span>
+                            </div>
+                            <div class="bodeguero-op-tab tab-porc" data-tab="porcionado">
+                                <i data-lucide="scissors"></i>
+                                <span>2. Porcionado y Pesado</span>
+                            </div>
+                            <div class="bodeguero-op-tab tab-traslado" data-tab="traslado-cocina">
+                                <i data-lucide="arrow-right-circle"></i>
+                                <span>3. Traslado a Cocina</span>
+                            </div>
+                            <div class="bodeguero-op-tab tab-devolucion" data-tab="devolucion-cocina">
+                                <i data-lucide="corner-down-left"></i>
+                                <span>4. Devolución de Cocina</span>
+                            </div>
+                        </div>
 
-                <div class="dashboard-content hidden" id="dashboard-data">
+                        <!-- Formulario 1: Entrada por Compra -->
+                        <div class="bodeguero-op-form active" id="form-entrada-compra">
+                            <!-- Fila completa prominente para el buscador -->
+                            <div class="form-search-row">
+                                <label for="comp-search-input" style="display: block; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.5rem; color: #1e293b;">
+                                    Buscar Carne / Insumo a Ingresar *
+                                </label>
+                                <div class="smart-search-container" id="comp-smart-search">
+                                    <div class="smart-search-input-wrapper">
+                                        <i data-lucide="search" class="smart-search-icon"></i>
+                                        <input type="text" id="comp-search-input" class="form-control smart-search-input" placeholder="Escribe para buscar carne o insumo (ej. Lomo viche, Punta de anca, Costilla, Pollo, Cerdo)..." autocomplete="off">
+                                        <button type="button" class="smart-search-clear" id="comp-search-clear" title="Limpiar selección">&times;</button>
+                                    </div>
+                                    <input type="hidden" id="comp-insumo" value="">
+                                    <div class="smart-search-dropdown" id="comp-search-dropdown"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row-grid">
+                                <div class="form-group">
+                                    <label for="comp-proveedor">Proveedor</label>
+                                    <input type="text" id="comp-proveedor" class="form-control" placeholder="Ej. Frigorífico Central">
+                                </div>
+                                <div class="form-group">
+                                    <label for="comp-factura">Nº Factura / Remisión</label>
+                                    <input type="text" id="comp-factura" class="form-control" placeholder="Ej. FAC-9821">
+                                </div>
+                                <div class="form-group">
+                                    <label for="comp-cant-kg">Cantidad Recibida (Kg) *</label>
+                                    <input type="number" step="0.01" min="0.01" id="comp-cant-kg" class="form-control" placeholder="0.00">
+                                </div>
+                                <div class="form-group">
+                                    <label for="comp-costo-total">Costo Total Factura ($ COP) *</label>
+                                    <input type="number" step="100" min="100" id="comp-costo-total" class="form-control" placeholder="Ej. 650000">
+                                </div>
+                                <div class="form-group">
+                                    <label for="comp-obs">Observaciones</label>
+                                    <input type="text" id="comp-obs" class="form-control" placeholder="Notas de recepción">
+                                </div>
+                            </div>
+
+                            <div class="preview-box" id="comp-preview-box">
+                                <div class="preview-placeholder">Escribe y selecciona un insumo arriba para ver la proyección del movimiento.</div>
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button type="button" class="btn btn-primary" id="btn-submit-compra" style="padding: 0.75rem 1.75rem; font-size: 1rem; background: #3b82f6;">
+                                    <i data-lucide="plus-circle"></i>
+                                    <span>Registrar Ingreso a Bodega</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Formulario 2: Porcionado y Pesado -->
+                        <div class="bodeguero-op-form" id="form-porcionado">
+                            <!-- Fila completa prominente para el buscador -->
+                            <div class="form-search-row">
+                                <label for="porc-search-input" style="display: block; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.5rem; color: #1e293b;">
+                                    Buscar Carne a Procesar y Porcionar *
+                                </label>
+                                <div class="smart-search-container" id="porc-smart-search">
+                                    <div class="smart-search-input-wrapper">
+                                        <i data-lucide="search" class="smart-search-icon"></i>
+                                        <input type="text" id="porc-search-input" class="form-control smart-search-input" placeholder="Escribe para buscar carne a porcionar (ej. Lomo viche, Punta de anca, Churrasco, Panceta)..." autocomplete="off">
+                                        <button type="button" class="smart-search-clear" id="porc-search-clear" title="Limpiar selección">&times;</button>
+                                    </div>
+                                    <input type="hidden" id="porc-insumo" value="">
+                                    <div class="smart-search-dropdown" id="porc-search-dropdown"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row-grid">
+                                <div class="form-group">
+                                    <label for="porc-kg-procesar">Kg de Pieza Entera a Procesar *</label>
+                                    <input type="number" step="0.01" min="0.01" id="porc-kg-procesar" class="form-control" placeholder="Ej. 10.50">
+                                </div>
+                                <div class="form-group">
+                                    <label for="porc-unds-obtenidas">Porciones Obtenidas (Unidades) *</label>
+                                    <input type="number" step="1" min="1" id="porc-unds-obtenidas" class="form-control" placeholder="Ej. 28">
+                                </div>
+                                <div class="form-group">
+                                    <label for="porc-peso-obtenido">Peso Total Porciones (Kg) *</label>
+                                    <input type="number" step="0.01" min="0.01" id="porc-peso-obtenido" class="form-control" placeholder="Ej. 9.80">
+                                </div>
+                                <div class="form-group">
+                                    <label for="porc-obs">Observaciones / Motivo de merma</label>
+                                    <input type="text" id="porc-obs" class="form-control" placeholder="Ej. Grasa y recorte no utilizable">
+                                </div>
+                            </div>
+
+                            <div class="preview-box" id="porc-preview-box">
+                                <div class="preview-placeholder">Escribe y selecciona la carne arriba para calcular rendimiento y merma.</div>
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button type="button" class="btn btn-primary" id="btn-submit-porcionado" style="padding: 0.75rem 1.75rem; font-size: 1rem; background: #a855f7;">
+                                    <i data-lucide="scissors"></i>
+                                    <span>Guardar Porcionado y Merma</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Formulario 3: Traslado a Cocina -->
+                        <div class="bodeguero-op-form" id="form-traslado-cocina">
+                            <!-- Fila completa prominente para el buscador -->
+                            <div class="form-search-row">
+                                <label for="tras-search-input" style="display: block; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.5rem; color: #1e293b;">
+                                    Buscar Carne / Insumo a Despachar a Cocina *
+                                </label>
+                                <div class="smart-search-container" id="tras-smart-search">
+                                    <div class="smart-search-input-wrapper">
+                                        <i data-lucide="search" class="smart-search-icon"></i>
+                                        <input type="text" id="tras-search-input" class="form-control smart-search-input" placeholder="Escribe para buscar insumo o porciones a despachar a cocina..." autocomplete="off">
+                                        <button type="button" class="smart-search-clear" id="tras-search-clear" title="Limpiar selección">&times;</button>
+                                    </div>
+                                    <input type="hidden" id="tras-insumo" value="">
+                                    <div class="smart-search-dropdown" id="tras-search-dropdown"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row-grid">
+                                <div class="form-group">
+                                    <label for="tras-tipo">Tipo de Entrega *</label>
+                                    <select id="tras-tipo" class="form-control">
+                                        <option value="PORCIONES">Porciones Listas (Unidades)</option>
+                                        <option value="ENTERO">Pieza Entera / Sin Porcionar (Kg)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="tras-cant-group">
+                                    <label for="tras-cantidad">Número de Porciones *</label>
+                                    <input type="number" step="1" min="1" id="tras-cantidad" class="form-control" placeholder="Ej. 15">
+                                </div>
+                                <div class="form-group">
+                                    <label for="tras-peso-kg" id="lbl-tras-peso">Peso total entregado (Kg) *</label>
+                                    <input type="number" step="0.01" min="0.01" id="tras-peso-kg" class="form-control" placeholder="Ej. 5.25">
+                                </div>
+                                <div class="form-group">
+                                    <label for="tras-obs">Observaciones</label>
+                                    <input type="text" id="tras-obs" class="form-control" placeholder="Ej. Turno Almuerzo">
+                                </div>
+                            </div>
+
+                            <div class="preview-box" id="tras-preview-box">
+                                <div class="preview-placeholder">Escribe y selecciona el insumo arriba para ver la proyección del traslado.</div>
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button type="button" class="btn btn-primary" id="btn-submit-traslado" style="padding: 0.75rem 1.75rem; font-size: 1rem; background: #f97316;">
+                                    <i data-lucide="arrow-right-circle"></i>
+                                    <span>Despachar a Cocina</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Formulario 4: Devolución de Cocina -->
+                        <div class="bodeguero-op-form" id="form-devolucion-cocina">
+                            <!-- Fila completa prominente para el buscador -->
+                            <div class="form-search-row">
+                                <label for="dev-search-input" style="display: block; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.5rem; color: #1e293b;">
+                                    Buscar Carne / Insumo Devuelto por Cocina *
+                                </label>
+                                <div class="smart-search-container" id="dev-smart-search">
+                                    <div class="smart-search-input-wrapper">
+                                        <i data-lucide="search" class="smart-search-icon"></i>
+                                        <input type="text" id="dev-search-input" class="form-control smart-search-input" placeholder="Escribe para buscar carne o porciones que regresan a bodega..." autocomplete="off">
+                                        <button type="button" class="smart-search-clear" id="dev-search-clear" title="Limpiar selección">&times;</button>
+                                    </div>
+                                    <input type="hidden" id="dev-insumo" value="">
+                                    <div class="smart-search-dropdown" id="dev-search-dropdown"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row-grid">
+                                <div class="form-group">
+                                    <label for="dev-tipo">Tipo de Devolución *</label>
+                                    <select id="dev-tipo" class="form-control">
+                                        <option value="PORCIONES">Porciones Listas (Unidades)</option>
+                                        <option value="ENTERO">Pieza Entera (Kg)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="dev-cant-group">
+                                    <label for="dev-cantidad">Número de Porciones Devueltas *</label>
+                                    <input type="number" step="1" min="1" id="dev-cantidad" class="form-control" placeholder="Ej. 4">
+                                </div>
+                                <div class="form-group">
+                                    <label for="dev-peso-kg" id="lbl-dev-peso">Peso devuelto a bodega (Kg) *</label>
+                                    <input type="number" step="0.01" min="0.01" id="dev-peso-kg" class="form-control" placeholder="Ej. 1.40">
+                                </div>
+                                <div class="form-group">
+                                    <label for="dev-obs">Motivo de Devolución</label>
+                                    <input type="text" id="dev-obs" class="form-control" placeholder="Ej. Sobrante cierre de turno noche">
+                                </div>
+                            </div>
+
+                            <div class="preview-box" id="dev-preview-box">
+                                <div class="preview-placeholder">Escribe y selecciona el insumo arriba para ver el reingreso a bodega.</div>
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button type="button" class="btn btn-primary" id="btn-submit-devolucion" style="padding: 0.75rem 1.75rem; font-size: 1rem; background: #10b981;">
+                                    <i data-lucide="corner-down-left"></i>
+                                    <span>Registrar Devolución</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Línea de Tiempo de Movimientos Recientes -->
+                    <div class="timeline-card card" style="padding: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+                            <div>
+                                <h2 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                                    <i data-lucide="history" style="color: var(--accent-primary);"></i>
+                                    <span>Línea de Tiempo de Movimientos</span>
+                                </h2>
+                                <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.15rem;">
+                                    Historial en vivo de compras, porcionados, traslados y devoluciones con fecha, hora y usuario
+                                </p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <span class="badge" id="bod-timeline-count" style="background: var(--bg-surface-hover); color: var(--text-secondary); border: 1px solid var(--border-color); font-weight: 600;">
+                                    0 movimientos
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Contenedor del Feed / Timeline -->
+                        <div class="timeline-wrapper" id="bod-timeline-feed">
+                            <div class="timeline-empty">
+                                <i data-lucide="clock" style="width: 28px; height: 28px; color: var(--text-muted);"></i>
+                                <span>No hay movimientos registrados aún.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Inventario en Tiempo Real -->
+                    <div class="card" style="padding: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <h2 style="font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                                    <i data-lucide="clipboard-list" style="color: var(--accent-primary);"></i>
+                                    <span>Estado Real del Inventario de Carnes</span>
+                                </h2>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                    Monitoreo en vivo de cantidades, ubicaciones y valorización en pesos
+                                </p>
+                            </div>
+
+                            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                <div style="position: relative;">
+                                    <input type="text" id="bod-search-insumo" class="form-control" placeholder="Buscar carne..." style="padding-left: 2.2rem; width: 220px; font-size: 0.85rem;">
+                                    <i data-lucide="search" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-muted);"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtros por categoría -->
+                        <div class="bod-cat-filters-bar" style="margin-bottom: 1rem;">
+                            <button class="bod-cat-filter active" data-cat="ALL">Todos los Insumos</button>
+                            <button class="bod-cat-filter" data-cat="CARNES">Solo Carnes</button>
+                            <button class="bod-cat-filter" data-cat="CARNE DE RES">Res</button>
+                            <button class="bod-cat-filter" data-cat="CARNE DE CERDO">Cerdo</button>
+                            <button class="bod-cat-filter" data-cat="CARNE POLLO">Pollo</button>
+                            <button class="bod-cat-filter" data-cat="PESCADOS">Pescados</button>
+                        </div>
+
+                        <div class="table-container" style="max-height: 480px; overflow-y: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Insumo / Carne</th>
+                                        <th style="text-align: right;">Bodega Entero</th>
+                                        <th style="text-align: right;">Bodega Porciones</th>
+                                        <th style="text-align: right;">Total Bodega</th>
+                                        <th style="text-align: right;">En Cocina</th>
+                                        <th style="text-align: right;">Costo Prom/Kg</th>
+                                        <th style="text-align: right;">Valor Total ($)</th>
+                                        <th style="text-align: center;">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bod-tabla-stock-body">
+                                    <!-- Generado dinámicamente por JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view-section">
+                <div class="dashboard-content" id="dashboard-data">
                     <!-- KPIs -->
                     <div class="kpi-grid">
                         <div class="kpi-card">
@@ -278,13 +591,7 @@
 
             <!-- Movimientos View -->
             <section id="view-movimientos" class="view-section">
-                <div class="empty-state" id="movimientos-empty">
-                    <i data-lucide="database"></i>
-                    <h3>No hay datos disponibles</h3>
-                    <p>Por favor, carga el archivo Excel para utilizar los filtros de movimientos.</p>
-                </div>
-
-                <div class="movimientos-content hidden" id="movimientos-data">
+                <div class="movimientos-content" id="movimientos-data">
                     
                     <!-- Filters -->
                     <div class="filters-bar glass-panel">
@@ -448,6 +755,20 @@
                  VISTA: COMPRAS
             ========================== -->
             <section id="view-compras" class="view-section">
+
+                <!-- Alerta de Compras Pendientes de Facturación -->
+                <div id="compras-pending-alert" style="display: none; background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md); padding: 0.85rem 1.25rem; margin-bottom: 1.5rem; align-items: center; justify-content: space-between; gap: 1rem; color: #92400e;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <i data-lucide="alert-triangle" style="width: 22px; height: 22px; color: #d97706; flex-shrink: 0;"></i>
+                        <div>
+                            <strong style="font-size: 0.95rem;">Compras pendientes de facturar:</strong>
+                            <span id="compras-pending-msg" style="font-size: 0.88rem; margin-left: 0.25rem;">Tienes registros de bodega pendientes por completar factura y proveedor.</span>
+                        </div>
+                    </div>
+                    <button id="compras-filter-pending-btn" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem; background: #ffffff; border-color: #d97706; color: #b45309;">
+                        Ver Solo Pendientes
+                    </button>
+                </div>
                 
                 <!-- Filtros de Compras -->
                 <div class="filters-bar" style="display: flex; gap: 1rem; margin-bottom: 2rem; background: var(--bg-surface); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); align-items: center;">
@@ -567,7 +888,7 @@
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                         <h3>Registro Detallado de Compras</h3>
                         <div class="filter-group" style="min-width: auto; flex-direction: row; align-items: center; gap: 1rem;">
-                            <input type="text" id="compras-table-search" class="form-control" placeholder="Buscar insumo por nombre..." style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid); min-width: 200px;">
+                            <input type="text" id="compras-table-search" class="form-control" placeholder="Buscar por insumo, factura o proveedor..." style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid); min-width: 240px;">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <label style="margin: 0;">Categoría:</label>
                                 <select id="compras-table-category" class="form-control" style="padding: 0.4rem 1rem; font-size: 0.8rem; background-color: var(--bg-surface-solid);">
@@ -581,11 +902,15 @@
                             <thead>
                                 <tr>
                                     <th class="sortable" data-sort="fecha" style="cursor:pointer;">Fecha <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="factura" style="cursor:pointer;">Nº Factura <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="proveedor" style="cursor:pointer;">Proveedor <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
                                     <th class="sortable" data-sort="categoria" style="cursor:pointer;">Categoría <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
                                     <th class="sortable" data-sort="insumo" style="cursor:pointer;">Insumo Comprado <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
                                     <th class="sortable" data-sort="cantidad" style="cursor:pointer;">Cantidad (Kg) <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
                                     <th class="sortable" data-sort="costoUnitario" style="cursor:pointer;">Costo Unit. <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
-                                    <th class="sortable" data-sort="total" style="cursor:pointer;">Total <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="total" style="cursor:pointer;">Total Factura <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th class="sortable" data-sort="estado_factura" style="cursor:pointer;">Estado Factura <i data-lucide="arrow-up-down" style="width:12px; height:12px;"></i></th>
+                                    <th style="text-align: center;">Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -593,10 +918,11 @@
                             </tbody>
                             <tfoot>
                                 <tr style="background-color: var(--bg-surface-hover); font-weight: 600;">
-                                    <td colspan="3" style="text-align: right; padding: 1rem;">Total Compras:</td>
+                                    <td colspan="5" style="text-align: right; padding: 1rem;">Total Compras:</td>
                                     <td id="compras-footer-cantidad" style="padding: 1rem;">0</td>
                                     <td></td>
                                     <td id="compras-footer-total" style="padding: 1rem; color: var(--danger);">$0</td>
+                                    <td colspan="2"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -609,6 +935,61 @@
                             <button id="compras-prev-page" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" disabled><i data-lucide="chevron-left"></i></button>
                             <button id="compras-next-page" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;" disabled><i data-lucide="chevron-right"></i></button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Modal para Completar / Editar Factura -->
+                <div id="modal-factura-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 1rem;">
+                    <div class="card" style="width: 100%; max-width: 520px; background: #ffffff; border-radius: var(--radius-lg); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); padding: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i data-lucide="receipt" style="color: var(--accent-primary);"></i>
+                                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #0f172a;">Completar / Liquidar Factura</h3>
+                            </div>
+                            <button id="modal-factura-close" type="button" style="background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer; line-height: 1;">&times;</button>
+                        </div>
+
+                        <!-- Info de recepción de bodega -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-md); padding: 0.85rem; margin-bottom: 1.25rem;">
+                            <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 0.25rem;">Materia prima ingresada por Bodeguero:</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong id="modal-factura-insumo" style="font-size: 1rem; color: #0f172a;">Lomo viche</strong>
+                                <span id="modal-factura-cant" style="font-weight: 700; color: #2563eb; background: #eff6ff; padding: 0.2rem 0.6rem; border-radius: 8px;">25.00 Kg</span>
+                            </div>
+                            <div id="modal-factura-fecha" style="font-size: 0.78rem; color: #64748b; margin-top: 0.35rem;">Fecha de recepción: 21 Ago 2026</div>
+                        </div>
+
+                        <form id="form-modal-factura" style="display: flex; flex-direction: column; gap: 1rem;">
+                            <input type="hidden" id="modal-factura-id">
+
+                            <div class="form-group">
+                                <label for="modal-factura-num" style="display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 0.35rem; color: #334155;">Nº de Factura Oficial / Remisión *</label>
+                                <input type="text" id="modal-factura-num" class="form-control" placeholder="Ej. FAC-2026-9812" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="modal-factura-prov" style="display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 0.35rem; color: #334155;">Proveedor Real *</label>
+                                <input type="text" id="modal-factura-prov" class="form-control" placeholder="Ej. Frigorífico Central S.A.S" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="modal-factura-total" style="display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 0.35rem; color: #334155;">Costo Total Factura ($ COP) *</label>
+                                <input type="number" step="100" min="1" id="modal-factura-total" class="form-control" placeholder="Ej. 650000" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="modal-factura-obs" style="display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 0.35rem; color: #334155;">Observaciones Administrativas</label>
+                                <input type="text" id="modal-factura-obs" class="form-control" placeholder="Ej. Factura validada por administración">
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
+                                <button type="button" id="modal-factura-cancel" class="btn btn-secondary">Cancelar</button>
+                                <button type="submit" class="btn btn-primary" style="background: #10b981; border-color: #10b981;">
+                                    <i data-lucide="check-circle"></i>
+                                    <span>Guardar y Confirmar Factura</span>
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </section>
@@ -876,7 +1257,9 @@
 
     <!-- Scripts -->
     <script src="js/lucide-icons.js?v=2"></script>
+    <script src="js/supabaseClient.js"></script>
     <script src="js/excelParser.js"></script>
+    <script src="js/bodeguero.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/movimientos.js"></script>
     <script src="js/bodega-linea.js"></script>

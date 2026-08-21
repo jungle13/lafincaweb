@@ -64,12 +64,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewSubtitle = document.getElementById('current-view-subtitle');
 
     const viewMeta = {
+        'bodeguero': { title: 'Terminal del Bodeguero', subtitle: 'Control operativo de carnes y movimientos en tiempo real' },
         'dashboard': { title: 'Dashboard General', subtitle: 'Resumen ejecutivo del restaurante' },
         'movimientos': { title: 'Movimientos de Inventario', subtitle: 'Trazabilidad y estados diarios por insumo' },
         'bodega-linea': { title: 'Bodega Línea Temporal', subtitle: 'Tabla original de movimientos de conteo bodega' },
         'compras': { title: 'Registro de Compras', subtitle: 'Ingresos y costos de materia prima' },
         'recetas': { title: 'Recetario y Menú', subtitle: 'Desglose de insumos cárnicos por plato' }
     };
+
+    // Establecer textos iniciales
+    if (viewTitle && viewSubtitle) {
+        viewTitle.textContent = viewMeta['bodeguero'].title;
+        viewSubtitle.textContent = viewMeta['bodeguero'].subtitle;
+    }
+
+    // Inicializar Supabase, Terminal del Bodeguero y Compras
+    if (typeof SupabaseConfig !== 'undefined') {
+        SupabaseConfig.init();
+    }
+    if (typeof BodegueroTerminal !== 'undefined') {
+        BodegueroTerminal.init();
+    }
+    if (typeof Compras !== 'undefined') {
+        Compras.init();
+    }
 
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
@@ -107,114 +125,40 @@ document.addEventListener('DOMContentLoaded', () => {
             if (target === 'dashboard' && AppData.isLoaded) {
                 Dashboard.renderTrendChart();
             }
+
+            if (target === 'bodeguero' && typeof BodegueroTerminal !== 'undefined') {
+                BodegueroTerminal.loadData();
+            }
+
+            if (target === 'compras' && typeof Compras !== 'undefined') {
+                Compras.loadData();
+            }
         });
     });
 
-    // Manejo Carga Archivo
-    const uploadInput = document.getElementById('excel-upload');
-    const uploadBtn = document.getElementById('btn-upload');
-    
-    // Drag & Drop
-    const body = document.body;
-    
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        body.addEventListener(eventName, preventDefaults, false);
-    });
+    // Botón de Sincronización Manual de Base de Datos
+    const btnSyncDb = document.getElementById('btn-sync-db');
+    if (btnSyncDb) {
+        btnSyncDb.addEventListener('click', async () => {
+            btnSyncDb.disabled = true;
+            btnSyncDb.innerHTML = `<i data-lucide="refresh-cw" class="spin"></i><span>Sincronizando...</span>`;
+            lucide.createIcons();
 
-    function preventDefaults (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        body.addEventListener(eventName, highlight, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        body.addEventListener(eventName, unhighlight, false);
-    });
-
-    function highlight(e) {
-        body.style.opacity = '0.8';
-    }
-
-    function unhighlight(e) {
-        body.style.opacity = '1';
-    }
-
-    body.addEventListener('drop', handleDrop, false);
-
-    function handleDrop(e) {
-        let dt = e.dataTransfer;
-        let files = dt.files;
-        handleFiles(files);
-    }
-
-    uploadInput.addEventListener('change', function() {
-        handleFiles(this.files);
-    });
-
-    function handleFiles(files) {
-        if(files.length === 0) return;
-        const file = files[0];
-        
-        if(!file.name.includes('.xls')) {
-            alert('Por favor, selecciona un archivo Excel (.xlsx o .xls)');
-            return;
-        }
-
-        processExcelFile(file);
-    }
-
-    function processExcelFile(file) {
-        const loading = document.getElementById('loading-overlay');
-        loading.classList.remove('hidden');
-
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
             try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array', cellDates: true, cellNF: false, cellText:false});
-                
-                // Extraer Data
-                AppData.bodega = ExcelParser.parseBodega(workbook);
-                AppData.bodegaRaw = ExcelParser.parseBodegaRaw(workbook);
-                AppData.compras = ExcelParser.parseCompras(workbook);
-                AppData.ventas = ExcelParser.parseVentas(workbook);
-                AppData.recetas = ExcelParser.parseRecetas(workbook);
-                AppData.catalogo = ExcelParser.parseCatalogo(workbook);
-                
-                AppData.isLoaded = true;
-                
-                // UI Updates
-                document.getElementById('data-status').innerHTML = `
-                    <div class="status-indicator green"></div>
-                    <span>Datos cargados: ${file.name}</span>
-                `;
-                
-                document.getElementById('dashboard-empty').classList.add('hidden');
-                document.getElementById('dashboard-data').classList.remove('hidden');
-                document.getElementById('movimientos-empty').classList.add('hidden');
-                document.getElementById('movimientos-data').classList.remove('hidden');
-
-                // Inicializar Vistas
-                Dashboard.init();
-                if (typeof Movimientos !== 'undefined') Movimientos.init();
-                if (typeof Compras !== 'undefined') Compras.init();
-                if (typeof Ventas !== 'undefined') Ventas.init();
-                if (typeof Recetas !== 'undefined') Recetas.init();
-                if (typeof BodegaLinea !== 'undefined') BodegaLinea.init();
-                
-            } catch (error) {
-                console.error(error);
-                alert('Error técnico detectado:\n' + error.message + '\n\nStack:\n' + error.stack);
+                if (typeof BodegueroTerminal !== 'undefined') {
+                    await BodegueroTerminal.loadData();
+                }
+                if (typeof SupabaseConfig !== 'undefined') {
+                    await SupabaseConfig.testConnection();
+                }
+            } catch (e) {
+                console.error("Error sincronizando base de datos:", e);
             } finally {
-                loading.classList.add('hidden');
+                btnSyncDb.disabled = false;
+                btnSyncDb.innerHTML = `<i data-lucide="refresh-cw"></i><span>Sincronizar Datos</span>`;
+                lucide.createIcons();
             }
-        };
-
-        reader.readAsArrayBuffer(file);
+        });
     }
 
     // Cerrar tooltips al hacer click fuera
