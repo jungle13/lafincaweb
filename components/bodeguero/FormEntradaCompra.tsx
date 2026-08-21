@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { PlusCircle, Loader2 } from 'lucide-react';
@@ -22,7 +22,7 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
 
   const cantNum = parseFloat(cantidadKg) || 0;
   const costoNum = parseFloat(costoTotal) || 0;
-  const costoCalculado = cantNum > 0 && costoNum > 0 ? costoNum / cantNum : selectedInsumo?.costo_unitario_kg || 0;
+  const costoCalculado = cantNum > 0 && costoNum > 0 ? Math.round(costoNum / cantNum) : selectedInsumo?.costo_unitario_kg || 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,8 +39,8 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
           insumoId: selectedInsumo.insumo_id,
           cantidadKg: cantNum,
           costoTotal: costoNum,
-          proveedor,
-          factura,
+          proveedor: proveedor.trim() || 'Proveedor Local',
+          factura: factura.trim() || 'Pendiente',
           observaciones,
         }),
       });
@@ -48,7 +48,6 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Error al registrar ingreso');
 
-      // Reset form
       setSelectedInsumo(null);
       setProveedor('');
       setFactura('');
@@ -64,39 +63,40 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 bg-white rounded-b-2xl shadow-sm">
+    <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 bg-white">
       <SmartSearchInsumo
         insumos={insumos}
         selectedInsumo={selectedInsumo}
         onSelect={setSelectedInsumo}
-        placeholder="Buscar carne a ingresar (ej. Lomo, Punta de anca, Costilla)..."
+        placeholder="Escribe para buscar carne que ingresa (ej. Lomo viche, Punta de anca, Costilla)..."
+        label="Buscar Carne / Insumo a Ingresar *"
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
-          <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Proveedor</label>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">Proveedor</label>
           <input
             type="text"
             value={proveedor}
             onChange={(e) => setProveedor(e.target.value)}
             placeholder="Ej. Frigorífico Central / Local"
-            className="w-full h-11 px-3 text-sm rounded-xl border border-slate-300 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
           />
         </div>
 
         <div>
-          <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Nº Factura / Remisión</label>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">Nº Factura / Remisión</label>
           <input
             type="text"
             value={factura}
             onChange={(e) => setFactura(e.target.value)}
             placeholder="Ej. FAC-9821 / Pendiente"
-            className="w-full h-11 px-3 text-sm rounded-xl border border-slate-300 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
           />
         </div>
 
         <div>
-          <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Cantidad Recibida (Kg) *</label>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">Cantidad Recibida (Kg) *</label>
           <input
             type="number"
             step="0.01"
@@ -105,12 +105,12 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
             value={cantidadKg}
             onChange={(e) => setCantidadKg(e.target.value)}
             placeholder="0.00"
-            className="w-full h-11 px-3 text-base font-bold rounded-xl border border-slate-300 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            className="w-full h-9 px-2.5 text-xs font-semibold text-blue-600 rounded-lg border border-slate-300 outline-none focus:border-blue-500"
           />
         </div>
 
         <div>
-          <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Costo Total Factura ($ COP)</label>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">Costo Total Factura ($ COP)</label>
           <input
             type="number"
             step="100"
@@ -118,61 +118,52 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
             value={costoTotal}
             onChange={(e) => setCostoTotal(e.target.value)}
             placeholder="Ej. 650000 (Opcional)"
-            className="w-full h-11 px-3 text-sm rounded-xl border border-slate-300 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Observaciones</label>
+        <label className="block text-xs font-semibold text-slate-700 mb-1">Observaciones / Notas de Entrega</label>
         <input
           type="text"
           value={observaciones}
           onChange={(e) => setObservaciones(e.target.value)}
-          placeholder="Notas de recepción"
-          className="w-full h-11 px-3 text-sm rounded-xl border border-slate-300 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+          placeholder="Notas de recepción o calidad"
+          className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
         />
       </div>
 
-      {/* Live Preview Box */}
-      {selectedInsumo && (
-        <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs md:text-sm text-blue-900 space-y-1.5 animate-fade-in">
-          <div className="font-bold flex items-center justify-between">
-            <span>Impacto en Inventario: {selectedInsumo.insumo}</span>
-            <span className="text-xs bg-blue-200 px-2 py-0.5 rounded font-bold">Entrada Compra</span>
+      {/* Projection Preview Box */}
+      <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg text-center text-xs text-slate-500">
+        {selectedInsumo ? (
+          <div className="flex items-center justify-between text-xs text-slate-700 px-2 font-medium">
+            <span>Carne: <strong>{selectedInsumo.insumo}</strong></span>
+            <span>Bodega Entero: {selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg ➔ <strong className="text-blue-600">{(selectedInsumo.bodega_sin_porc_kg + cantNum).toFixed(2)} Kg</strong></span>
+            {costoNum > 0 && <span>Costo resultante: <strong>${formatMoney(costoCalculado)}/Kg</strong></span>}
           </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-slate-500">Bodega Entero Actual:</span>{' '}
-              <strong>{selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg</strong>
-            </div>
-            <div>
-              <span className="text-slate-500">Nuevo Saldo:</span>{' '}
-              <strong className="text-blue-700">{(selectedInsumo.bodega_sin_porc_kg + cantNum).toFixed(2)} Kg</strong>
-            </div>
-            {costoNum > 0 && (
-              <div className="col-span-2 text-slate-600">
-                Costo Unitario Resultante: <strong>${formatMoney(costoCalculado)} / Kg</strong>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={loading || !selectedInsumo}
-        className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 transition-all disabled:opacity-50"
-      >
-        {loading ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
         ) : (
-          <>
-            <PlusCircle className="w-5 h-5" />
-            <span>Registrar Ingreso a Bodega</span>
-          </>
+          <span className="italic text-slate-400">Escribe y selecciona el insumo arriba para ver el impacto en inventario.</span>
         )}
-      </button>
+      </div>
+
+      {/* Submit Button (Right aligned) */}
+      <div className="flex justify-end pt-1">
+        <button
+          type="submit"
+          disabled={loading || !selectedInsumo}
+          className="w-full sm:w-auto px-6 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold text-xs md:text-sm flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+        >
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <PlusCircle className="w-4 h-4" />
+              <span>Registrar Entrada por Compra</span>
+            </>
+          )}
+        </button>
+      </div>
     </form>
   );
 }

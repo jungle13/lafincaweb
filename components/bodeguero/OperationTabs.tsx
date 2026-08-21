@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { PlusCircle, Scissors, ArrowRightCircle, CornerDownLeft } from 'lucide-react';
 
@@ -10,15 +10,15 @@ interface Props {
 }
 
 const TABS = [
-  { id: 'ENTRADA_COMPRA' as OperationType, label: '1. Compra', icon: PlusCircle, activeColor: 'bg-blue-600 border-blue-500 text-white' },
-  { id: 'PORCIONADO' as OperationType, label: '2. Porcionado', icon: Scissors, activeColor: 'bg-purple-600 border-purple-500 text-white' },
-  { id: 'TRASLADO_COCINA' as OperationType, label: '3. A Cocina', icon: ArrowRightCircle, activeColor: 'bg-orange-600 border-orange-500 text-white' },
-  { id: 'DEVOLUCION_COCINA' as OperationType, label: '4. Devolución', icon: CornerDownLeft, activeColor: 'bg-emerald-600 border-emerald-500 text-white' },
+  { id: 'ENTRADA_COMPRA' as OperationType, label: '1. Compra', icon: PlusCircle },
+  { id: 'PORCIONADO' as OperationType, label: '2. Porcionado', icon: Scissors },
+  { id: 'TRASLADO_COCINA' as OperationType, label: '3. A Cocina', icon: ArrowRightCircle },
+  { id: 'DEVOLUCION_COCINA' as OperationType, label: '4. Devolución', icon: CornerDownLeft },
 ];
 
 export default function OperationTabs({ activeTab, onChangeTab }: Props) {
   return (
-    <div className="grid grid-cols-4 gap-1.5 p-1.5 bg-slate-900 rounded-t-2xl border-b border-slate-800">
+    <div className="grid grid-cols-4 bg-slate-50/80 border-b border-slate-200">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -28,14 +28,14 @@ export default function OperationTabs({ activeTab, onChangeTab }: Props) {
             key={tab.id}
             type="button"
             onClick={() => onChangeTab(tab.id)}
-            className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl text-xs md:text-sm font-bold transition-all border ${
+            className={`flex items-center justify-center gap-2 py-3 px-2 text-xs md:text-sm font-semibold transition-all border-b-2 ${
               isActive
-                ? `${tab.activeColor} shadow-lg scale-[1.02]`
-                : 'bg-slate-800/80 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                ? 'bg-white border-orange-500 text-orange-600 font-bold shadow-[0_-2px_6px_rgba(0,0,0,0.02)]'
+                : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60 font-medium'
             }`}
           >
-            <Icon className={`w-5 h-5 mb-1 ${isActive ? 'text-white stroke-[2.5]' : 'text-slate-400'}`} />
-            <span className="tracking-tight truncate max-w-full">{tab.label}</span>
+            <Icon className={`w-4 h-4 ${isActive ? 'text-orange-500' : 'text-slate-400'}`} />
+            <span className="truncate">{tab.label}</span>
           </button>
         );
       })}

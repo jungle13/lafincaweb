@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import OperationTabs, { OperationType } from '@/components/bodeguero/OperationTabs';
@@ -44,14 +44,14 @@ export default function BodegueroPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-        <p className="text-sm font-semibold">Cargando Terminal del Bodeguero...</p>
+        <p className="text-xs md:text-sm font-semibold">Cargando Terminal del Bodeguero...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-      {/* Panel de Operaciones */}
+    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+      {/* Panel de Operaciones (Exact match to screenshot 1) */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <OperationTabs activeTab={activeTab} onChangeTab={setActiveTab} />
 
@@ -69,12 +69,14 @@ export default function BodegueroPage() {
         )}
       </div>
 
-      {/* Línea de Tiempo de Movimientos */}
-      <TimelineFeed
-        movimientos={movimientos}
-        filterDate={filterDate}
-        onDateChange={setFilterDate}
-      />
+      {/* Línea de Tiempo de Movimientos (Exact match to screenshot 2) */}
+      <div id="timeline">
+        <TimelineFeed
+          movimientos={movimientos}
+          filterDate={filterDate}
+          onDateChange={setFilterDate}
+        />
+      </div>
     </div>
   );
 }

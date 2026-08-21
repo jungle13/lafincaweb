@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { CornerDownLeft, Loader2 } from 'lucide-react';
@@ -67,31 +67,31 @@ export default function FormDevolucionCocina({ insumos, onSuccess }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 bg-white rounded-b-2xl shadow-sm">
+    <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 bg-white">
       <SmartSearchInsumo
         insumos={insumos}
         selectedInsumo={selectedInsumo}
         onSelect={setSelectedInsumo}
-        placeholder="Buscar carne devuelta por cocina..."
-        label="Buscar Carne Devuelta a Bodega *"
+        placeholder="Escribe para buscar carne que devuelve cocina (ej. Baby beef, Costilla, Cerdo)..."
+        label="Buscar Carne / Insumo que Regresa de Cocina *"
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
-          <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Tipo de Presentación *</label>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Devolución</label>
           <select
             value={tipoCorte}
             onChange={(e) => setTipoCorte(e.target.value as any)}
-            className="w-full h-11 px-3 text-sm font-semibold rounded-xl border border-slate-300 outline-none focus:border-emerald-500 bg-white"
+            className="w-full h-9 px-2.5 text-xs font-medium rounded-lg border border-slate-300 outline-none focus:border-emerald-500 bg-white text-slate-800"
           >
-            <option value="PORCIONADO">✂️ Porciones No Utilizadas (Unidades)</option>
-            <option value="ENTERO">📦 Carne Entera / Trozo (Kg)</option>
+            <option value="PORCIONADO">Porciones Listas (Unidades)</option>
+            <option value="ENTERO">Pieza Entera / A Granel (Kg)</option>
           </select>
         </div>
 
         {tipoCorte === 'PORCIONADO' ? (
           <div>
-            <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Cantidad de Porciones Devueltas *</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Cantidad Devuelta (Porciones) *</label>
             <input
               type="number"
               min="1"
@@ -99,12 +99,12 @@ export default function FormDevolucionCocina({ insumos, onSuccess }: Props) {
               value={cantidad}
               onChange={(e) => handleCantidadChange(e.target.value)}
               placeholder="Ej. 4"
-              className="w-full h-11 px-3 text-base font-bold rounded-xl border border-slate-300 outline-none focus:border-emerald-500"
+              className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-emerald-500 text-slate-800"
             />
           </div>
         ) : (
           <div>
-            <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Peso Reintegrado (Kg) *</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Peso Reintegrado (Kg) *</label>
             <input
               type="number"
               step="0.01"
@@ -113,70 +113,67 @@ export default function FormDevolucionCocina({ insumos, onSuccess }: Props) {
               value={pesoKg}
               onChange={(e) => setPesoKg(e.target.value)}
               placeholder="0.00"
-              className="w-full h-11 px-3 text-base font-bold rounded-xl border border-slate-300 outline-none focus:border-emerald-500"
+              className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-emerald-500 text-slate-800"
             />
           </div>
         )}
 
         {tipoCorte === 'PORCIONADO' && (
           <div>
-            <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Peso Estimado (Kg)</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Peso Reintegrado (Kg) *</label>
             <input
               type="number"
               step="0.01"
               value={pesoKg}
               onChange={(e) => setPesoKg(e.target.value)}
               placeholder="0.00"
-              className="w-full h-11 px-3 text-sm rounded-xl border border-slate-300 outline-none focus:border-emerald-500"
+              className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-emerald-500 text-slate-800"
             />
           </div>
         )}
 
         <div>
-          <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1">Motivo de Devolución / Obs</label>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">Motivo de Devolución</label>
           <input
             type="text"
             value={observaciones}
             onChange={(e) => setObservaciones(e.target.value)}
-            placeholder="Ej. Sobrante de turno / Cierre"
-            className="w-full h-11 px-3 text-sm rounded-xl border border-slate-300 outline-none focus:border-emerald-500"
+            placeholder="Ej. Sobrante fin de turno / No utilizado"
+            className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-emerald-500 text-slate-800"
           />
         </div>
       </div>
 
-      {selectedInsumo && (
-        <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs md:text-sm text-emerald-900 space-y-1.5 animate-fade-in">
-          <div className="font-bold flex items-center justify-between">
-            <span>Reintegro a Bodega: {selectedInsumo.insumo}</span>
-            <span className="text-xs bg-emerald-200 px-2 py-0.5 rounded font-bold">Devolución</span>
+      {/* Projection Preview Box */}
+      <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg text-center text-xs text-slate-500">
+        {selectedInsumo ? (
+          <div className="flex items-center justify-between text-xs text-slate-700 px-2 font-medium">
+            <span>Carne: <strong>{selectedInsumo.insumo}</strong></span>
+            <span>Resta Cocina: <strong className="text-red-600">-{cantNum || pesoNum} {tipoCorte === 'PORCIONADO' ? 'porc' : 'Kg'}</strong></span>
+            <span>Reintegra a Bodega: <strong className="text-emerald-600">+{cantNum || pesoNum} {tipoCorte === 'PORCIONADO' ? 'porc' : 'Kg'}</strong></span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-slate-500">Resta en Cocina:</span>{' '}
-              <strong className="text-red-700">-{cantNum || pesoNum} {tipoCorte === 'PORCIONADO' ? 'porc' : 'Kg'}</strong>
-            </div>
-            <div>
-              <span className="text-slate-500">Reintegra a Bodega:</span>{' '}
-              <strong className="text-emerald-700">+{cantNum || pesoNum} {tipoCorte === 'PORCIONADO' ? 'porc' : 'Kg'}</strong>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={loading || !selectedInsumo}
-        className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50"
-      >
-        {loading ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
         ) : (
-          <>
-            <CornerDownLeft className="w-5 h-5" />
-            <span>Registrar Devolución a Bodega</span>
-          </>
+          <span className="italic text-slate-400">Escribe y selecciona un insumo arriba para verificar el stock actual en cocina.</span>
         )}
-      </button>
+      </div>
+
+      {/* Submit Button (Right aligned) */}
+      <div className="flex justify-end pt-1">
+        <button
+          type="submit"
+          disabled={loading || !selectedInsumo}
+          className="w-full sm:w-auto px-6 h-10 rounded-xl bg-[#10b981] hover:bg-[#059669] active:scale-[0.98] text-white font-semibold text-xs md:text-sm flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+        >
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <CornerDownLeft className="w-4 h-4" />
+              <span>Registrar Devolución</span>
+            </>
+          )}
+        </button>
+      </div>
     </form>
   );
 }
