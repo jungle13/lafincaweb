@@ -93,6 +93,27 @@ const StockService = {
                 .order('categoria', { ascending: true })
                 .order('insumo', { ascending: true });
 
+            // Cargar mermas acumuladas por insumo desde movimientos_inventario
+            const mermasMap = {};
+            try {
+                const { data: movsMerma } = await client
+                    .from('movimientos_inventario')
+                    .select('insumo_id, merma_kg, costo_unitario_kg');
+                
+                if (movsMerma && movsMerma.length > 0) {
+                    movsMerma.forEach(m => {
+                        const id = m.insumo_id;
+                        const kg = parseFloat(m.merma_kg) || 0;
+                        const cost = parseFloat(m.costo_unitario_kg) || 0;
+                        if (!mermasMap[id]) mermasMap[id] = { kg: 0, pesos: 0 };
+                        mermasMap[id].kg += kg;
+                        mermasMap[id].pesos += (kg * cost);
+                    });
+                }
+            } catch (e) {
+                console.warn("Mermas map:", e);
+            }
+
             if (error || !data || data.length === 0) {
                 // Fallback manual con joins
                 const res = await client
@@ -119,6 +140,8 @@ const StockService = {
                     const totalCocinaKg = cSinPorc + cPorcKg;
                     const totalGenKg = totalBodegaKg + totalCocinaKg;
 
+                    const mermaData = mermasMap[item.id] || mermasMap[item.nombre] || { kg: 0, pesos: 0 };
+
                     return {
                         insumo_id: item.id,
                         codigo: item.codigo,
@@ -139,6 +162,8 @@ const StockService = {
                         cocina_porc_kg: cPorcKg,
                         peso_total_cocina_kg: totalCocinaKg,
                         valor_cocina_pesos: totalCocinaKg * costoU,
+                        merma_acumulada_kg: mermaData.kg,
+                        merma_acumulada_pesos: mermaData.pesos || (mermaData.kg * costoU),
                         peso_total_general_kg: totalGenKg,
                         valor_total_general_pesos: totalGenKg * costoU,
                         estado_stock: totalBodegaKg === 0 ? 'AGOTADO' : (totalBodegaKg <= stockMin ? 'BAJO' : 'OPTIMO')
@@ -146,7 +171,15 @@ const StockService = {
                 });
             }
 
-            return data;
+            return data.map(item => {
+                const mermaData = mermasMap[item.insumo_id] || mermasMap[item.insumo] || { kg: 0, pesos: 0 };
+                const costoU = parseFloat(item.costo_unitario_kg) || 0;
+                return {
+                    ...item,
+                    merma_acumulada_kg: mermaData.kg,
+                    merma_acumulada_pesos: mermaData.pesos || (mermaData.kg * costoU)
+                };
+            });
         } catch (e) {
             console.error("Error al obtener inventario en vivo de Supabase:", e);
             return null;

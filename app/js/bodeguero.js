@@ -10,11 +10,14 @@ const BodegueroTerminal = {
     activeTab: 'entrada-compra',
     filterCategoria: 'ALL',
     searchQuery: '',
+    timelineFilterFecha: new Date().toISOString().split('T')[0],
+    timelineFilterInsumo: 'ALL',
 
     init: async function() {
         this.bindEvents();
         this.initSmartSearches();
         await this.loadData();
+        this.initTimelineFilters();
         await this.loadMovimientosTimeline();
         this.setupRealtime();
     },
@@ -83,6 +86,7 @@ const BodegueroTerminal = {
             const totalB = bSinPorc + bPorcKg;
             const totalC = cSinPorc + cPorcKg;
             const totalGen = totalB + totalC;
+            const mermaKg = parseFloat(b.mermaKg) || 0;
 
             list.push({
                 insumo_id: `fallback-${nom}`,
@@ -104,6 +108,8 @@ const BodegueroTerminal = {
                 cocina_porc_kg: cPorcKg,
                 peso_total_cocina_kg: totalC,
                 valor_cocina_pesos: totalC * costoU,
+                merma_acumulada_kg: mermaKg,
+                merma_acumulada_pesos: mermaKg * costoU,
                 peso_total_general_kg: totalGen,
                 valor_total_general_pesos: totalGen * costoU,
                 estado_stock: totalB === 0 ? 'AGOTADO' : (totalB <= 10 ? 'BAJO' : 'OPTIMO')
@@ -374,52 +380,150 @@ const BodegueroTerminal = {
 
     renderTablaStock: function() {
         const tbody = document.getElementById('bod-tabla-stock-body');
-        if (!tbody) return;
+        const cardsContainer = document.getElementById('bod-cards-stock-container');
 
-        if (this.insumosFiltrados.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">No se encontraron insumos que coincidan con la búsqueda.</td></tr>`;
-            return;
+        // 1. Calcular y actualizar KPIs generales en vivo
+        let totalBodegaKg = 0;
+        let totalBodegaPorcUnd = 0;
+        let totalBodegaSinPorcKg = 0;
+        let totalValorStock = 0;
+        let totalMermaKg = 0;
+        let totalMermaPesos = 0;
+
+        (this.inventario || []).forEach(item => {
+            totalBodegaKg += (item.peso_total_bodega_kg || 0);
+            totalBodegaPorcUnd += (item.bodega_porc_und || 0);
+            totalBodegaSinPorcKg += (item.bodega_sin_porc_kg || 0);
+            totalValorStock += (item.valor_total_general_pesos || 0);
+            const mKg = parseFloat(item.merma_acumulada_kg) || 0;
+            const mPesos = parseFloat(item.merma_acumulada_pesos) || (mKg * (item.costo_unitario_kg || 0));
+            totalMermaKg += mKg;
+            totalMermaPesos += mPesos;
+        });
+
+        const kpiStockKg = document.getElementById('kpi-inv-stock-kg');
+        const kpiStockSub = document.getElementById('kpi-inv-stock-sub');
+        const kpiPorcUnd = document.getElementById('kpi-inv-porc-und');
+        const kpiValor = document.getElementById('kpi-inv-valor-total');
+        const kpiMermaKg = document.getElementById('kpi-inv-merma-kg');
+        const kpiMermaPesos = document.getElementById('kpi-inv-merma-pesos');
+
+        if (kpiStockKg) kpiStockKg.textContent = `${totalBodegaKg.toFixed(1)} Kg`;
+        if (kpiStockSub) kpiStockSub.textContent = `${totalBodegaSinPorcKg.toFixed(1)} Kg ent | ${totalBodegaPorcUnd} porc`;
+        if (kpiPorcUnd) kpiPorcUnd.textContent = `${totalBodegaPorcUnd} und`;
+        if (kpiValor) kpiValor.textContent = `$ ${this.formatMoney(totalValorStock)}`;
+        if (kpiMermaKg) kpiMermaKg.textContent = `${totalMermaKg.toFixed(2)} Kg`;
+        if (kpiMermaPesos) kpiMermaPesos.textContent = `$ ${this.formatMoney(totalMermaPesos)} en pérdidas`;
+
+        // 2. Renderizar Tabla para Desktop
+        if (tbody) {
+            if (this.insumosFiltrados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 2rem; color: var(--text-muted);">No se encontraron carnes que coincidan con la búsqueda.</td></tr>`;
+            } else {
+                tbody.innerHTML = this.insumosFiltrados.map(item => {
+                    const estadoBadge = item.estado_stock === 'AGOTADO'
+                        ? `<span class="badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">AGOTADO</span>`
+                        : item.estado_stock === 'BAJO'
+                        ? `<span class="badge" style="background:#fef3c7; color:#b45309; font-weight:700;">BAJO</span>`
+                        : `<span class="badge" style="background:#d1fae5; color:#047857; font-weight:700;">ÓPTIMO</span>`;
+
+                    const mermaKg = parseFloat(item.merma_acumulada_kg) || 0;
+                    const mermaPesos = parseFloat(item.merma_acumulada_pesos) || (mermaKg * (item.costo_unitario_kg || 0));
+                    const mermaHtml = mermaKg > 0
+                        ? `<span style="font-weight: 700; color: #dc2626;">${mermaKg.toFixed(2)} Kg</span>
+                           <div style="font-size: 0.75rem; color: #b91c1c; font-weight: 600;">$ ${this.formatMoney(mermaPesos)}</div>`
+                        : `<span style="color: var(--text-muted); font-size: 0.85rem;">0.00 Kg</span>
+                           <div style="font-size: 0.72rem; color: var(--text-muted);">$ 0</div>`;
+
+                    return `
+                        <tr>
+                            <td style="font-weight: 600;">
+                                ${item.insumo}
+                                <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${item.categoria}</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600; color: #2563eb;">
+                                ${item.bodega_sin_porc_kg.toFixed(2)} <span style="font-size:0.75rem; color:var(--text-muted);">Kg</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <span style="font-weight: 600; color: #7c3aed;">${item.bodega_porc_und}</span> <span style="font-size:0.75rem;">und</span>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">${item.bodega_porc_kg.toFixed(2)} Kg</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600; color: #059669;">
+                                ${item.peso_total_bodega_kg.toFixed(2)} <span style="font-size:0.75rem; color:var(--text-muted);">Kg</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <span style="font-weight: 600; color: #d97706;">${item.cocina_porc_und}</span> <span style="font-size:0.75rem;">und</span>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">${item.cocina_porc_kg.toFixed(2)} Kg</div>
+                            </td>
+                            <td style="text-align: right; background: rgba(239, 68, 68, 0.04);">
+                                ${mermaHtml}
+                            </td>
+                            <td style="text-align: right; color: var(--text-muted);">
+                                $ ${this.formatMoney(item.costo_unitario_kg)}
+                            </td>
+                            <td style="text-align: right; font-weight: 700; color: #0284c7;">
+                                $ ${this.formatMoney(item.valor_total_general_pesos)}
+                            </td>
+                            <td style="text-align: center;">
+                                ${estadoBadge}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
         }
 
-        tbody.innerHTML = this.insumosFiltrados.map(item => {
-            const estadoBadge = item.estado_stock === 'AGOTADO'
-                ? `<span class="badge" style="background:#ef4444; color:#fff;">AGOTADO</span>`
-                : item.estado_stock === 'BAJO'
-                ? `<span class="badge" style="background:#f59e0b; color:#fff;">BAJO</span>`
-                : `<span class="badge" style="background:#10b981; color:#fff;">ÓPTIMO</span>`;
+        // 3. Renderizar Tarjetas para Móviles
+        if (cardsContainer) {
+            if (this.insumosFiltrados.length === 0) {
+                cardsContainer.innerHTML = `<div style="text-align:center; padding: 2rem; color: #94a3b8;">No se encontraron carnes que coincidan con la búsqueda.</div>`;
+            } else {
+                cardsContainer.innerHTML = this.insumosFiltrados.map(item => {
+                    const estadoBadge = item.estado_stock === 'AGOTADO'
+                        ? `<span class="badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">AGOTADO</span>`
+                        : item.estado_stock === 'BAJO'
+                        ? `<span class="badge" style="background:#fef3c7; color:#b45309; font-weight:700;">BAJO</span>`
+                        : `<span class="badge" style="background:#d1fae5; color:#047857; font-weight:700;">ÓPTIMO</span>`;
 
-            return `
-                <tr>
-                    <td style="font-weight: 600;">
-                        ${item.insumo}
-                        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${item.categoria}</div>
-                    </td>
-                    <td style="text-align: right; font-weight: 600; color: #60a5fa;">
-                        ${item.bodega_sin_porc_kg.toFixed(2)} <span style="font-size:0.75rem; color:var(--text-muted);">Kg</span>
-                    </td>
-                    <td style="text-align: right;">
-                        <span style="font-weight: 600; color: #a78bfa;">${item.bodega_porc_und}</span> <span style="font-size:0.75rem;">und</span>
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">${item.bodega_porc_kg.toFixed(2)} Kg</div>
-                    </td>
-                    <td style="text-align: right; font-weight: 600; color: #34d399;">
-                        ${item.peso_total_bodega_kg.toFixed(2)} <span style="font-size:0.75rem; color:var(--text-muted);">Kg</span>
-                    </td>
-                    <td style="text-align: right;">
-                        <span style="font-weight: 600; color: #fbbf24;">${item.cocina_porc_und}</span> <span style="font-size:0.75rem;">und</span>
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">${item.cocina_porc_kg.toFixed(2)} Kg</div>
-                    </td>
-                    <td style="text-align: right; color: var(--text-muted);">
-                        $ ${this.formatMoney(item.costo_unitario_kg)}
-                    </td>
-                    <td style="text-align: right; font-weight: 600; color: #38bdf8;">
-                        $ ${this.formatMoney(item.valor_total_general_pesos)}
-                    </td>
-                    <td style="text-align: center;">
-                        ${estadoBadge}
-                    </td>
-                </tr>
-            `;
-        }).join('');
+                    const mermaKg = parseFloat(item.merma_acumulada_kg) || 0;
+                    const mermaPesos = parseFloat(item.merma_acumulada_pesos) || (mermaKg * (item.costo_unitario_kg || 0));
+
+                    return `
+                        <div class="stock-card-item">
+                            <div class="stock-card-header">
+                                <div>
+                                    <div class="stock-card-title">${item.insumo}</div>
+                                    <div class="stock-card-cat">${item.categoria}</div>
+                                </div>
+                                <div>${estadoBadge}</div>
+                            </div>
+                            <div class="stock-card-grid">
+                                <div class="stock-card-metric">
+                                    <span class="metric-label">📦 Bodega Entero</span>
+                                    <span class="metric-val" style="color: #2563eb;">${item.bodega_sin_porc_kg.toFixed(2)} Kg</span>
+                                </div>
+                                <div class="stock-card-metric">
+                                    <span class="metric-label">✂️ Bodega Porciones</span>
+                                    <span class="metric-val" style="color: #7c3aed;">${item.bodega_porc_und} und <small>(${item.bodega_porc_kg.toFixed(2)} Kg)</small></span>
+                                </div>
+                                <div class="stock-card-metric">
+                                    <span class="metric-label">🍳 En Cocina</span>
+                                    <span class="metric-val" style="color: #d97706;">${item.cocina_porc_und} und <small>(${item.cocina_porc_kg.toFixed(2)} Kg)</small></span>
+                                </div>
+                                <div class="stock-card-metric">
+                                    <span class="metric-label">📉 Merma Acum.</span>
+                                    <span class="metric-val" style="color: #dc2626;">${mermaKg > 0 ? `${mermaKg.toFixed(2)} Kg ($ ${this.formatMoney(mermaPesos)})` : '0.00 Kg'}</span>
+                                </div>
+                            </div>
+                            <div class="stock-card-footer">
+                                <span><strong>Valor Stock:</strong> $ ${this.formatMoney(item.valor_total_general_pesos)}</span>
+                                <span><strong>Costo/Kg:</strong> $ ${this.formatMoney(item.costo_unitario_kg)}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
     },
 
     // ==========================================
@@ -910,31 +1014,249 @@ const BodegueroTerminal = {
     },
 
     // ==========================================
-    // RENDERIZADO DE LÍNEA DE TIEMPO (TIMELINE)
+    // RENDERIZADO Y FILTROS DE LÍNEA DE TIEMPO
     // ==========================================
+
+    initTimelineFilters: function() {
+        const fechaInput = document.getElementById('timeline-filter-fecha');
+        const btnToday = document.getElementById('timeline-btn-today');
+        const btnAllDates = document.getElementById('timeline-btn-all-dates');
+
+        // 1. Inicializar fecha con Hoy
+        const todayStr = new Date().toISOString().split('T')[0];
+        this.timelineFilterFecha = todayStr;
+        if (fechaInput) {
+            fechaInput.value = todayStr;
+            fechaInput.addEventListener('change', (e) => {
+                this.timelineFilterFecha = e.target.value;
+                if (btnToday) btnToday.classList.toggle('active', e.target.value === todayStr);
+                if (btnAllDates) btnAllDates.classList.toggle('active', !e.target.value);
+                this.resetTimelineSearch();
+                this.renderTimeline();
+            });
+        }
+
+        // 2. Configurar Buscador Inteligente de Carnes para la Línea de Tiempo
+        this.setupTimelineSmartSearch();
+
+        // 3. Botones rápidos de fecha
+        if (btnToday) {
+            btnToday.addEventListener('click', () => {
+                const today = new Date().toISOString().split('T')[0];
+                this.timelineFilterFecha = today;
+                if (fechaInput) fechaInput.value = today;
+                btnToday.classList.add('active');
+                if (btnAllDates) btnAllDates.classList.remove('active');
+                this.resetTimelineSearch();
+                this.renderTimeline();
+            });
+        }
+
+        if (btnAllDates) {
+            btnAllDates.addEventListener('click', () => {
+                this.timelineFilterFecha = '';
+                if (fechaInput) fechaInput.value = '';
+                btnAllDates.classList.add('active');
+                if (btnToday) btnToday.classList.remove('active');
+                this.resetTimelineSearch();
+                this.renderTimeline();
+            });
+        }
+    },
+
+    resetTimelineSearch: function() {
+        const searchInput = document.getElementById('timeline-search-input');
+        const hiddenInput = document.getElementById('timeline-insumo-val');
+        const clearBtn = document.getElementById('timeline-search-clear');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.classList.remove('item-selected');
+        }
+        if (hiddenInput) hiddenInput.value = 'ALL';
+        if (clearBtn) clearBtn.style.display = 'none';
+        this.timelineFilterInsumo = 'ALL';
+    },
+
+    setupTimelineSmartSearch: function() {
+        const searchInput = document.getElementById('timeline-search-input');
+        const hiddenInput = document.getElementById('timeline-insumo-val');
+        const dropdown = document.getElementById('timeline-search-dropdown');
+        const clearBtn = document.getElementById('timeline-search-clear');
+
+        if (!searchInput || !dropdown) return;
+
+        // Obtener la lista de carnes que TIENEN movimientos en la fecha seleccionada
+        const getMeatsForCurrentDate = () => {
+            let list = this.movimientosHistorial || [];
+            if (this.timelineFilterFecha) {
+                list = list.filter(m => {
+                    const mDate = (m.fecha_hora || m.fecha || '').split('T')[0];
+                    return mDate === this.timelineFilterFecha;
+                });
+            }
+
+            const meatsMap = new Map();
+            list.forEach(m => {
+                const nombre = m.catalogo_insumos?.nombre || m.insumo || 'Carne';
+                const id = m.insumo_id || nombre;
+                const cat = m.catalogo_insumos?.categoria || 'CARNES';
+                
+                if (!meatsMap.has(id)) {
+                    meatsMap.set(id, {
+                        id: id,
+                        name: nombre,
+                        categoria: cat,
+                        count: 1
+                    });
+                } else {
+                    meatsMap.get(id).count += 1;
+                }
+            });
+
+            return Array.from(meatsMap.values());
+        };
+
+        const renderResults = (query = '') => {
+            const cleanQuery = this.normalizeStr(query);
+            const activeMeats = getMeatsForCurrentDate();
+
+            if (activeMeats.length === 0) {
+                const dateText = this.timelineFilterFecha ? `el día ${this.timelineFilterFecha}` : 'las fechas seleccionadas';
+                dropdown.innerHTML = `<div class="smart-search-empty" style="padding:0.75rem; font-size:0.85rem; text-align:center; color:#64748b;">No hay carnes con movimientos registrados ${dateText}.</div>`;
+                dropdown.classList.add('show');
+                return;
+            }
+
+            let filtered = activeMeats;
+            if (cleanQuery.length > 0) {
+                filtered = activeMeats.filter(m => this.normalizeStr(m.name).includes(cleanQuery) || this.normalizeStr(m.categoria).includes(cleanQuery));
+            }
+
+            let html = `
+                <div class="smart-search-item" data-id="ALL" data-name="Todas las Carnes" style="background:#f8fafc; font-weight:700; border-bottom:1px solid #e2e8f0; padding:0.6rem 0.85rem;">
+                    <div class="smart-search-item-left">
+                        <span class="smart-search-item-name" style="color:#0f172a;">🥩 Ver Todas las Carnes (${activeMeats.length} con movs)</span>
+                    </div>
+                </div>
+            `;
+
+            if (filtered.length === 0) {
+                html += `<div class="smart-search-empty" style="padding:0.75rem; font-size:0.85rem; text-align:center; color:#64748b;">No hay carnes que coincidan con "<strong>${query}</strong>" en esta fecha.</div>`;
+            } else {
+                html += filtered.map(m => {
+                    let displayName = m.name;
+                    if (cleanQuery.length > 0) {
+                        const regex = new RegExp(`(${cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                        displayName = m.name.replace(regex, '<mark>$1</mark>');
+                    }
+                    return `
+                        <div class="smart-search-item" data-id="${m.id}" data-name="${m.name}" style="padding:0.6rem 0.85rem; cursor:pointer;">
+                            <div class="smart-search-item-left">
+                                <span class="smart-search-item-name" style="font-weight:600; font-size:0.9rem;">${displayName}</span>
+                                <span class="smart-search-item-cat" style="font-size:0.72rem; color:#94a3b8;">${m.categoria}</span>
+                            </div>
+                            <div class="smart-search-item-right">
+                                <span class="badge" style="font-size:0.72rem; background:#f1f5f9; color:#475569; padding:0.2rem 0.5rem; border-radius:4px;">${m.count} mov${m.count > 1 ? 's' : ''}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            dropdown.innerHTML = html;
+            dropdown.classList.add('show');
+
+            dropdown.querySelectorAll('.smart-search-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const id = el.getAttribute('data-id');
+                    const name = el.getAttribute('data-name');
+                    
+                    if (id === 'ALL') {
+                        hiddenInput.value = 'ALL';
+                        searchInput.value = '';
+                        searchInput.placeholder = 'Escribe para filtrar carnes con movimientos...';
+                        searchInput.classList.remove('item-selected');
+                        if (clearBtn) clearBtn.style.display = 'none';
+                        this.timelineFilterInsumo = 'ALL';
+                    } else {
+                        hiddenInput.value = id;
+                        searchInput.value = name;
+                        searchInput.classList.add('item-selected');
+                        if (clearBtn) clearBtn.style.display = 'flex';
+                        this.timelineFilterInsumo = id;
+                    }
+                    dropdown.classList.remove('show');
+                    this.renderTimeline();
+                });
+            });
+        };
+
+        searchInput.addEventListener('focus', () => {
+            renderResults(searchInput.value);
+        });
+
+        searchInput.addEventListener('input', (e) => {
+            renderResults(e.target.value);
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.resetTimelineSearch();
+                this.renderTimeline();
+            });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+    },
 
     renderTimeline: function() {
         const container = document.getElementById('bod-timeline-feed');
         const countBadge = document.getElementById('bod-timeline-count');
         if (!container) return;
 
-        if (countBadge) {
-            countBadge.textContent = `${this.movimientosHistorial.length} movimiento${this.movimientosHistorial.length === 1 ? '' : 's'}`;
+        // Filtrar según carne y fecha seleccionadas
+        let filtered = [...this.movimientosHistorial];
+
+        if (this.timelineFilterFecha) {
+            filtered = filtered.filter(m => {
+                const mDate = (m.fecha_hora || m.fecha || '').split('T')[0];
+                return mDate === this.timelineFilterFecha;
+            });
         }
 
-        if (this.movimientosHistorial.length === 0) {
+        if (this.timelineFilterInsumo && this.timelineFilterInsumo !== 'ALL') {
+            const target = String(this.timelineFilterInsumo).toLowerCase();
+            filtered = filtered.filter(m => {
+                const insumoNom = (m.catalogo_insumos?.nombre || m.insumo || '').toLowerCase();
+                const insId = String(m.insumo_id || '').toLowerCase();
+                return insId === target || insumoNom === target;
+            });
+        }
+
+        if (countBadge) {
+            countBadge.textContent = `${filtered.length} movimiento${filtered.length === 1 ? '' : 's'}`;
+        }
+
+        if (filtered.length === 0) {
+            const fechaInfo = this.timelineFilterFecha ? `el día ${this.timelineFilterFecha}` : 'las fechas seleccionadas';
+            const carneInfo = (this.timelineFilterInsumo && this.timelineFilterInsumo !== 'ALL') ? 'para la carne seleccionada' : '';
+
             container.innerHTML = `
                 <div class="timeline-empty">
                     <i data-lucide="clock" style="width: 32px; height: 32px; color: #94a3b8;"></i>
-                    <span style="font-weight: 500;">No hay movimientos registrados recientemente.</span>
-                    <span style="font-size: 0.8rem; color: #94a3b8;">A medida que registres compras, porcionados o traslados, aparecerán en este historial.</span>
+                    <span style="font-weight: 600; color: #475569;">Sin movimientos ${carneInfo} ${fechaInfo}</span>
+                    <span style="font-size: 0.8rem; color: #94a3b8;">Prueba cambiando la fecha o seleccionando "Todas las Fechas" / "Todas las Carnes".</span>
                 </div>
             `;
             lucide.createIcons();
             return;
         }
 
-        container.innerHTML = this.movimientosHistorial.map(m => {
+        container.innerHTML = filtered.map(m => {
             const tipo = m.tipo_movimiento || 'MOVIMIENTO';
             const nombreInsumo = m.catalogo_insumos?.nombre || m.insumo || 'Carne';
             const usuario = m.usuario || 'Bodeguero';

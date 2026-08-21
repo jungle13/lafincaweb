@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const viewMeta = {
         'bodeguero': { title: 'Terminal del Bodeguero', subtitle: 'Control operativo de carnes y movimientos en tiempo real' },
+        'inventario': { title: 'Estado Real del Inventario', subtitle: 'Monitoreo en vivo de existencias en bodega, cocina y valorización en pesos' },
         'dashboard': { title: 'Dashboard General', subtitle: 'Resumen ejecutivo del restaurante' },
         'movimientos': { title: 'Movimientos de Inventario', subtitle: 'Trazabilidad y estados diarios por insumo' },
         'bodega-linea': { title: 'Bodega Línea Temporal', subtitle: 'Tabla original de movimientos de conteo bodega' },
@@ -89,52 +90,98 @@ document.addEventListener('DOMContentLoaded', () => {
         Compras.init();
     }
 
+    function switchView(target) {
+        if (!target) return;
+
+        // Actualizar active classes en sidebar
+        navItems.forEach(nav => {
+            if (nav.getAttribute('data-target') === target) {
+                nav.classList.add('active');
+            } else {
+                nav.classList.remove('active');
+            }
+        });
+
+        // Actualizar active classes en barra móvil inferior
+        document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+            if (btn.getAttribute('data-view') === target) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Actualizar secciones de vista
+        viewSections.forEach(section => {
+            section.classList.remove('active');
+            if (section.id === `view-${target}`) {
+                section.classList.add('active');
+            }
+        });
+
+        // Actualizar textos Header
+        if (viewMeta[target]) {
+            if (viewTitle) viewTitle.textContent = viewMeta[target].title;
+            if (viewSubtitle) viewSubtitle.textContent = viewMeta[target].subtitle;
+        } else if (target === 'ventas') {
+            if (viewTitle) viewTitle.textContent = 'Registro de Ventas';
+            if (viewSubtitle) viewSubtitle.textContent = 'KPIs e ingresos por platos vendidos';
+        }
+        
+        // Cerrar menú móvil si está abierto
+        if (window.innerWidth <= 768 && sidebar && overlay) {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('show');
+        }
+        
+        // Acciones específicas por vista
+        if (target === 'dashboard' && AppData.isLoaded) {
+            Dashboard.renderTrendChart();
+        }
+
+        if (target === 'bodeguero' && typeof BodegueroTerminal !== 'undefined') {
+            BodegueroTerminal.loadData();
+        }
+
+        if (target === 'inventario' && typeof BodegueroTerminal !== 'undefined') {
+            BodegueroTerminal.loadData();
+        }
+
+        if (target === 'compras' && typeof Compras !== 'undefined') {
+            Compras.loadData();
+        }
+
+        // Scroll al tope de la página suavemente
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Eventos en Nav Items Sidebar
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
-            
-            // Actualizar active classes nav
-            navItems.forEach(nav => nav.classList.remove('active'));
-            item.classList.add('active');
-
-            // Actualizar vistas
             const target = item.getAttribute('data-target');
-            viewSections.forEach(section => {
-                section.classList.remove('active');
-                if(section.id === `view-${target}`) {
-                    section.classList.add('active');
-                }
-            });
-
-            // Actualizar textos Header
-            if (viewMeta[target]) {
-                viewTitle.textContent = viewMeta[target].title;
-                viewSubtitle.textContent = viewMeta[target].subtitle;
-            } else if (target === 'ventas') {
-                viewTitle.textContent = 'Registro de Ventas';
-                viewSubtitle.textContent = 'KPIs e ingresos por platos vendidos';
-            }
-            
-            // Cerrar menú móvil si está abierto
-            if (window.innerWidth <= 768 && sidebar && overlay) {
-                sidebar.classList.remove('mobile-open');
-                overlay.classList.remove('show');
-            }
-            
-            // Re-render chart if navigating back to dashboard to fix canvas resize issues
-            if (target === 'dashboard' && AppData.isLoaded) {
-                Dashboard.renderTrendChart();
-            }
-
-            if (target === 'bodeguero' && typeof BodegueroTerminal !== 'undefined') {
-                BodegueroTerminal.loadData();
-            }
-
-            if (target === 'compras' && typeof Compras !== 'undefined') {
-                Compras.loadData();
-            }
+            switchView(target);
         });
     });
+
+    // Eventos en Botones de Barra Inferior Móvil
+    document.querySelectorAll('.mobile-nav-btn[data-view]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const target = btn.getAttribute('data-view');
+            switchView(target);
+        });
+    });
+
+    // Botón de Abrir Menú lateral desde Barra Inferior
+    const mobileMenuDrawerBtn = document.getElementById('mobile-btn-menu-drawer');
+    if (mobileMenuDrawerBtn && sidebar) {
+        mobileMenuDrawerBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            sidebar.classList.add('mobile-open');
+            if (overlay) overlay.classList.add('show');
+        });
+    }
 
     // Botón de Sincronización Manual de Base de Datos
     const btnSyncDb = document.getElementById('btn-sync-db');
