@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hoja Diaria de Control de Carnes - La Finca</title>
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 6mm 8mm;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            color: #0f172a;
+        }
+
+        body {
+            background-color: #f8fafc;
+            padding: 12px;
+            font-size: 10px;
+        }
+
+        .sheet {
+            background: #ffffff;
+            width: 100%;
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 12px 16px;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+
+        .logo-title h1 {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: 0.3px;
+        }
+
+        .logo-title p {
+            font-size: 9.5px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .meta-fields {
+            display: flex;
+            gap: 10px;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .meta-line {
+            display: inline-block;
+            border-bottom: 1px solid #334155;
+            min-width: 75px;
+            height: 12px;
+        }
+
+        /* TABLA MAESTRA */
+        table.master-grid {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9.5px;
+        }
+
+        table.master-grid th {
+            background: #0f172a;
+            color: #ffffff;
+            font-weight: 700;
+            border: 1px solid #334155;
+            padding: 4px 4px;
+            text-align: center;
+            font-size: 9px;
+            line-height: 1.1;
+        }
+
+        table.master-grid th.sub-th {
+            background: #1e293b;
+            color: #e2e8f0;
+            font-size: 8.5px;
+            font-weight: 600;
+        }
+
+        table.master-grid th.th-compra { background: #1e3a8a; }
+        table.master-grid th.th-porc { background: #581c87; }
+        table.master-grid th.th-cocina { background: #c2410c; }
+        table.master-grid th.th-dev { background: #065f46; }
+
+        table.master-grid td {
+            border: 1px solid #cbd5e1;
+            padding: 3px 5px;
+            height: 17.5px;
+            vertical-align: middle;
+        }
+
+        table.master-grid tr:nth-child(even) td {
+            background-color: #f8fafc;
+        }
+
+        table.master-grid td.meat-name {
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        table.master-grid td.meat-cat {
+            font-size: 8px;
+            color: #64748b;
+            text-align: center;
+        }
+
+        table.master-grid td.center { text-align: center; }
+        table.master-grid td.right { text-align: right; }
+
+        /* FOOTER */
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid #cbd5e1;
+        }
+
+        .signatures {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+        }
+
+        .sig-box {
+            flex: 1;
+            text-align: center;
+        }
+
+        .sig-line {
+            border-bottom: 1px solid #475569;
+            margin-bottom: 2px;
+            height: 14px;
+        }
+
+        .sig-label {
+            font-size: 8.5px;
+            color: #64748b;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* INSTRUCCIÓN RÁPIDA */
+        .tips-bar {
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            border-left: 3px solid #f59e0b;
+            padding: 3px 6px;
+            font-size: 8.5px;
+            color: #92400e;
+            margin-bottom: 6px;
+            border-radius: 3px;
+        }
+
+        /* NO PRINT BAR */
+        .no-print-bar {
+            max-width: 820px;
+            margin: 0 auto 10px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 8px 14px;
+            border-radius: 6px;
+        }
+
+        .btn-print {
+            background: #f97316;
+            color: #ffffff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-print:hover { background: #ea580c; }
+        .btn-back { color: #94a3b8; text-decoration: none; font-size: 11px; font-weight: 600; }
+        .btn-back:hover { color: #ffffff; }
+
+        @media print {
+            body { background: #ffffff; padding: 0; }
+            .no-print-bar { display: none !important; }
+            .sheet { border: none; box-shadow: none; padding: 0; width: 100%; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Barra de acciones en pantalla -->
+    <div class="no-print-bar">
+        <div>
+            <strong style="font-size: 12.5px;">📋 Formato Diario de Carnes (Pre-impreso)</strong>
+            <div style="font-size: 10.5px; color: #94a3b8;">Las carnes habituales ya vienen listas. El bodeguero solo escribe números.</div>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <a href="index.html" class="btn-back">← Volver a la Aplicación</a>
+            <button onclick="window.print()" class="btn-print">
+                🖨️ Imprimir Hoja del Día
+            </button>
+        </div>
+    </div>
+
+    <!-- HOJA IMPRIMIBLE -->
+    <div class="sheet">
+
+        <!-- CABECERA -->
+        <div class="header">
+            <div class="logo-title">
+                <h1>🥩 LA FINCA - CONTROL DIARIO DE CARNES Y MOVIMIENTOS</h1>
+                <p>REGISTRO RÁPIDO DE OPERACIONES (BODEGA ➔ PORCIONADO ➔ COCINA)</p>
+            </div>
+            <div class="meta-fields">
+                <div class="meta-item"><strong>Fecha:</strong> <span class="meta-line" style="min-width: 70px;"></span></div>
+                <div class="meta-item"><strong>Turno:</strong> <span class="meta-line" style="min-width: 55px;"></span></div>
+                <div class="meta-item"><strong>Bodeguero:</strong> <span class="meta-line" style="min-width: 100px;"></span></div>
+            </div>
+        </div>
+
+        <div class="tips-bar">
+            💡 <strong>Instrucción rápida:</strong> Si cocina pide varias veces en el turno, anota sumando (ej. <code>10 + 5</code>). Si entra carne entera sin porcionar, anota los Kg en compras y luego las porciones obtenidas.
+        </div>
+
+        <!-- TABLA MAESTRA INTEGRADA -->
+        <table class="master-grid">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 22px;">#</th>
+                    <th rowspan="2" style="width: 140px; text-align: left; padding-left: 6px;">CARNE / INSUMO</th>
+                    <th rowspan="2" style="width: 60px;">CATEGORÍA</th>
+                    <th colspan="2" class="th-compra">1. ENTRADA PROVEEDOR</th>
+                    <th colspan="2" class="th-porc">2. PORCIONADO</th>
+                    <th colspan="2" class="th-cocina">3. SALIDA A COCINA</th>
+                    <th colspan="1" class="th-dev">4. DEVOLUCIÓN</th>
+                    <th rowspan="2" style="width: 110px;">OBSERVACIONES / FACTURA</th>
+                </tr>
+                <tr>
+                    <th class="sub-th" style="width: 50px;">Kg Entero</th>
+                    <th class="sub-th" style="width: 55px;">Nº Fact/Prov</th>
+                    <th class="sub-th" style="width: 50px;">Kg Proces.</th>
+                    <th class="sub-th" style="width: 50px;">Unds Listas</th>
+                    <th class="sub-th" style="width: 75px;">Porciones (Und)</th>
+                    <th class="sub-th" style="width: 50px;">Kg Entero</th>
+                    <th class="sub-th" style="width: 60px;">Unds Sobrantes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- RES -->
+                <tr><td class="center">1</td><td class="meat-name">Punta de Anca</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">2</td><td class="meat-name">Lomo Viche</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">3</td><td class="meat-name">Baby Beef</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">4</td><td class="meat-name">Churrasco</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">5</td><td class="meat-name">Sobrebarriga</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">6</td><td class="meat-name">Lengua de Res</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">7</td><td class="meat-name">Carne Asada / Caderita</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">8</td><td class="meat-name">Costilla de Res</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">9</td><td class="meat-name">Sobaco / Molida</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">10</td><td class="meat-name">Muchacho / Alguacil</td><td class="meat-cat">RES</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                
+                <!-- CERDO -->
+                <tr><td class="center">11</td><td class="meat-name">Tocino / Chicharrón</td><td class="meat-cat">CERDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">12</td><td class="meat-name">Tocino Barril / Mega</td><td class="meat-cat">CERDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">13</td><td class="meat-name">Lomo de Cerdo</td><td class="meat-cat">CERDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">14</td><td class="meat-name">Costilla San Luis</td><td class="meat-cat">CERDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">15</td><td class="meat-name">Costilla Ahumada</td><td class="meat-cat">CERDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">16</td><td class="meat-name">Panceta / Pezuña</td><td class="meat-cat">CERDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+
+                <!-- POLLO Y AVES -->
+                <tr><td class="center">17</td><td class="meat-name">Filete de Pollo</td><td class="meat-cat">POLLO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">18</td><td class="meat-name">Pernil / Muslos de Pollo</td><td class="meat-cat">POLLO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">19</td><td class="meat-name">Pechuga de Pollo (Trozo)</td><td class="meat-cat">POLLO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">20</td><td class="meat-name">Gallina / Gallo Criollo</td><td class="meat-cat">POLLO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+
+                <!-- PESCADOS Y OTROS -->
+                <tr><td class="center">21</td><td class="meat-name">Tilapia (Filete)</td><td class="meat-cat">PESCADO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">22</td><td class="meat-name">Trucha (Filete)</td><td class="meat-cat">PESCADO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">23</td><td class="meat-name">Salmón (Filete)</td><td class="meat-cat">PESCADO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">24</td><td class="meat-name">Camarón / Mariscos</td><td class="meat-cat">MARISCO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">25</td><td class="meat-name">Chorizo Paisa / Grande</td><td class="meat-cat">EMBUTIDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">26</td><td class="meat-name">Morcilla / Rellena</td><td class="meat-cat">EMBUTIDO</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">27</td><td class="meat-name">Tamal / Huevos / Papas</td><td class="meat-cat">COMPLEM.</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+
+                <!-- FILAS EN BLANCO PARA EXTRAS -->
+                <tr><td class="center">28</td><td class="meat-name"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="center">29</td><td class="meat-name"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+        </table>
+
+        <!-- FIRMAS -->
+        <div class="footer">
+            <div class="signatures">
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-label">Firma Bodeguero</div>
+                </div>
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-label">Firma Jefe de Cocina</div>
+                </div>
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-label">Firma Administración / Cierre</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

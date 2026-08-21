@@ -1651,221 +1651,6 @@ th.super-total {
 }
 
 /* ====================================================================
-   FILTROS DE LÍNEA DE TIEMPO (DESKTOP BASE)
-   ==================================================================== */
-.timeline-filters-bar {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    background: #f8fafc;
-    padding: 0.75rem 1rem;
-    border-radius: var(--radius-md);
-    border: 1px solid #e2e8f0;
-    margin-bottom: 1rem;
-}
-
-.timeline-filter-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.timeline-filter-date-group {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.timeline-filter-date-group label {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #475569;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-.timeline-filter-date-group label svg {
-    width: 15px;
-    height: 15px;
-    color: var(--accent-primary);
-}
-
-.timeline-filter-date-group input.date-picker {
-    height: 38px;
-    padding: 0.35rem 0.65rem;
-    font-size: 0.85rem;
-    border-radius: 6px;
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #0f172a;
-}
-
-.timeline-filter-quick-btns {
-    display: flex;
-    gap: 0.4rem;
-}
-
-.btn-filter-pill {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border-radius: 6px;
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #475569;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-filter-pill:hover {
-    background: #f1f5f9;
-    border-color: #94a3b8;
-}
-
-.btn-filter-pill.active {
-    background: #0f172a;
-    color: #ffffff;
-    border-color: #0f172a;
-}
-
-.timeline-search-container {
-    position: relative;
-    flex: 1;
-    max-width: 450px;
-}
-
-.timeline-search-container .smart-search-input {
-    height: 40px;
-    font-size: 0.88rem;
-    padding-left: 36px;
-    padding-right: 32px;
-    border-radius: 8px;
-    border: 1.5px solid #cbd5e1;
-    background: #ffffff;
-    color: #0f172a;
-}
-
-.timeline-search-container .smart-search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    color: #94a3b8;
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.timeline-search-container .smart-search-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    z-index: 1050;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
-    max-height: 260px;
-    overflow-y: auto;
-    display: none;
-}
-
-.timeline-search-container .smart-search-dropdown.show {
-    display: block;
-}
-
-/* ====================================================================
-   CONTROL DE STOCK / INVENTARIO DE CARNES (DESKTOP & MOBILE)
-   ==================================================================== */
-.stock-desktop-table {
-    display: block;
-}
-
-.stock-mobile-cards {
-    display: none;
-}
-
-.stock-card-item {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 0.85rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-}
-
-.stock-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    border-bottom: 1px solid #f1f5f9;
-    padding-bottom: 0.5rem;
-}
-
-.stock-card-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-.stock-card-cat {
-    font-size: 0.72rem;
-    color: #64748b;
-    font-weight: 500;
-}
-
-.stock-card-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-    background: #f8fafc;
-    padding: 0.6rem;
-    border-radius: 8px;
-}
-
-.stock-card-metric {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-}
-
-.stock-card-metric .metric-label {
-    font-size: 0.68rem;
-    color: #64748b;
-    font-weight: 600;
-}
-
-.stock-card-metric .metric-val {
-    font-size: 0.82rem;
-    font-weight: 700;
-}
-
-.stock-card-metric .metric-val small {
-    font-size: 0.7rem;
-    color: #94a3b8;
-    font-weight: normal;
-}
-
-.stock-card-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.75rem;
-    color: #334155;
-    border-top: 1px dashed #e2e8f0;
-    padding-top: 0.4rem;
-}
-
-/* ====================================================================
    BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (ESTILO APP NATIVA)
    ==================================================================== */
 .mobile-bottom-bar {
@@ -1925,224 +1710,137 @@ th.super-total {
 }
 
 /* ====================================================================
-   OPTIMIZACIONES MÓVILES RESPONSIVE (UI TIPO APP NATIVA)
+   OPTIMIZACIONES MÓVILES RESPONSIVE (TERMINAL BODEGUERO & STOCK)
    ==================================================================== */
 @media (max-width: 768px) {
     /* Mostrar barra inferior en móviles */
     .mobile-bottom-bar {
-        display: flex !important;
+        display: flex;
     }
 
-    /* Ocultar botón menú superior ya que está abajo */
-    #sidebar-toggle,
-    .mobile-menu-btn,
-    .mobile-hide-toggle {
+    /* Ocultar menú hamburguesa superior duplicado */
+    .mobile-menu-btn {
         display: none !important;
     }
 
     /* Evitar que el contenido quede tapado por la barra inferior */
     .main-content {
-        padding-bottom: calc(85px + env(safe-area-inset-bottom, 0)) !important;
-        background-color: #0b0f19 !important;
+        padding-bottom: calc(75px + env(safe-area-inset-bottom, 0)) !important;
     }
 
-    /* Cabecera Superior Nativa (App Bar limpia y compacta) */
+    /* Ajuste de cabecera en móvil - Menos espacio en blanco */
     .top-header {
-        padding: 0.65rem 0.85rem !important;
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 0.5rem !important;
-        background: #0f172a !important;
-        border-bottom: 1px solid #1e293b !important;
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 100 !important;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2) !important;
+        padding: 0.5rem 0.75rem !important;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
     }
 
     .top-header-left {
-        display: flex !important;
-        align-items: center !important;
-        gap: 0.5rem !important;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
 
     .header-title h1 {
-        font-size: 1.05rem !important;
-        font-weight: 800 !important;
-        color: #ffffff !important;
+        font-size: 1.15rem !important;
+        margin-bottom: 0.1rem !important;
+    }
+
+    .header-title p {
+        font-size: 0.75rem !important;
         margin: 0 !important;
-        letter-spacing: -0.01em !important;
     }
 
-    /* Ocultar subtítulos y filtros pesados en cabecera móvil para ganar espacio */
-    .header-title p.subtitle,
-    .header-date-filter,
-    .header-btn-print {
-        display: none !important;
+    .top-header-right {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0.5rem;
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
     }
 
-    .header-actions {
-        display: flex !important;
-        align-items: center !important;
-        gap: 0.5rem !important;
+    .top-header-right .btn, .top-header-right input {
+        font-size: 0.75rem !important;
+        padding: 0.35rem 0.5rem !important;
     }
 
-    /* Botón de Sincronizar Datos como Icon-Button flotante superior */
-    .header-btn-sync {
-        width: 38px !important;
-        height: 38px !important;
-        padding: 0 !important;
-        border-radius: 50% !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background: #1e293b !important;
-        border: 1px solid #334155 !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
-    }
-
-    .header-btn-sync span {
-        display: none !important;
-    }
-
-    .header-btn-sync svg {
-        width: 18px !important;
-        height: 18px !important;
-        color: #38bdf8 !important;
-    }
-
-    /* Sección Principal y Contenedor */
+    /* Reducir espacio exterior de las secciones en móvil */
     .view-section {
-        padding: 0.65rem 0.65rem 1.5rem 0.65rem !important;
+        padding: 0 0.5rem 1rem 0.5rem !important;
     }
 
     .bodeguero-container {
         gap: 0.75rem !important;
     }
 
-    .bodeguero-ops-panel {
-        background: #1e293b !important;
-        border: 1px solid #334155 !important;
-        border-radius: 14px !important;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
-        overflow: hidden !important;
-    }
-
-    /* Segmented Control de Operaciones (Grid 4 columnas nativas tipo App) */
+    /* Pestañas de operaciones del bodeguero (Scroll Horizontal suave) */
     .bodeguero-op-tabs {
-        display: grid !important;
-        grid-template-columns: repeat(4, 1fr) !important;
-        gap: 4px !important;
-        padding: 6px !important;
+        display: flex !important;
+        overflow-x: auto !important;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.4rem !important;
+        padding: 0.5rem !important;
         background: #0f172a !important;
-        border-bottom: 1px solid #1e293b !important;
+        border-bottom: 2px solid #1e293b !important;
     }
 
     .bodeguero-op-tab {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 8px 2px !important;
-        min-width: 0 !important;
+        flex: 0 0 auto !important;
+        min-width: 130px !important;
+        padding: 0.65rem 0.85rem !important;
         border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
         background: #1e293b !important;
-        color: #94a3b8 !important;
-        font-size: 0.72rem !important;
+        color: #e2e8f0 !important;
+        font-size: 0.82rem !important;
         font-weight: 700 !important;
         text-align: center !important;
-        gap: 4px !important;
-        border: 1px solid transparent !important;
-        transition: all 0.2s ease !important;
+        scroll-snap-align: start;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.4rem !important;
         -webkit-tap-highlight-color: transparent;
     }
 
-    .bodeguero-op-tab svg {
-        width: 18px !important;
-        height: 18px !important;
-    }
-
     .bodeguero-op-tab.active {
+        border-color: #f97316 !important;
+        background: #f97316 !important;
         color: #ffffff !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-        transform: scale(1.02) !important;
+        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35) !important;
     }
 
-    .bodeguero-op-tab.tab-compra.active { background: #2563eb !important; border-color: #3b82f6 !important; }
-    .bodeguero-op-tab.tab-porc.active { background: #9333ea !important; border-color: #a855f7 !important; }
-    .bodeguero-op-tab.tab-traslado.active { background: #ea580c !important; border-color: #f97316 !important; }
-    .bodeguero-op-tab.tab-devolucion.active { background: #059669 !important; border-color: #10b981 !important; }
+    .bodeguero-op-tab.tab-compra.active { background: #3b82f6 !important; border-color: #3b82f6 !important; }
+    .bodeguero-op-tab.tab-porc.active { background: #a855f7 !important; border-color: #a855f7 !important; }
+    .bodeguero-op-tab.tab-traslado.active { background: #f97316 !important; border-color: #f97316 !important; }
+    .bodeguero-op-tab.tab-devolucion.active { background: #10b981 !important; border-color: #10b981 !important; }
 
-    /* Formulario de operaciones móvil */
+    /* Formulario de operaciones móvil - Menos padding */
     .bodeguero-op-form {
-        padding: 0.85rem !important;
-        background: #ffffff !important;
-        border-radius: 0 0 14px 14px !important;
+        padding: 0.75rem !important;
     }
 
-    /* Buscador inteligente táctil - Sin traslapes */
-    .smart-search-container {
-        position: relative !important;
-        width: 100% !important;
-    }
-
-    .smart-search-input-wrapper {
-        position: relative !important;
-        display: flex !important;
-        align-items: center !important;
-        width: 100% !important;
+    /* Buscador inteligente táctil */
+    .smart-search-input {
+        height: 50px !important;
+        font-size: 16px !important; /* 16px previene el zoom automático de iOS */
+        padding-left: 2.75rem !important;
+        border-radius: 10px !important;
     }
 
     .smart-search-icon {
-        position: absolute !important;
-        left: 12px !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
         width: 20px !important;
         height: 20px !important;
-        color: #94a3b8 !important;
-        pointer-events: none !important;
-        z-index: 10 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-
-    .smart-search-icon svg {
-        width: 18px !important;
-        height: 18px !important;
-    }
-
-    .smart-search-input,
-    input.smart-search-input.form-control {
-        width: 100% !important;
-        height: 48px !important;
-        font-size: 15px !important;
-        padding-left: 38px !important; /* Espacio exacto para que no choque con el icono */
-        padding-right: 36px !important;
-        padding-top: 0.65rem !important;
-        padding-bottom: 0.65rem !important;
-        border-radius: 10px !important;
-        border: 2px solid #cbd5e1 !important;
-        background-color: #ffffff !important;
-        color: #0f172a !important;
-        box-sizing: border-box !important;
-    }
-
-    .smart-search-clear {
-        position: absolute !important;
-        right: 10px !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
-        z-index: 10 !important;
+        left: 0.85rem !important;
     }
 
     .smart-search-dropdown {
         max-height: 280px !important;
         border-radius: 10px !important;
-        z-index: 1000 !important;
     }
 
     .smart-search-item {
@@ -2154,41 +1852,35 @@ th.super-total {
     .form-row-grid {
         display: grid !important;
         grid-template-columns: 1fr !important;
-        gap: 0.65rem !important;
+        gap: 0.65rem !important; /* Reducir gap en móvil */
     }
 
     .form-group {
-        margin-bottom: 0.65rem !important;
+        margin-bottom: 0 !important;
     }
 
     .form-group label {
         font-size: 0.85rem !important;
         font-weight: 700 !important;
-        color: #334155 !important;
         margin-bottom: 0.25rem !important;
-        display: block !important;
     }
 
     .form-control {
-        height: 46px !important;
-        font-size: 15px !important;
+        height: 48px !important;
+        font-size: 16px !important; /* 16px previene auto-zoom */
         border-radius: 8px !important;
-        padding: 0.65rem 0.75rem !important;
-        border: 1.5px solid #cbd5e1 !important;
-        background: #ffffff !important;
-        color: #0f172a !important;
-        box-sizing: border-box !important;
+        padding: 0.65rem 0.85rem !important;
     }
     
-    /* Dropdown nativos select */
+    /* Hacer que los dropdown nativos select se vean consistentes */
     select.form-control,
     select.select-modern {
         -webkit-appearance: none;
         appearance: none;
-        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
         background-repeat: no-repeat;
         background-position: right 0.75rem center;
-        background-size: 1.1em;
+        background-size: 1em;
         padding-right: 2.5rem !important;
     }
 
@@ -2196,8 +1888,8 @@ th.super-total {
     .btn-touch-lg {
         width: 100% !important;
         max-width: 100% !important;
-        height: 48px !important;
-        font-size: 1rem !important;
+        height: 52px !important;
+        font-size: 1.05rem !important;
         font-weight: 800 !important;
         border-radius: 10px !important;
         margin-top: 0.5rem !important;
@@ -2214,16 +1906,14 @@ th.super-total {
 
     /* Preview box móvil */
     .preview-box {
-        padding: 0.75rem !important;
+        padding: 0.85rem !important;
         font-size: 0.85rem !important;
-        margin: 0.65rem 0 !important;
-        border-radius: 8px !important;
+        margin: 0.85rem 0 !important;
     }
 
     /* Filtros de Línea de Tiempo en móvil */
     .timeline-filter-card {
         padding: 0.75rem !important;
-        border-radius: 12px !important;
     }
 
     /* Tabla de Inventario de Carnes con primera columna fija (Sticky) */
@@ -2257,179 +1947,29 @@ th.super-total {
         border-radius: 20px !important;
     }
 
-    /* Separación y contención de paneles */
-    .bodeguero-container {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 1.25rem !important; /* Espacio limpio entre el panel de movimiento y la línea de tiempo */
-        width: 100% !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-        overflow-x: hidden !important;
-    }
-
-    .bodeguero-ops-panel {
-        width: 100% !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-        overflow: hidden !important;
-        border-radius: 14px !important;
-        background: #1e293b !important;
-        border: 1px solid #334155 !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
-    }
-
-    /* Línea de Tiempo Nativa Móvil - Tarjeta contenida */
-    .timeline-card,
-    #timeline-card-container {
-        width: 100% !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-        overflow: hidden !important;
-        padding: 0.85rem !important;
-        border-radius: 14px !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06) !important;
-        background: #ffffff !important;
-    }
-
-    /* Barra de filtros de la línea de tiempo (Fecha + Buscador de carnes) */
-    .timeline-filters-bar {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0.5rem !important;
+    /* Línea de Tiempo Nativa Móvil */
+    .timeline-card {
+        padding: 0.75rem !important;
+        border-radius: 12px !important;
+        border: none !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05) !important;
         background: #f8fafc !important;
-        padding: 0.65rem !important;
-        border-radius: 10px !important;
-        border: 1px solid #e2e8f0 !important;
-        margin-bottom: 0.85rem !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-    }
-
-    .timeline-filter-row {
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        gap: 0.4rem !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-    }
-
-    .timeline-filter-date-group {
-        display: flex !important;
-        align-items: center !important;
-        gap: 0.35rem !important;
-        flex: 1 !important;
-        min-width: 0 !important;
-    }
-
-    .timeline-filter-date-group label {
-        font-size: 0.78rem !important;
-        font-weight: 700 !important;
-        color: #475569 !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 0.2rem !important;
-        white-space: nowrap !important;
-    }
-
-    .timeline-filter-date-group label svg {
-        width: 14px !important;
-        height: 14px !important;
-        color: var(--accent-primary) !important;
-    }
-
-    .timeline-filter-date-group input.date-picker {
-        flex: 1 !important;
-        min-width: 0 !important;
-        width: 100% !important;
-        height: 36px !important;
-        padding: 0.2rem 0.4rem !important;
-        font-size: 0.8rem !important;
-        border-radius: 6px !important;
-        border: 1px solid #cbd5e1 !important;
-        background: #ffffff !important;
-        color: #0f172a !important;
-        box-sizing: border-box !important;
-    }
-
-    .timeline-filter-quick-btns {
-        display: flex !important;
-        gap: 0.25rem !important;
-        flex-shrink: 0 !important;
-    }
-
-    .btn-filter-pill {
-        padding: 0.3rem 0.55rem !important;
-        font-size: 0.72rem !important;
-        font-weight: 700 !important;
-        border-radius: 6px !important;
-        border: 1px solid #cbd5e1 !important;
-        background: #ffffff !important;
-        color: #475569 !important;
-        cursor: pointer !important;
-        transition: all 0.15s ease !important;
-    }
-
-    .btn-filter-pill.active {
-        background: #0f172a !important;
-        color: #ffffff !important;
-        border-color: #0f172a !important;
-    }
-
-    /* Buscador inteligente en timeline */
-    .timeline-search-container {
-        width: 100% !important;
-        position: relative !important;
-        box-sizing: border-box !important;
-    }
-
-    .timeline-search-container .smart-search-input {
-        height: 40px !important;
-        font-size: 0.84rem !important;
-        padding-left: 34px !important;
-        padding-right: 32px !important;
-        border-radius: 8px !important;
-        border: 1.5px solid #cbd5e1 !important;
-        background: #ffffff !important;
-        box-sizing: border-box !important;
-    }
-
-    .timeline-search-container .smart-search-icon {
-        left: 10px !important;
-        width: 16px !important;
-        height: 16px !important;
-    }
-
-    .timeline-search-container .smart-search-dropdown {
-        position: absolute !important;
-        top: calc(100% + 4px) !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        z-index: 1050 !important;
     }
 
     .timeline-wrapper {
-        padding-left: 0.85rem !important;
+        padding-left: 1rem !important;
         border-left-width: 2px !important;
         border-color: #e2e8f0 !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
     }
 
     .timeline-item {
-        padding-bottom: 1rem !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
+        padding-bottom: 1.25rem !important;
     }
 
     .timeline-dot {
-        width: 22px !important;
-        height: 22px !important;
-        left: -12px !important;
+        width: 24px !important;
+        height: 24px !important;
+        left: -13px !important;
     }
     
     .timeline-dot svg {
@@ -2438,21 +1978,18 @@ th.super-total {
     }
 
     .timeline-card-content {
-        padding: 0.65rem 0.75rem !important;
+        padding: 0.75rem !important;
         border-radius: 10px !important;
         background: #ffffff !important;
         border: 1px solid #e2e8f0 !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
     }
 
     .timeline-header {
-        flex-direction: row !important;
-        justify-content: space-between !important;
-        align-items: center !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
         gap: 0.25rem !important;
-        margin-bottom: 0.35rem !important;
+        margin-bottom: 0.5rem !important;
     }
 
     .timeline-tag {
@@ -2462,35 +1999,35 @@ th.super-total {
     }
 
     .timeline-meta-right {
-        justify-content: flex-end !important;
+        width: 100% !important;
+        justify-content: flex-start !important;
     }
 
     .timeline-user, .timeline-time {
-        font-size: 0.68rem !important;
+        font-size: 0.7rem !important;
         color: #64748b !important;
     }
 
     .timeline-main {
-        flex-direction: row !important;
-        justify-content: space-between !important;
-        align-items: center !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
         gap: 0.5rem !important;
     }
 
     .timeline-meat-title {
-        font-size: 0.9rem !important;
-        font-weight: 700 !important;
+        font-size: 0.95rem !important;
     }
 
     .timeline-qty-badge {
-        font-size: 0.85rem !important;
-        padding: 0.2rem 0.45rem !important;
+        font-size: 0.95rem !important;
+        padding: 0.25rem 0.5rem !important;
+        align-self: flex-start !important;
     }
 
     .timeline-notes {
-        font-size: 0.75rem !important;
-        margin-top: 0.35rem !important;
-        padding: 0.4rem !important;
+        font-size: 0.8rem !important;
+        margin-top: 0.5rem !important;
+        padding: 0.5rem !important;
         background-color: #f1f5f9 !important;
         border-radius: 6px !important;
         border-left: 2px solid #cbd5e1 !important;
@@ -2499,95 +2036,10 @@ th.super-total {
     .timeline-snapshot {
         flex-direction: column !important;
         align-items: flex-start !important;
-        gap: 0.2rem !important;
-        font-size: 0.68rem !important;
-        margin-top: 0.35rem !important;
-        padding-top: 0.35rem !important;
-    }
-
-    /* Vista Inventario de Carnes en Móvil: Ocultar tabla ancha y mostrar tarjetas táctiles */
-    .stock-desktop-table {
-        display: none !important;
-    }
-
-    .stock-mobile-cards {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0.75rem !important;
-        margin-top: 0.5rem !important;
-    }
-
-    .stock-card-item {
-        background: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 12px !important;
-        padding: 0.85rem !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0.65rem !important;
-    }
-
-    .stock-card-header {
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: flex-start !important;
-        border-bottom: 1px solid #f1f5f9 !important;
-        padding-bottom: 0.5rem !important;
-    }
-
-    .stock-card-title {
-        font-size: 0.95rem !important;
-        font-weight: 700 !important;
-        color: #0f172a !important;
-    }
-
-    .stock-card-cat {
-        font-size: 0.72rem !important;
-        color: #64748b !important;
-        font-weight: 500 !important;
-    }
-
-    .stock-card-grid {
-        display: grid !important;
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: 0.5rem !important;
-        background: #f8fafc !important;
-        padding: 0.6rem !important;
-        border-radius: 8px !important;
-    }
-
-    .stock-card-metric {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0.15rem !important;
-    }
-
-    .stock-card-metric .metric-label {
-        font-size: 0.68rem !important;
-        color: #64748b !important;
-        font-weight: 600 !important;
-    }
-
-    .stock-card-metric .metric-val {
-        font-size: 0.82rem !important;
-        font-weight: 700 !important;
-    }
-
-    .stock-card-metric .metric-val small {
+        gap: 0.25rem !important;
         font-size: 0.7rem !important;
-        color: #94a3b8 !important;
-        font-weight: normal !important;
-    }
-
-    .stock-card-footer {
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        font-size: 0.75rem !important;
-        color: #334155 !important;
-        border-top: 1px dashed #e2e8f0 !important;
-        padding-top: 0.4rem !important;
+        margin-top: 0.5rem !important;
+        padding-top: 0.5rem !important;
     }
 }
 
