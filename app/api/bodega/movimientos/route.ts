@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -12,12 +12,12 @@ export async function GET(request: Request) {
     let query = supabase
       .from('movimientos_inventario')
       .select('*, catalogo_insumos(nombre, categoria)')
-      .order('fecha_movimiento', { ascending: false })
+      .order('fecha_hora', { ascending: false })
       .order('id', { ascending: false })
       .limit(100);
 
     if (fecha) {
-      query = query.gte('fecha_movimiento', `${fecha}T00:00:00`).lte('fecha_movimiento', `${fecha}T23:59:59`);
+      query = query.eq('fecha', fecha);
     }
 
     if (insumoId && insumoId !== 'ALL') {
@@ -26,10 +26,16 @@ export async function GET(request: Request) {
 
     const { data, error } = await query;
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      // Fallback si fecha_hora no está indexado
+      const fallback = await supabase
+        .from('movimientos_inventario')
+        .select('*, catalogo_insumos(nombre, categoria)')
+        .order('id', { ascending: false })
+        .limit(100);
+      return NextResponse.json({ success: true, data: fallback.data || [] });
     }
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: data || [] });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -44,7 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
-    // 1. Obtener saldo actual
+    // 1. Obtener saldo actual en stock_actual
     const { data: stockData, error: stockFetchErr } = await supabase
       .from('stock_actual')
       .select('*')
@@ -67,14 +73,18 @@ export async function POST(request: Request) {
       .select('costo_unitario_kg')
       .eq('id', insumoId)
       .single();
-    const costoUnitarioKg = parseFloat(catData?.costo_unitario_kg) || 0;
+    let costoUnitarioKg = parseFloat(catData?.costo_unitario_kg) || 0;
 
-    let updateStockPayload: any = { updated_at: new Date().toISOString() };
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+
+    let updateStockPayload: any = { updated_at: nowIso };
     let insertMovPayload: any = {
       tipo_movimiento: tipo,
       insumo_id: insumoId,
       usuario: usuario,
-      fecha_movimiento: new Date().toISOString(),
+      fecha: todayStr,
+      fecha_hora: nowIso,
       costo_unitario_kg: costoUnitarioKg,
     };
 
@@ -84,6 +94,44 @@ export async function POST(request: Request) {
       const proveedor = body.proveedor || 'Proveedor Local';
       const factura = body.factura || 'PENDIENTE';
       const newBSinPorc = prevBSinPorc + cantidadKg;
+
+      if (cantidadKg > 0 && costoTotal > 0) {
+        costoUnitarioKg = Math.round(costoTotal / cantidadKg);
+        insertMovPayload.costo_unitario_kg = costoUnitarioKg;
+        // Actualizar costo en catálogo
+        await supabase
+          .from('catalogo_insumos')
+          .update({ costo_unitario_kg: costoUnitarioKg, updated_at: nowIso })
+          .eq('id', insumoId);
+      }
+
+      // Registrar en tabla compras
+      try {
+        const { data: compra } = await supabase
+          .from('compras')
+          .insert([{
+            fecha: todayStr,
+            numero_factura: factura,
+            proveedor: proveedor,
+            valor_total: costoTotal,
+            observaciones: body.observaciones || 'Ingreso registrado desde Terminal Bodeguero',
+            usuario: usuario
+          }])
+          .select()
+          .single();
+
+        if (compra) {
+          await supabase.from('compras_detalle').insert([{
+            compra_id: compra.id,
+            insumo_id: insumoId,
+            cantidad_kg: cantidadKg,
+            costo_unitario_kg: costoUnitarioKg,
+            costo_total: costoTotal
+          }]);
+        }
+      } catch (compraErr) {
+        console.warn('Registro secundario en compras:', compraErr);
+      }
 
       updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
       insertMovPayload.origen = `PROVEEDOR (${proveedor})`;

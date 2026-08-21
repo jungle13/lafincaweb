@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { 
@@ -44,7 +44,7 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange }: 
   const dateFilteredMovs = useMemo(() => {
     if (!filterDate) return movimientos;
     return movimientos.filter((m) => {
-      const mDate = (m.fecha_movimiento || m.fecha_hora || '').split('T')[0];
+      const mDate = (m.fecha || m.fecha_hora || m.fecha_movimiento || '').split('T')[0];
       return mDate === filterDate;
     });
   }, [movimientos, filterDate]);
@@ -227,8 +227,9 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange }: 
           {finalFilteredMovs.map((m, idx) => {
             const tipo = m.tipo_movimiento;
             const carneName = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
-            const timeStr = m.fecha_movimiento ? new Date(m.fecha_movimiento).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
-            const dateStr = m.fecha_movimiento ? new Date(m.fecha_movimiento).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
+            const rawDate = m.fecha_hora || m.fecha || m.fecha_movimiento;
+            const timeStr = rawDate ? new Date(rawDate).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
+            const dateStr = rawDate ? new Date(rawDate).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
 
             let badgeColor = 'bg-blue-100 text-blue-700 border-blue-200';
             let Icon = PlusCircle;

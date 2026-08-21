@@ -1,41 +1,47 @@
-﻿'use client';
+'use client';
 
 import { usePathname } from 'next/navigation';
-import { RefreshCw, UtensilsCrossed } from 'lucide-react';
-import { useState } from 'react';
+import { Menu, Printer, UtensilsCrossed } from 'lucide-react';
+import Image from 'next/image';
+import { useSidebar } from '@/context/SidebarContext';
 
 const VIEW_TITLES: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'Terminal del Bodeguero', subtitle: 'Operaciones diarias de carnes en tiempo real' },
   '/bodeguero': { title: 'Terminal del Bodeguero', subtitle: 'Operaciones diarias de carnes en tiempo real' },
-  '/inventario': { title: 'Inventario de Carnes', subtitle: 'Existencias en bodega, cocina, mermas y costos' },
-  '/dashboard': { title: 'Dashboard Ejecutivo', subtitle: 'Métricas financieras y tendencias generales' },
-  '/compras': { title: 'Módulo de Compras', subtitle: 'Histórico de facturas y proveedores' },
-  '/ventas': { title: 'Módulo de Ventas', subtitle: 'Control de comandas y despachos' },
+  '/inventario': { title: 'Estado Real del Inventario de Carnes', subtitle: 'Monitoreo en vivo de cantidades en bodega, cortes en cocina, costos y valorización' },
+  '/dashboard': { title: 'Dashboard General', subtitle: 'Resumen ejecutivo y tendencias del restaurante' },
+  '/compras': { title: 'Módulo de Compras', subtitle: 'Historial de facturas y abastecimiento de insumos' },
+  '/ventas': { title: 'Módulo de Ventas', subtitle: 'Control de platos servidos y descargos' },
 };
 
-export default function TopHeader({ onRefresh }: { onRefresh?: () => void }) {
+export default function TopHeader() {
   const pathname = usePathname();
+  const { toggleSidebar } = useSidebar();
   const current = VIEW_TITLES[pathname] || VIEW_TITLES['/bodeguero'];
-  const [spinning, setSpinning] = useState(false);
-
-  const handleSync = () => {
-    setSpinning(true);
-    if (onRefresh) onRefresh();
-    setTimeout(() => setSpinning(false), 800);
-  };
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900 md:bg-white border-b border-slate-800 md:border-slate-200 px-4 py-3 md:px-6 md:py-3.5 flex items-center justify-between shadow-sm">
-      {/* Left Info */}
+    <header className="sticky top-0 z-20 bg-white border-b border-slate-200/90 px-4 md:px-6 py-3 flex items-center justify-between shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      {/* Left Title & Sidebar Toggle */}
       <div className="flex items-center gap-3">
-        <div className="md:hidden w-8 h-8 rounded-lg bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400">
-          <UtensilsCrossed className="w-5 h-5" />
+        {/* Toggle button on desktop & mobile */}
+        <button
+          onClick={toggleSidebar}
+          title="Mostrar/Ocultar Menú Lateral"
+          className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Mobile brand icon */}
+        <div className="md:hidden relative w-8 h-8">
+          <Image src="/Logo.png" alt="Logo" fill className="object-contain" />
         </div>
+
         <div>
-          <h1 className="text-base md:text-xl font-black md:font-bold text-white md:text-slate-900 tracking-tight">
+          <h1 className="text-base md:text-xl font-bold text-slate-900 tracking-tight leading-tight">
             {current.title}
           </h1>
-          <p className="hidden md:block text-xs text-slate-500 font-medium">
+          <p className="hidden md:block text-xs text-slate-500 font-normal mt-0.5">
             {current.subtitle}
           </p>
         </div>
@@ -43,14 +49,16 @@ export default function TopHeader({ onRefresh }: { onRefresh?: () => void }) {
 
       {/* Right Actions */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={handleSync}
-          title="Sincronizar Datos"
-          className="flex items-center gap-2 px-3 py-1.5 md:py-2 rounded-xl text-xs md:text-sm font-semibold bg-slate-800 md:bg-slate-100 text-slate-200 md:text-slate-700 hover:bg-slate-700 md:hover:bg-slate-200 transition-colors border border-slate-700 md:border-slate-300 shadow-sm"
+        <a
+          href="/formato-bodeguero.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Imprimir formato físico diario para el bodeguero"
+          className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-300 transition-colors shadow-sm"
         >
-          <RefreshCw className={`w-4 h-4 text-sky-400 md:text-sky-600 ${spinning ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">Sincronizar</span>
-        </button>
+          <Printer className="w-4 h-4 text-slate-500" />
+          <span>Formato Físico</span>
+        </a>
       </div>
     </header>
   );
