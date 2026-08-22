@@ -7,11 +7,8 @@ import {
   Truck, 
   Boxes, 
   LayoutDashboard, 
-  ArrowRightLeft,
-  List,
   ShoppingCart, 
   DollarSign, 
-  ChefHat,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -21,11 +18,8 @@ const NAV_ITEMS = [
   { label: 'Terminal Bodeguero', href: '/bodeguero', icon: Truck },
   { label: 'Inventario de Carnes', href: '/inventario', icon: Boxes },
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Movimientos', href: '/bodeguero#timeline', icon: ArrowRightLeft },
-  { label: 'Bodega Línea Temporal', href: '/bodeguero#timeline', icon: List, isSubItem: true },
   { label: 'Compras', href: '/compras', icon: ShoppingCart },
   { label: 'Ventas', href: '/ventas', icon: DollarSign },
-  { label: 'Recetas', href: '/dashboard', icon: ChefHat },
 ];
 
 export default function Sidebar() {
@@ -75,11 +69,10 @@ export default function Sidebar() {
       </div>
 
       {/* Nav Menu */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item, idx) => {
           const Icon = item.icon;
           const isExact = pathname === item.href || (item.href === '/bodeguero' && pathname === '/');
-          const isSub = item.isSubItem;
 
           return (
             <Link
@@ -87,9 +80,7 @@ export default function Sidebar() {
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs md:text-sm font-medium transition-all ${
-                isSub ? 'pl-7 text-xs text-slate-400' : ''
-              } ${
-                collapsed ? 'justify-center !pl-3' : ''
+                collapsed ? 'justify-center' : ''
               } ${
                 isExact
                   ? 'bg-orange-500 text-white font-semibold shadow-md shadow-orange-500/20'
