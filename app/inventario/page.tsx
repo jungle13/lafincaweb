@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import StockKpis from '@/components/inventario/StockKpis';
@@ -17,7 +17,7 @@ export default function InventarioPage() {
 
   const loadStock = async () => {
     try {
-      const res = await fetch('/api/bodega/stock');
+      const res = await fetch(`/api/bodega/stock?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.data) setInsumos(data.data);
     } catch (e) {
@@ -34,13 +34,11 @@ export default function InventarioPage() {
   const filteredInsumos = useMemo(() => {
     const cleanSearch = normalizeStr(searchQuery);
     return insumos.filter((item) => {
-      // Filtro de categoría
       if (selectedCat === 'CARNES' && item.es_carne === false) return false;
       if (selectedCat !== 'ALL' && selectedCat !== 'CARNES') {
         if (normalizeStr(item.categoria) !== normalizeStr(selectedCat)) return false;
       }
 
-      // Filtro de búsqueda
       if (!cleanSearch) return true;
       const name = normalizeStr(item.insumo);
       const code = normalizeStr(item.codigo);
@@ -52,46 +50,43 @@ export default function InventarioPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-        <p className="text-sm font-semibold">Cargando Inventario de Carnes...</p>
+        <p className="text-xs font-normal">Cargando Inventario de Carnes...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5 animate-fade-in">
-      {/* KPIs Superiores */}
+    <div className="w-full space-y-4 animate-fade-in font-normal">
+      {/* KPIs Superiores Planos */}
       <StockKpis insumos={insumos} />
 
-      {/* Main Stock Card */}
-      <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        {/* Header & Search */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h2 className="font-bold text-base md:text-lg text-slate-900">Control de Existencias de Carnes</h2>
-            <p className="text-xs text-slate-500">Monitoreo en vivo de bodega, cocina, mermas acumuladas y costos</p>
-          </div>
-
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar carne por nombre o código..."
-              className="w-full h-10 pl-9 pr-3 text-xs md:text-sm rounded-xl border border-slate-300 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10"
-            />
-          </div>
+      {/* Header y Filtros Planos */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2">
+        <div>
+          <h2 className="text-base font-medium text-slate-900 tracking-tight">Control de Existencias de Carnes</h2>
+          <p className="text-xs text-slate-500 font-normal">Monitoreo en vivo de bodega, cocina, mermas acumuladas y costos</p>
         </div>
 
-        {/* Category Chips */}
-        <CategoryFilterChips selectedCat={selectedCat} onSelectCat={setSelectedCat} />
-
-        {/* Desktop Table */}
-        <StockTableDesktop insumos={filteredInsumos} />
-
-        {/* Mobile Cards */}
-        <StockCardsMobile insumos={filteredInsumos} />
+        <div className="relative w-full md:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar carne por nombre o código..."
+            className="w-full h-9 pl-9 pr-3 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 font-normal"
+          />
+        </div>
       </div>
+
+      {/* Category Chips */}
+      <CategoryFilterChips selectedCat={selectedCat} onSelectCat={setSelectedCat} />
+
+      {/* Desktop Table Plana */}
+      <StockTableDesktop insumos={filteredInsumos} />
+
+      {/* Mobile Cards */}
+      <StockCardsMobile insumos={filteredInsumos} />
     </div>
   );
 }

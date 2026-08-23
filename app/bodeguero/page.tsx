@@ -19,9 +19,10 @@ export default function BodegueroPage() {
 
   const loadData = useCallback(async () => {
     try {
+      const ts = Date.now();
       const [stockRes, movsRes] = await Promise.all([
-        fetch('/api/bodega/stock'),
-        fetch('/api/bodega/movimientos'),
+        fetch(`/api/bodega/stock?t=${ts}`, { cache: 'no-store' }),
+        fetch(`/api/bodega/movimientos?t=${ts}`, { cache: 'no-store' }),
       ]);
 
       const stockData = await stockRes.json();
@@ -44,37 +45,41 @@ export default function BodegueroPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-        <p className="text-xs md:text-sm font-semibold">Cargando Terminal del Bodeguero...</p>
+        <p className="text-xs font-normal">Cargando Terminal del Bodeguero...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
-      {/* Panel de Operaciones (Exact match to screenshot 1) */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="w-full space-y-6 animate-fade-in font-normal">
+      {/* Panel de Operaciones Plano */}
+      <div className="border-b border-slate-200 pb-6">
         <OperationTabs activeTab={activeTab} onChangeTab={setActiveTab} />
 
-        {activeTab === 'ENTRADA_COMPRA' && (
-          <FormEntradaCompra insumos={insumos} onSuccess={loadData} />
-        )}
-        {activeTab === 'PORCIONADO' && (
-          <FormPorcionado insumos={insumos} onSuccess={loadData} />
-        )}
-        {activeTab === 'TRASLADO_COCINA' && (
-          <FormTrasladoCocina insumos={insumos} onSuccess={loadData} />
-        )}
-        {activeTab === 'DEVOLUCION_COCINA' && (
-          <FormDevolucionCocina insumos={insumos} onSuccess={loadData} />
-        )}
+        <div className="pt-4">
+          {activeTab === 'ENTRADA_COMPRA' && (
+            <FormEntradaCompra insumos={insumos} onSuccess={loadData} />
+          )}
+          {activeTab === 'PORCIONADO' && (
+            <FormPorcionado insumos={insumos} onSuccess={loadData} />
+          )}
+          {activeTab === 'TRASLADO_COCINA' && (
+            <FormTrasladoCocina insumos={insumos} onSuccess={loadData} />
+          )}
+          {activeTab === 'DEVOLUCION_COCINA' && (
+            <FormDevolucionCocina insumos={insumos} onSuccess={loadData} />
+          )}
+        </div>
       </div>
 
-      {/* Línea de Tiempo de Movimientos (Exact match to screenshot 2) */}
-      <div id="timeline">
+      {/* Línea Temporal Plana */}
+      <div className="pt-2" id="timeline">
         <TimelineFeed
           movimientos={movimientos}
           filterDate={filterDate}
           onDateChange={setFilterDate}
+          onSuccess={loadData}
+          insumos={insumos}
         />
       </div>
     </div>

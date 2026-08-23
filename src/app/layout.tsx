@@ -31,13 +31,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={inter.variable}>
-      <body className="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen">
+      <body className="bg-white text-slate-800 font-sans antialiased min-h-screen">
         <SidebarProvider>
           <div className="flex min-h-screen">
             <Sidebar />
             <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
               <TopHeader />
-              <main className="flex-1 p-4 md:p-6 pb-24 md:pb-8 overflow-x-hidden">
+              <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-x-hidden bg-white">
                 {children}
               </main>
             </div>

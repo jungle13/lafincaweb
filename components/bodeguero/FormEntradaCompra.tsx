@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { PlusCircle, Loader2 } from 'lucide-react';
 import { InsumoItem } from '@/types';
 import SmartSearchInsumo from './SmartSearchInsumo';
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
-  const [selectedInsumo, setSelectedInsumo] = useState<InsumoItem | null>(null);
+  const [selectedInsumoId, setSelectedInsumoId] = useState<number | null>(null);
   const [proveedor, setProveedor] = useState('');
   const [factura, setFactura] = useState('');
   const [cantidadKg, setCantidadKg] = useState('');
@@ -20,9 +20,16 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
   const [observaciones, setObservaciones] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const selectedInsumo = useMemo(() => {
+    if (!selectedInsumoId) return null;
+    return insumos.find((i) => i.insumo_id === selectedInsumoId) || null;
+  }, [insumos, selectedInsumoId]);
+
   const cantNum = parseFloat(cantidadKg) || 0;
   const costoNum = parseFloat(costoTotal) || 0;
-  const costoCalculado = cantNum > 0 && costoNum > 0 ? Math.round(costoNum / cantNum) : selectedInsumo?.costo_unitario_kg || 0;
+  const costoUnitarioEstimado = cantNum > 0 && costoNum > 0 ? Math.round(costoNum / cantNum) : selectedInsumo?.costo_unitario_kg || 0;
+  const nuevoStockKg = (selectedInsumo?.bodega_sin_porc_kg || 0) + cantNum;
+  const nuevoValorBodega = nuevoStockKg * costoUnitarioEstimado;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +55,6 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Error al registrar ingreso');
 
-      setSelectedInsumo(null);
       setProveedor('');
       setFactura('');
       setCantidadKg('');
@@ -63,40 +69,40 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 bg-white">
+    <form onSubmit={handleSubmit} className="space-y-4 font-normal">
       <SmartSearchInsumo
         insumos={insumos}
         selectedInsumo={selectedInsumo}
-        onSelect={setSelectedInsumo}
-        placeholder="Escribe para buscar carne que ingresa (ej. Lomo viche, Punta de anca, Costilla)..."
+        onSelect={(item) => setSelectedInsumoId(item ? item.insumo_id : null)}
+        placeholder="Escribe para buscar carne que ingresa (ej. Lomo de cerdo, Baby beef)..."
         label="Buscar Carne / Insumo a Ingresar *"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">Proveedor</label>
+          <label className="block text-xs font-normal text-slate-700 mb-1">Proveedor</label>
           <input
             type="text"
             value={proveedor}
             onChange={(e) => setProveedor(e.target.value)}
             placeholder="Ej. Frigorífico Central / Local"
-            className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
+            className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">Nº Factura / Remisión</label>
+          <label className="block text-xs font-normal text-slate-700 mb-1">Nº Factura / Remisión</label>
           <input
             type="text"
             value={factura}
             onChange={(e) => setFactura(e.target.value)}
             placeholder="Ej. FAC-9821 / Pendiente"
-            className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
+            className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">Cantidad Recibida (Kg) *</label>
+          <label className="block text-xs font-normal text-slate-700 mb-1">Cantidad Recibida (Kg) *</label>
           <input
             type="number"
             step="0.01"
@@ -105,12 +111,12 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
             value={cantidadKg}
             onChange={(e) => setCantidadKg(e.target.value)}
             placeholder="0.00"
-            className="w-full h-9 px-2.5 text-xs font-semibold text-blue-600 rounded-lg border border-slate-300 outline-none focus:border-blue-500"
+            className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">Costo Total Factura ($ COP)</label>
+          <label className="block text-xs font-normal text-slate-700 mb-1">Costo Total Factura ($ COP)</label>
           <input
             type="number"
             step="100"
@@ -118,48 +124,69 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
             value={costoTotal}
             onChange={(e) => setCostoTotal(e.target.value)}
             placeholder="Ej. 650000 (Opcional)"
-            className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
+            className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-normal text-slate-700 mb-1">Observaciones</label>
+          <input
+            type="text"
+            value={observaciones}
+            onChange={(e) => setObservaciones(e.target.value)}
+            placeholder="Notas de recepción"
+            className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
           />
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1">Observaciones / Notas de Entrega</label>
-        <input
-          type="text"
-          value={observaciones}
-          onChange={(e) => setObservaciones(e.target.value)}
-          placeholder="Notas de recepción o calidad"
-          className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800"
-        />
-      </div>
-
       {/* Projection Preview Box */}
-      <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg text-center text-xs text-slate-500">
+      <div className="p-3.5 bg-[#f8fafc] border border-slate-200 rounded-xl space-y-2 text-xs font-normal">
+        <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+          IMPACTO EN INVENTARIO: {selectedInsumo ? selectedInsumo.insumo.toUpperCase() : 'SELECCIONA UN INSUMO'}
+        </div>
+
         {selectedInsumo ? (
-          <div className="flex items-center justify-between text-xs text-slate-700 px-2 font-medium">
-            <span>Carne: <strong>{selectedInsumo.insumo}</strong></span>
-            <span>Bodega Entero: {selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg ➔ <strong className="text-blue-600">{(selectedInsumo.bodega_sin_porc_kg + cantNum).toFixed(2)} Kg</strong></span>
-            {costoNum > 0 && <span>Costo resultante: <strong>${formatMoney(costoCalculado)}/Kg</strong></span>}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div>
+              <div className="text-[11px] text-slate-500 font-normal">Stock Entero en Bodega:</div>
+              <div className="text-slate-800 font-normal mt-0.5">
+                {selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg ➔ <span className="text-emerald-600 font-medium">{nuevoStockKg.toFixed(2)} Kg</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] text-slate-500 font-normal">Costo por Kg estimado:</div>
+              <div className="text-slate-800 font-normal mt-0.5">
+                $ {formatMoney(costoUnitarioEstimado)} / Kg
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] text-slate-500 font-normal">Nuevo Valor en Bodega:</div>
+              <div className="text-slate-800 font-normal mt-0.5">
+                $ {formatMoney(nuevoValorBodega)}
+              </div>
+            </div>
           </div>
         ) : (
-          <span className="italic text-slate-400">Escribe y selecciona el insumo arriba para ver el impacto en inventario.</span>
+          <span className="italic text-slate-400 text-xs">Selecciona un insumo para previsualizar el impacto antes de guardar.</span>
         )}
       </div>
 
-      {/* Submit Button (Right aligned) */}
+      {/* Submit Button */}
       <div className="flex justify-end pt-1">
         <button
           type="submit"
           disabled={loading || !selectedInsumo}
-          className="w-full sm:w-auto px-6 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold text-xs md:text-sm flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+          className="w-full sm:w-auto px-6 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-normal text-xs md:text-sm flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
         >
           {loading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <>
               <PlusCircle className="w-4 h-4" />
-              <span>Registrar Entrada por Compra</span>
+              <span>Registrar Ingreso a Bodega</span>
             </>
           )}
         </button>

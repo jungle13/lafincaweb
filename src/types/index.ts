@@ -22,9 +22,9 @@ export interface InsumoItem {
 }
 
 export interface MovimientoItem {
-  id?: number;
-  tipo_movimiento: 'ENTRADA_COMPRA' | 'PORCIONADO' | 'TRASLADO_COCINA' | 'DEVOLUCION_COCINA';
-  insumo_id: number;
+  id?: any;
+  tipo_movimiento: 'ENTRADA_COMPRA' | 'PORCIONADO' | 'TRASLADO_COCINA' | 'DEVOLUCION_COCINA' | 'AJUSTE_INVENTARIO' | 'INVENTARIO_INICIAL' | string;
+  insumo_id: any;
   insumo_nombre?: string;
   catalogo_insumos?: {
     nombre: string;

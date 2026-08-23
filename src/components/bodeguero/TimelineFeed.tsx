@@ -2,31 +2,83 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { 
-  History, 
+  CheckCircle2, 
+  Trash2, 
+  Edit2, 
+  AlertTriangle, 
   Calendar, 
+  Clock, 
+  TrendingUp, 
+  TrendingDown, 
+  RefreshCw, 
+  ChevronDown, 
   Search, 
   X, 
-  PlusCircle, 
-  Scissors, 
-  ArrowRightCircle, 
-  CornerDownLeft, 
-  Clock, 
-  User 
+  Plus, 
+  Loader2,
+  Lock,
+  Zap,
+  ArrowRight,
+  ShieldAlert,
+  Wrench,
+  Layers,
+  History,
+  CheckCheck,
+  Save,
+  RotateCcw
 } from 'lucide-react';
-import { MovimientoItem } from '@/types';
+import Modal from '@/components/ui/Modal';
 import { formatMoney, normalizeStr } from '@/lib/formatters';
+import { InsumoItem, MovimientoItem } from '@/types';
 
 interface Props {
   movimientos: MovimientoItem[];
   filterDate: string;
   onDateChange: (date: string) => void;
+  onSuccess?: () => void;
+  insumos?: InsumoItem[];
 }
 
-export default function TimelineFeed({ movimientos, filterDate, onDateChange }: Props) {
+export default function TimelineFeed({ movimientos, filterDate, onDateChange, onSuccess, insumos = [] }: Props) {
+  // Pestaña principal: 'PENDIENTES' | 'HISTORIAL'
+  const [activeFeedTab, setActiveFeedTab] = useState<'PENDIENTES' | 'HISTORIAL'>('PENDIENTES');
+
   const [meatFilter, setMeatFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Filtro de fecha específico para la sección de Pendientes
+  const [pendingDateFilter, setPendingDateFilter] = useState<string>('ALL');
+
+  // Estados de acciones
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [approvingBatchDate, setApprovingBatchDate] = useState<string | null>(null);
+  const [deletingDate, setDeletingDate] = useState<string | null>(null);
+  const [revertingDate, setRevertingDate] = useState<string | null>(null);
+
+  // Modal de Edición de Movimiento
+  const [editingMov, setEditingMov] = useState<MovimientoItem | null>(null);
+  const [editInsumoId, setEditInsumoId] = useState<string | number>('');
+  const [editCantKg, setEditCantKg] = useState<string>('');
+  const [editPorciones, setEditPorciones] = useState<string>('');
+  const [editPesoPorciones, setEditPesoPorciones] = useState<string>('');
+  const [editCostoTotal, setEditCostoTotal] = useState<string>('');
+  const [editObs, setEditObs] = useState<string>('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // 🛠️ Modal de Ajuste Rápido por Stock Insuficiente
+  const [quickAjusteModal, setQuickAjusteModal] = useState<{
+    isOpen: boolean;
+    insumoId: string | number;
+    insumoName: string;
+    ubicacion: string;
+    ubicacionLabel: string;
+    cantidad: number | string;
+    motivo: string;
+    justificacion: string;
+  } | null>(null);
+  const [savingQuickAjuste, setSavingQuickAjuste] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -40,330 +92,1404 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange }: 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 1. Filtrar movimientos por fecha seleccionada
-  const dateFilteredMovs = useMemo(() => {
-    if (!filterDate) return movimientos;
-    return movimientos.filter((m) => {
+  // 1. Separar movimientos pendientes vs aprobados
+  const { allPendingMovs, approvedMovs } = useMemo(() => {
+    const pending: MovimientoItem[] = [];
+    const approved: MovimientoItem[] = [];
+
+    movimientos.forEach((m) => {
+      const isPending = m.observaciones?.includes('[PENDIENTE_APROBAR]') || m.usuario?.includes('(Pendiente)');
+      if (isPending) {
+        pending.push(m);
+      } else {
+        approved.push(m);
+      }
+    });
+
+    return { allPendingMovs: pending, approvedMovs: approved };
+  }, [movimientos]);
+
+  // Si no hay pendientes, cambiar automáticamente a la pestaña de Historial
+  useEffect(() => {
+    if (allPendingMovs.length === 0 && activeFeedTab === 'PENDIENTES') {
+      setActiveFeedTab('HISTORIAL');
+    }
+  }, [allPendingMovs.length]);
+
+  // 2. Extraer fechas únicas presentes en pendientes ordenadas ascendentemente (del más antiguo al más reciente)
+  const sortedPendingDates = useMemo(() => {
+    const map = new Map<string, number>();
+    allPendingMovs.forEach((m) => {
+      const d = (m.fecha || m.fecha_hora || '').split('T')[0] || todayStr;
+      map.set(d, (map.get(d) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [allPendingMovs, todayStr]);
+
+  // 3. Extraer fechas únicas presentes en aprobados ordenadas de más reciente a más antiguo
+  const sortedApprovedDates = useMemo(() => {
+    const map = new Map<string, number>();
+    approvedMovs.forEach((m) => {
+      const d = (m.fecha || m.fecha_hora || m.fecha_movimiento || '').split('T')[0] || todayStr;
+      map.set(d, (map.get(d) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [approvedMovs, todayStr]);
+
+  // 📅 La fecha activa obligatoria en pendientes es la fecha más antigua que aún tenga pendientes
+  const earliestPendingDate = sortedPendingDates.length > 0 ? sortedPendingDates[0].date : null;
+
+  // Enfocar por defecto en la fecha más antigua de pendientes
+  useEffect(() => {
+    if (earliestPendingDate && (pendingDateFilter === 'ALL' || !sortedPendingDates.some(d => d.date === pendingDateFilter))) {
+      setPendingDateFilter(earliestPendingDate);
+    }
+  }, [earliestPendingDate]);
+
+  // 4. Filtrar pendientes por la fecha seleccionada en los Badges
+  const filteredPendingMovs = useMemo(() => {
+    if (pendingDateFilter === 'ALL') return allPendingMovs;
+    return allPendingMovs.filter((m) => {
+      const d = (m.fecha || m.fecha_hora || '').split('T')[0] || todayStr;
+      return d === pendingDateFilter;
+    });
+  }, [allPendingMovs, pendingDateFilter, todayStr]);
+
+  // 5. Agrupar pendientes por carne y ordenar alfabéticamente de manera 100% estable
+  const groupedPendingMeats = useMemo(() => {
+    const groups = new Map<string, { insumoId: string; carneName: string; insumoObj?: InsumoItem; movs: MovimientoItem[] }>();
+
+    filteredPendingMovs.forEach((m) => {
+      const idKey = String(m.insumo_id);
+      const name = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
+      const foundInsumo = insumos.find((i) => String(i.insumo_id) === idKey);
+
+      if (!groups.has(idKey)) {
+        groups.set(idKey, {
+          insumoId: idKey,
+          carneName: name,
+          insumoObj: foundInsumo,
+          movs: [m],
+        });
+      } else {
+        groups.get(idKey)!.movs.push(m);
+      }
+    });
+
+    // Ordenar movimientos DENTRO de cada grupo de carne:
+    // 1: ENTRADA_COMPRA
+    // 2: PORCIONADO
+    // 3: DEVOLUCION_COCINA
+    // 4: TRASLADO_COCINA
+    groups.forEach((group) => {
+      group.movs.sort((a, b) => {
+        const orderMap: Record<string, number> = {
+          ENTRADA_COMPRA: 10,
+          PORCIONADO: 20,
+          DEVOLUCION_COCINA: 30,
+          TRASLADO_COCINA: 40,
+        };
+        const orderA = orderMap[a.tipo_movimiento] || 50;
+        const orderB = orderMap[b.tipo_movimiento] || 50;
+        return orderA - orderB;
+      });
+    });
+
+    return Array.from(groups.values()).sort((a, b) => a.carneName.localeCompare(b.carneName));
+  }, [filteredPendingMovs, insumos]);
+
+  // 6. Filtrar aprobados por fecha seleccionada en los Badges o selector
+  const dateFilteredApproved = useMemo(() => {
+    if (!filterDate || filterDate === 'ALL') return approvedMovs;
+    return approvedMovs.filter((m) => {
       const mDate = (m.fecha || m.fecha_hora || m.fecha_movimiento || '').split('T')[0];
       return mDate === filterDate;
     });
-  }, [movimientos, filterDate]);
+  }, [approvedMovs, filterDate]);
 
-  // 2. Extraer carnes únicas con movimientos en esta fecha
+  // 7. Extraer carnes únicas con movimientos aprobados en esta fecha
   const availableMeats = useMemo(() => {
-    const map = new Map<string, { id: number; name: string; count: number }>();
-    dateFilteredMovs.forEach((m) => {
+    const map = new Map<string, { id: string | number; name: string; count: number }>();
+    dateFilteredApproved.forEach((m) => {
       const name = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
       const id = m.insumo_id;
       const key = String(id);
       if (!map.has(key)) {
         map.set(key, { id, name, count: 1 });
       } else {
-        map.get(key)!.count += 1;
+        const item = map.get(key)!;
+        item.count += 1;
       }
     });
-    return Array.from(map.values());
-  }, [dateFilteredMovs]);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [dateFilteredApproved]);
 
-  // 3. Filtrar según carne seleccionada
-  const finalFilteredMovs = useMemo(() => {
-    if (meatFilter === 'ALL') return dateFilteredMovs;
-    return dateFilteredMovs.filter((m) => String(m.insumo_id) === String(meatFilter));
-  }, [dateFilteredMovs, meatFilter]);
-
-  // Carnes filtradas por el texto escrito en el buscador
-  const searchResults = useMemo(() => {
-    const clean = normalizeStr(searchQuery);
-    if (!clean) return availableMeats;
-    return availableMeats.filter((m) => normalizeStr(m.name).includes(clean));
+  // 8. Carnes filtradas para el buscador predictivo
+  const filteredSearchMeats = useMemo(() => {
+    if (!searchQuery.trim()) return availableMeats;
+    const q = normalizeStr(searchQuery);
+    return availableMeats.filter((item) => normalizeStr(item.name).includes(q));
   }, [availableMeats, searchQuery]);
 
-  const handleSelectMeat = (meatId: string, meatName: string) => {
-    setMeatFilter(meatId);
-    setSearchQuery(meatId === 'ALL' ? '' : meatName);
+  // 9. Filtrar lista final de aprobados por carne seleccionada
+  const finalApprovedMovs = useMemo(() => {
+    if (meatFilter === 'ALL') return dateFilteredApproved;
+    return dateFilteredApproved.filter((m) => String(m.insumo_id) === String(meatFilter));
+  }, [dateFilteredApproved, meatFilter]);
+
+  // 10. Agrupar movimientos APROBADOS por insumo con orden lógico
+  const groupedApprovedMeats = useMemo(() => {
+    const groups = new Map<string, { insumoId: string; carneName: string; categoria?: string; insumoObj?: InsumoItem; movs: MovimientoItem[] }>();
+
+    finalApprovedMovs.forEach((m) => {
+      const idKey = String(m.insumo_id);
+      const name = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
+      const cat = m.catalogo_insumos?.categoria || '';
+      const foundInsumo = insumos.find((i) => String(i.insumo_id) === idKey);
+
+      if (!groups.has(idKey)) {
+        groups.set(idKey, {
+          insumoId: idKey,
+          carneName: name,
+          categoria: cat,
+          insumoObj: foundInsumo,
+          movs: [m],
+        });
+      } else {
+        groups.get(idKey)!.movs.push(m);
+      }
+    });
+
+    // Ordenar movimientos dentro de cada grupo por orden lógico:
+    // 1: ENTRADA_COMPRA
+    // 2: PORCIONADO
+    // 3: DEVOLUCION_COCINA
+    // 4: TRASLADO_COCINA
+    // 5: AJUSTE_INVENTARIO / OTROS
+    groups.forEach((group) => {
+      group.movs.sort((a, b) => {
+        const orderMap: Record<string, number> = {
+          ENTRADA_COMPRA: 10,
+          PORCIONADO: 20,
+          DEVOLUCION_COCINA: 30,
+          TRASLADO_COCINA: 40,
+          AJUSTE_INVENTARIO: 50,
+          INVENTARIO_INICIAL: 60,
+        };
+        const orderA = orderMap[a.tipo_movimiento] || 99;
+        const orderB = orderMap[b.tipo_movimiento] || 99;
+        return orderA - orderB;
+      });
+    });
+
+    return Array.from(groups.values()).sort((a, b) => a.carneName.localeCompare(b.carneName));
+  }, [finalApprovedMovs, insumos]);
+
+  const handleSelectMeat = (id: string, name: string) => {
+    setMeatFilter(id);
+    setSearchQuery(id === 'ALL' ? '' : name);
     setIsDropdownOpen(false);
   };
 
   const handleClearMeatFilter = () => {
     setMeatFilter('ALL');
     setSearchQuery('');
-    setIsDropdownOpen(false);
+  };
+
+  // Manejador: Aprobar Movimiento Individual
+  const handleAprobar = async (movId: string) => {
+    setActionLoadingId(movId);
+    try {
+      const res = await fetch('/api/bodega/movimientos/aprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'APROBAR',
+          movimientoId: movId,
+          usuario: 'Administrador',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al aprobar movimiento');
+
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Manejador: Aprobar Todos los Movimientos de un Día Completo en Orden
+  const handleAprobarDia = async (targetDate: string) => {
+    if (!confirm(`¿Estás seguro de aprobar TODOS los movimientos pendientes del día ${targetDate} en orden cronológico?`)) return;
+
+    setApprovingBatchDate(targetDate);
+    try {
+      const res = await fetch('/api/bodega/movimientos/aprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'APROBAR_FECHA',
+          fecha: targetDate,
+          usuario: 'Administrador',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al aprobar día');
+
+      alert(data.message || `✅ Día ${targetDate} aprobado con éxito.`);
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setApprovingBatchDate(null);
+    }
+  };
+
+  // ↺ Manejador: Revertir Todos los Movimientos Aprobados de una Fecha a PENDIENTE
+  const handleRevertirDia = async (targetDate: string, count: number) => {
+    if (!confirm(`↺ ¿Deseas revertir todos los ${count} movimientos aprobados del día ${targetDate} a estado PENDIENTE?\n\nEl stock de bodega se recalibrará automáticamente para que puedas realizar ajustes o revisiones.`)) return;
+
+    setRevertingDate(targetDate);
+    try {
+      const res = await fetch('/api/bodega/movimientos/aprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'REVERTIR_FECHA',
+          fecha: targetDate,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al revertir los movimientos de la fecha');
+
+      alert(data.message || `✅ Movimientos del ${targetDate} vueltos a estado pendiente.`);
+      setActiveFeedTab('PENDIENTES');
+      setPendingDateFilter(targetDate);
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRevertingDate(null);
+    }
+  };
+
+  // 🗑️ Manejador: Descartar y Eliminar TODOS los Movimientos Pendientes de una Fecha Específica
+  const handleDescartarDia = async (targetDate: string, count: number) => {
+    if (!confirm(`⚠️ ¿Estás seguro de descartar y eliminar TODOS los ${count} movimientos pendientes del día ${targetDate}?\n\nEsta acción borrará estos registros pendientes para evitar duplicados.`)) return;
+
+    setDeletingDate(targetDate);
+    try {
+      const res = await fetch('/api/bodega/movimientos/aprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DESCARTAR_FECHA',
+          fecha: targetDate,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al descartar los movimientos de la fecha');
+
+      alert(data.message || `✅ Movimientos pendientes del ${targetDate} eliminados con éxito.`);
+      if (pendingDateFilter === targetDate) {
+        setPendingDateFilter('ALL');
+      }
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setDeletingDate(null);
+    }
+  };
+
+  // Manejador: Descartar Movimiento Individual
+  const handleDescartar = async (movId: string) => {
+    if (!confirm('¿Estás seguro de descartar y eliminar este movimiento pendiente?')) return;
+
+    setActionLoadingId(movId);
+    try {
+      const res = await fetch('/api/bodega/movimientos/aprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DESCARTAR',
+          movimientoId: movId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al descartar movimiento');
+
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Manejador: Abrir Modal de Edición
+  const handleOpenEdit = (m: MovimientoItem) => {
+    setEditingMov(m);
+    setEditInsumoId(m.insumo_id);
+    setEditCantKg(String(m.cant_sin_porcionar_kg || 0));
+    setEditPorciones(String(m.porciones_und || 0));
+    setEditPesoPorciones(String(m.peso_porciones_kg || 0));
+    setEditCostoTotal(String(m.valor_total_movimiento || 0));
+    setEditObs(m.observaciones?.replace(/\[PENDIENTE_APROBAR\]/g, '').trim() || '');
+  };
+
+  // Manejador: Guardar Edición
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMov) return;
+
+    setSavingEdit(true);
+    try {
+      const res = await fetch('/api/bodega/movimientos/aprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'EDITAR',
+          movimientoId: editingMov.id,
+          overrides: {
+            insumo_id: editInsumoId,
+            cant_sin_porcionar_kg: parseFloat(editCantKg) || 0,
+            porciones_und: parseInt(editPorciones) || 0,
+            peso_porciones_kg: parseFloat(editPesoPorciones) || 0,
+            valor_total_movimiento: parseFloat(editCostoTotal) || 0,
+            observaciones: editObs,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al actualizar movimiento');
+
+      setEditingMov(null);
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // 🛠️ Manejador: Abrir Modal de Ajuste Rápido por Stock Insuficiente
+  const handleOpenQuickAjuste = (m: any, stock: any, carneName: string) => {
+    const tipo = m.tipo_movimiento;
+    let ubicacion = 'BODEGA_ENTERO';
+    let ubicacionLabel = 'Bodega Entero (Kg)';
+    let deficit = 0;
+
+    if (tipo === 'TRASLADO_COCINA') {
+      if (m.porciones_und > 0) {
+        const cur = stock?.bodega_porc_und || 0;
+        const needed = m.porciones_und || 0;
+        deficit = Math.max(0, needed - cur);
+        ubicacion = 'BODEGA_PORCIONADO';
+        ubicacionLabel = 'Bodega Porciones (Und)';
+      } else {
+        const cur = stock?.bodega_sin_porc_kg || 0;
+        const needed = parseFloat(m.cant_sin_porcionar_kg) || 0;
+        deficit = parseFloat((Math.max(0, needed - cur)).toFixed(2));
+        ubicacion = 'BODEGA_ENTERO';
+        ubicacionLabel = 'Bodega Entero (Kg)';
+      }
+    } else if (tipo === 'PORCIONADO') {
+      const cur = stock?.bodega_sin_porc_kg || 0;
+      const needed = parseFloat(m.cant_sin_porcionar_kg) || 0;
+      deficit = parseFloat((Math.max(0, needed - cur)).toFixed(2));
+      ubicacion = 'BODEGA_ENTERO';
+      ubicacionLabel = 'Bodega Entero (Kg)';
+    } else if (tipo === 'DEVOLUCION_COCINA') {
+      if (m.porciones_und > 0) {
+        const cur = stock?.cocina_porc_und || 0;
+        const needed = m.porciones_und || 0;
+        deficit = Math.max(0, needed - cur);
+        ubicacion = 'COCINA_PORCIONADO';
+        ubicacionLabel = 'Cocina Porciones (Und)';
+      } else {
+        const cur = stock?.cocina_sin_porc_kg || 0;
+        const needed = parseFloat(m.cant_sin_porcionar_kg) || 0;
+        deficit = parseFloat((Math.max(0, needed - cur)).toFixed(2));
+        ubicacion = 'COCINA_PORCIONADO';
+        ubicacionLabel = 'Cocina (Kg)';
+      }
+    }
+
+    setQuickAjusteModal({
+      isOpen: true,
+      insumoId: m.insumo_id,
+      insumoName: carneName || m.catalogo_insumos?.nombre || `Insumo #${m.insumo_id}`,
+      ubicacion: ubicacion,
+      ubicacionLabel: ubicacionLabel,
+      cantidad: deficit,
+      motivo: 'ERROR_CONTEO_PREVIO',
+      justificacion: 'error de conteo previo',
+    });
+  };
+
+  // 🛠️ Manejador: Guardar Ajuste Rápido
+  const handleSaveQuickAjuste = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickAjusteModal) return;
+
+    setSavingQuickAjuste(true);
+    try {
+      const res = await fetch('/api/bodega/ajustes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          insumo_id: quickAjusteModal.insumoId,
+          tipo_ajuste: quickAjusteModal.motivo,
+          ubicacion: quickAjusteModal.ubicacion,
+          cantidad: parseFloat(String(quickAjusteModal.cantidad)) || 0,
+          justificacion: quickAjusteModal.justificacion.trim(),
+          usuario: 'Administrador',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar ajuste');
+
+      alert('✅ Ajuste de inventario aplicado con éxito. El stock ha sido corregido.');
+      setQuickAjusteModal(null);
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingQuickAjuste(false);
+    }
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6 space-y-4">
-      {/* Title Row (Exact match to screenshot 2) */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="font-bold text-base md:text-lg text-slate-900 flex items-center gap-2">
-            <History className="w-5 h-5 text-orange-500" />
-            <span>Línea de Tiempo de Movimientos</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Historial en vivo de compras, porcionados, traslados y devoluciones
-          </p>
-        </div>
+    <div className="space-y-4 font-normal">
+      {/* 🗂️ PESTAÑAS PRINCIPALES DEL FEED */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+        <button
+          type="button"
+          onClick={() => setActiveFeedTab('PENDIENTES')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+            activeFeedTab === 'PENDIENTES'
+              ? 'border-amber-600 text-amber-900 bg-amber-50/60 rounded-t-lg'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+          <span>Movimientos Pendientes de Aprobación</span>
+          {allPendingMovs.length > 0 && (
+            <span className="bg-amber-600 text-white px-2 py-0.5 rounded-full text-[10px] font-medium">
+              {allPendingMovs.length}
+            </span>
+          )}
+        </button>
 
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-          {finalFilteredMovs.length} movimientos
-        </span>
+        <button
+          type="button"
+          onClick={() => setActiveFeedTab('HISTORIAL')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+            activeFeedTab === 'HISTORIAL'
+              ? 'border-orange-500 text-orange-600 bg-orange-50/60 rounded-t-lg'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <History className="w-3.5 h-3.5 text-orange-500" />
+          <span>Kardex y Operaciones Aprobadas</span>
+          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[10px] font-medium border border-slate-200">
+            {approvedMovs.length}
+          </span>
+        </button>
       </div>
 
-      {/* Filter Bar (Date + Quick Buttons + Smart Search) */}
-      <div className="p-2.5 bg-slate-50/80 border border-slate-200 rounded-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        {/* Date Controls */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-            <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-            <span>Fecha:</span>
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => {
-                onDateChange(e.target.value);
-                handleClearMeatFilter();
-              }}
-              className="outline-none text-xs font-semibold text-slate-900 bg-transparent cursor-pointer"
-            />
-          </div>
+      {/* ⚠️ PESTAÑA 1: MOVIMIENTOS PENDIENTES DE APROBACIÓN */}
+      {activeFeedTab === 'PENDIENTES' && (
+        <div className="space-y-3 animate-fade-in">
+          {allPendingMovs.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 font-normal text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-2">
+              <CheckCheck className="w-8 h-8 text-emerald-500 mx-auto" />
+              <p className="font-medium text-slate-800 text-sm">¡Al día! No hay movimientos pendientes de aprobación.</p>
+              <p className="text-slate-400">Todos los movimientos extraídos por IA o ingresados manualmente han sido formalizados en el stock.</p>
+            </div>
+          ) : (
+            <>
+              {/* 🏷️ BADGES DE FILTRO POR FECHA CON BOTÓN ✖ PARA ELIMINAR FECHAS NO DESEADAS */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-slate-500 font-normal mr-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Jornadas pendientes:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPendingDateFilter('ALL')}
+                  className={`px-3 py-1 rounded-full text-xs font-normal transition-all border ${
+                    pendingDateFilter === 'ALL'
+                      ? 'bg-slate-900 border-slate-900 text-white shadow-sm font-medium'
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Todas las Fechas ({allPendingMovs.length})
+                </button>
 
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                onDateChange(todayStr);
-                handleClearMeatFilter();
-              }}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                filterDate === todayStr
-                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                  : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Hoy
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onDateChange('');
-                handleClearMeatFilter();
-              }}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                !filterDate
-                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                  : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Todas
-            </button>
-          </div>
+                {sortedPendingDates.map((item) => {
+                  const isLocked = earliestPendingDate ? item.date > earliestPendingDate : false;
+                  const isCurrentActive = item.date === earliestPendingDate;
+                  const isDeleting = deletingDate === item.date;
+
+                  return (
+                    <div
+                      key={item.date}
+                      className={`px-2.5 py-1 rounded-full text-xs font-normal transition-all border flex items-center gap-1.5 ${
+                        pendingDateFilter === item.date
+                          ? isLocked
+                            ? 'bg-slate-800 border-slate-800 text-white shadow-sm'
+                            : 'bg-amber-700 border-amber-700 text-white shadow-sm font-medium'
+                          : isLocked
+                          ? 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-slate-200/70'
+                          : 'bg-white border-slate-300 text-slate-700 hover:bg-amber-50 hover:border-amber-300'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPendingDateFilter(item.date)}
+                        className="flex items-center gap-1.5 outline-none cursor-pointer"
+                        title={isLocked ? `🔒 Bloqueado: Primero debes aprobar los movimientos del ${earliestPendingDate}` : `Jornada del ${item.date}`}
+                      >
+                        {isLocked ? <Lock className="w-3 h-3 text-slate-400" /> : <Calendar className="w-3 h-3 text-amber-600" />}
+                        <span>{item.date}</span>
+                        {isCurrentActive && (
+                          <span className="bg-emerald-500 text-white px-1.5 py-0.2 rounded-full text-[9px] font-medium">
+                            ACTIVO
+                          </span>
+                        )}
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${isLocked ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-900'}`}>
+                          {item.count}
+                        </span>
+                      </button>
+
+                      {/* ✖ Botón para eliminar los registros pendientes de esta fecha */}
+                      <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDescartarDia(item.date, item.count);
+                        }}
+                        className={`p-0.5 rounded-full transition-colors ml-0.5 cursor-pointer ${
+                          pendingDateFilter === item.date
+                            ? 'text-amber-200 hover:bg-red-600 hover:text-white'
+                            : 'text-slate-400 hover:bg-red-500 hover:text-white'
+                        }`}
+                        title={`Eliminar y descartar todos los pendientes del ${item.date}`}
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <X className="w-3 h-3" />
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* CUADRO CONTENEDOR DE PENDIENTES AGRUPADOS */}
+              <div className="p-4 bg-amber-50/50 border border-amber-200/90 rounded-2xl space-y-3.5 shadow-sm">
+                {/* Header del Bloque con Botón de Aprobación Masiva del Día */}
+                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-amber-200/60">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      <h3 className="text-sm font-medium text-amber-950">
+                        Movimientos Pendientes de Aprobación ({filteredPendingMovs.length})
+                      </h3>
+                    </div>
+                    <p className="text-[11px] text-amber-800 font-normal">
+                      {pendingDateFilter !== 'ALL' && earliestPendingDate && pendingDateFilter > earliestPendingDate ? (
+                        <span className="text-slate-600 flex items-center gap-1 font-medium">
+                          <Lock className="w-3.5 h-3.5 text-slate-500" /> 
+                          Esta jornada ({pendingDateFilter}) está bloqueada. Primero debes aprobar el día {earliestPendingDate}.
+                        </span>
+                      ) : (
+                        <span>Secuencia estricta: Compras ➔ Porcionados ➔ Devoluciones ➔ Traslados</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Botón de Aprobación en Lote de la Fecha Activa */}
+                  {earliestPendingDate && (pendingDateFilter === 'ALL' || pendingDateFilter === earliestPendingDate) && (
+                    <button
+                      type="button"
+                      disabled={approvingBatchDate === earliestPendingDate}
+                      onClick={() => handleAprobarDia(earliestPendingDate)}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                    >
+                      {approvingBatchDate === earliestPendingDate ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5 text-emerald-200" />
+                      )}
+                      <span>Aprobar Todo el Día {earliestPendingDate} ({sortedPendingDates[0]?.count})</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* GRUPOS POR CARNE */}
+                <div className="space-y-4">
+                  {groupedPendingMeats.map((group) => {
+                    const stock = group.insumoObj;
+
+                    return (
+                      <div key={group.insumoId} className="space-y-2">
+                        {/* Encabezado del Grupo de Carne con Stock Actual */}
+                        <div className="flex items-center justify-between flex-wrap gap-2 bg-white px-3 py-1.5 rounded-lg border border-amber-200/70 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                            <span className="font-medium text-slate-900 text-sm">{group.carneName}</span>
+                            <span className="text-[11px] text-slate-400 font-normal">
+                              ({group.movs.length} movimiento{group.movs.length !== 1 ? 's' : ''})
+                            </span>
+                          </div>
+
+                          {/* Stock Actual en Bodega */}
+                          <div className="flex items-center gap-2 text-xs text-slate-600">
+                            <span className="text-slate-400">Stock Actual en Bodega:</span>
+                            <span className="font-medium text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                              📦 {stock ? `${stock.bodega_porc_und} und (${stock.bodega_porc_kg.toFixed(2)} Kg) / Entero: ${stock.bodega_sin_porc_kg.toFixed(2)} Kg` : 'Sin datos'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Tarjetas de Movimientos de esta Carne */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pl-2">
+                          {group.movs.map((m: any) => {
+                            const tipo = m.tipo_movimiento;
+                            const dateStr = (m.fecha || m.fecha_hora || '').split('T')[0];
+                            const isLoading = actionLoadingId === m.id;
+                            const isDateLocked = earliestPendingDate ? dateStr > earliestPendingDate : false;
+
+                            let typeTag = 'bg-blue-100 text-blue-800 border-blue-200';
+                            let typeLabel = '1. ENTRADA COMPRA';
+                            let qtyText = `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+
+                            if (tipo === 'PORCIONADO') {
+                              typeTag = 'bg-purple-100 text-purple-800 border-purple-200';
+                              typeLabel = '2. PORCIONADO';
+                              qtyText = `${m.porciones_und || 0} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)`;
+                            } else if (tipo === 'DEVOLUCION_COCINA') {
+                              typeTag = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                              typeLabel = '3. DEVOLUCIÓN COCINA';
+                              qtyText = m.porciones_und ? `+${m.porciones_und} und` : `+${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                            } else if (tipo === 'TRASLADO_COCINA') {
+                              typeTag = 'bg-orange-100 text-orange-800 border-orange-200';
+                              typeLabel = '4. TRASLADO COCINA';
+                              qtyText = m.porciones_und ? `${m.porciones_und} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                            }
+
+                            // VALIDACIÓN Y COHERENCIA DE STOCK ACTUAL Y RESULTANTE
+                            let stockImpactHtml = null;
+                            let isStockInsufficient = false;
+
+                            if (stock) {
+                              if (tipo === 'TRASLADO_COCINA') {
+                                if (m.porciones_und > 0) {
+                                  const currentUnd = stock.bodega_porc_und;
+                                  const resultUnd = currentUnd - m.porciones_und;
+                                  isStockInsufficient = resultUnd < 0;
+
+                                  stockImpactHtml = (
+                                    <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-slate-500">Bodega:</span>
+                                      <span>{currentUnd} und</span>
+                                      <span className="text-slate-400">➔</span>
+                                      <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
+                                        {resultUnd} und
+                                      </span>
+                                      {isStockInsufficient && (
+                                        <span className="text-red-600 font-medium bg-red-100 px-1.5 py-0.2 rounded text-[10px]">
+                                          ⚠️ Stock insuficiente
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                } else {
+                                  const currentKg = stock.bodega_sin_porc_kg;
+                                  const resultKg = currentKg - (parseFloat(m.cant_sin_porcionar_kg) || 0);
+                                  isStockInsufficient = resultKg < 0;
+
+                                  stockImpactHtml = (
+                                    <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-slate-500">Bodega Entero:</span>
+                                      <span>{currentKg.toFixed(2)} Kg</span>
+                                      <span className="text-slate-400">➔</span>
+                                      <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
+                                        {resultKg.toFixed(2)} Kg
+                                      </span>
+                                      {isStockInsufficient && (
+                                        <span className="text-red-600 font-medium bg-red-100 px-1.5 py-0.2 rounded text-[10px]">
+                                          ⚠️ Stock insuficiente
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                              } else if (tipo === 'PORCIONADO') {
+                                const currentKg = stock.bodega_sin_porc_kg;
+                                const resultKg = currentKg - (parseFloat(m.cant_sin_porcionar_kg) || 0);
+                                isStockInsufficient = resultKg < 0;
+
+                                stockImpactHtml = (
+                                  <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-slate-500">Bodega Entero:</span>
+                                    <span>{currentKg.toFixed(2)} Kg</span>
+                                    <span className="text-slate-400">➔</span>
+                                    <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
+                                      {resultKg.toFixed(2)} Kg
+                                    </span>
+                                  </div>
+                                );
+                              } else if (tipo === 'ENTRADA_COMPRA') {
+                                const currentKg = stock.bodega_sin_porc_kg;
+                                const resultKg = currentKg + (parseFloat(m.cant_sin_porcionar_kg) || 0);
+                                stockImpactHtml = (
+                                  <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-slate-500">Bodega Entero:</span>
+                                    <span>{currentKg.toFixed(2)} Kg</span>
+                                    <span className="text-slate-400">➔</span>
+                                    <span className="text-emerald-700 font-medium">
+                                      +{parseFloat(m.cant_sin_porcionar_kg).toFixed(2)} Kg ({resultKg.toFixed(2)} Kg)
+                                    </span>
+                                  </div>
+                                );
+                              } else if (tipo === 'DEVOLUCION_COCINA') {
+                                const currentUnd = stock.bodega_porc_und;
+                                const resultUnd = currentUnd + (m.porciones_und || 0);
+                                stockImpactHtml = (
+                                  <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-slate-500">Reintegro Bodega:</span>
+                                    <span>{currentUnd} und</span>
+                                    <span className="text-slate-400">➔</span>
+                                    <span className="text-emerald-700 font-medium">{resultUnd} und</span>
+                                  </div>
+                                );
+                              }
+                            }
+
+                            return (
+                              <div
+                                key={m.id}
+                                className={`p-3 rounded-xl border shadow-sm space-y-2 text-xs font-normal transition-all ${
+                                  isDateLocked
+                                    ? 'bg-slate-50/70 border-slate-200 opacity-80'
+                                    : isStockInsufficient
+                                    ? 'bg-red-50/40 border-red-300'
+                                    : 'bg-white border-amber-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${typeTag}`}>
+                                    {typeLabel}
+                                  </span>
+                                  <span className="text-[11px] text-slate-400 font-normal flex items-center gap-1">
+                                    {isDateLocked && <Lock className="w-3 h-3 text-slate-400" />}
+                                    <span>{dateStr}</span>
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium text-slate-900 text-xs md:text-sm">
+                                    {qtyText}
+                                  </span>
+                                  {m.valor_total_movimiento ? (
+                                    <span className="text-slate-700 font-medium">
+                                      $ {formatMoney(m.valor_total_movimiento)}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {/* Impacto en Stock */}
+                                {stockImpactHtml}
+
+                                {m.observaciones && (
+                                  <p className="text-[11px] text-slate-500 line-clamp-2 pt-0.5">
+                                    {m.observaciones.replace(/\[PENDIENTE_APROBAR\]/g, '').trim()}
+                                  </p>
+                                )}
+
+                                {/* Botones de Acción */}
+                                <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    disabled={isLoading}
+                                    onClick={() => handleDescartar(m.id)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                                    title="Descartar movimiento"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isLoading}
+                                    onClick={() => handleOpenEdit(m)}
+                                    className="px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-normal flex items-center gap-1 transition-colors"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Editar</span>
+                                  </button>
+
+                                  {/* 🛠️ Botón Ajustar Directo cuando hay stock insuficiente */}
+                                  {isStockInsufficient && !isDateLocked && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenQuickAjuste(m, stock, group.carneName)}
+                                      className="px-2.5 py-1 text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg text-xs font-medium flex items-center gap-1 shadow-sm transition-all active:scale-95"
+                                      title="Ajustar stock faltante por error de conteo para poder aprobar"
+                                    >
+                                      <Wrench className="w-3 h-3 text-amber-700" />
+                                      <span>Ajustar</span>
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    disabled={isLoading || isStockInsufficient || isDateLocked}
+                                    onClick={() => handleAprobar(m.id)}
+                                    className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 shadow-sm active:scale-95 transition-all ${
+                                      isDateLocked
+                                        ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
+                                        : isStockInsufficient
+                                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    }`}
+                                    title={
+                                      isDateLocked
+                                        ? `⚠️ Bloqueado: Primero debes aprobar los movimientos del día ${earliestPendingDate}`
+                                        : isStockInsufficient
+                                        ? 'No se puede aprobar: stock insuficiente en bodega. Usa el botón Ajustar.'
+                                        : 'Aprobar movimiento'
+                                    }
+                                  >
+                                    {isDateLocked ? (
+                                      <>
+                                        <Lock className="w-3 h-3 text-slate-400" />
+                                        <span>Bloqueado</span>
+                                      </>
+                                    ) : isLoading ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>Aprobar</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
+      )}
 
-        {/* Smart Meat Search in Timeline */}
-        <div className="relative w-full md:max-w-xs" ref={searchRef}>
-          <div className="relative flex items-center">
-            <Search className="absolute left-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setIsDropdownOpen(true);
-              }}
-              onFocus={() => setIsDropdownOpen(true)}
-              placeholder="Escribe para filtrar carnes con movimientos..."
-              className={`w-full h-8 pl-8 pr-7 text-xs font-normal rounded-lg border outline-none bg-white transition-all ${
-                meatFilter !== 'ALL'
-                  ? 'border-orange-500 bg-orange-50/50 text-orange-950 font-semibold'
-                  : 'border-slate-300 focus:border-orange-500 text-slate-800'
+      {/* 📜 PESTAÑA 2: KARDEX Y OPERACIONES APROBADAS (AGRUPADO POR INSUMO) */}
+      {activeFeedTab === 'HISTORIAL' && (
+        <div className="space-y-4 animate-fade-in">
+          {/* 📅 Encabezado Superior con Selector de Fecha y Buscador */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-medium text-slate-900 tracking-tight flex items-center gap-2">
+                <Clock className="w-4 h-4 text-orange-500" />
+                <span>Kardex de Operaciones Aprobadas ({finalApprovedMovs.length})</span>
+              </h2>
+              <p className="text-xs text-slate-400 font-normal">
+                Movimientos formalizados en el inventario agrupados por corte de carne
+              </p>
+            </div>
+
+            {/* Selector de Fecha para la Línea de Tiempo */}
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={filterDate === 'ALL' ? '' : filterDate}
+                onChange={(e) => onDateChange(e.target.value)}
+                className="h-8 px-2.5 rounded-lg border border-slate-300 text-xs font-normal text-slate-800 bg-white outline-none focus:border-orange-500 shadow-sm"
+              />
+              {filterDate !== todayStr && (
+                <button
+                  type="button"
+                  onClick={() => onDateChange(todayStr)}
+                  className="px-2.5 h-8 text-xs font-normal bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+                >
+                  Hoy
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 🏷️ BADGES DE FILTRO POR FECHA PARA HISTORIAL (CON BOTÓN PARA REVERTIR) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-slate-500 font-normal mr-1 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-orange-500" />
+              <span>Jornadas aprobadas:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onDateChange('ALL')}
+              className={`px-3 py-1 rounded-full text-xs font-normal transition-all border ${
+                filterDate === 'ALL' || !filterDate
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm font-medium'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
               }`}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={handleClearMeatFilter}
-                className="absolute right-2 text-slate-400 hover:text-slate-600 text-xs"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+            >
+              Historial Completo ({approvedMovs.length})
+            </button>
+
+            {sortedApprovedDates.map((item) => {
+              const isReverting = revertingDate === item.date;
+
+              return (
+                <div
+                  key={item.date}
+                  className={`px-2.5 py-1 rounded-full text-xs font-normal transition-all border flex items-center gap-1.5 ${
+                    filterDate === item.date
+                      ? 'bg-orange-600 border-orange-600 text-white shadow-sm font-medium'
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-orange-50 hover:border-orange-300'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onDateChange(item.date)}
+                    className="flex items-center gap-1.5 outline-none cursor-pointer"
+                  >
+                    <Calendar className="w-3 h-3 text-orange-500" />
+                    <span>{item.date}</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${filterDate === item.date ? 'bg-orange-800 text-white' : 'bg-orange-100 text-orange-900'}`}>
+                      {item.count}
+                    </span>
+                  </button>
+
+                  {/* ↺ Botón para Revertir Jornada Aprobada a Pendiente */}
+                  <button
+                    type="button"
+                    disabled={isReverting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRevertirDia(item.date, item.count);
+                    }}
+                    className={`p-0.5 rounded-full transition-colors ml-0.5 cursor-pointer ${
+                      filterDate === item.date
+                        ? 'text-orange-200 hover:bg-orange-800 hover:text-white'
+                        : 'text-slate-400 hover:bg-slate-200 hover:text-slate-800'
+                    }`}
+                    title={`↺ Deshacer aprobación del día ${item.date} y volver a estado pendiente`}
+                  >
+                    {isReverting ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 🔍 Barra de Filtro Predictivo por Insumo */}
+          <div className="flex items-center gap-2 flex-wrap" ref={searchRef}>
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                placeholder="Filtrar por corte o materia prima..."
+                className="w-full h-8 pl-8 pr-8 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 text-slate-800 placeholder-slate-400 font-normal"
+              />
+              {meatFilter !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={handleClearMeatFilter}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {/* Desplegable de Autocompletado */}
+              {isDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-30 max-h-48 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectMeat('ALL', '')}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center justify-between text-slate-700 border-b border-slate-100 font-normal"
+                  >
+                    <span>Todas las Carnes</span>
+                    <span className="text-[11px] text-slate-400">{dateFilteredApproved.length}</span>
+                  </button>
+                  {filteredSearchMeats.length === 0 ? (
+                    <div className="px-3 py-2.5 text-xs text-slate-400 text-center font-normal">
+                      No hay movimientos para este criterio
+                    </div>
+                  ) : (
+                    filteredSearchMeats.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => handleSelectMeat(String(m.id), m.name)}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-orange-50 flex items-center justify-between text-slate-800 transition-colors font-normal"
+                      >
+                        <span>{m.name}</span>
+                        <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                          {m.count}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {meatFilter !== 'ALL' && (
+              <span className="px-2.5 py-1 bg-orange-100 text-orange-800 text-xs rounded-lg font-medium flex items-center gap-1">
+                Filtro activo
+              </span>
             )}
           </div>
 
-          {/* Meat Dropdown */}
-          {isDropdownOpen && (
-            <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-40 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100 animate-fade-in text-xs">
-              <div
-                onClick={() => handleSelectMeat('ALL', '')}
-                className="p-2.5 font-bold text-slate-800 hover:bg-slate-100 cursor-pointer flex items-center justify-between"
-              >
-                <span>🥩 Ver Todas las Carnes ({availableMeats.length})</span>
+          {/* 📦 LISTA DE MOVIMIENTOS APROBADOS AGRUPADOS POR INSUMO */}
+          <div className="space-y-4">
+            {groupedApprovedMeats.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 font-normal text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                No hay movimientos aprobados registrados para esta fecha y criterio de búsqueda.
               </div>
+            ) : (
+              groupedApprovedMeats.map((group) => {
+                const stock = group.insumoObj;
 
-              {searchResults.length === 0 ? (
-                <div className="p-3 text-center text-slate-400">
-                  No hay carnes con movimientos en esta fecha.
-                </div>
-              ) : (
-                searchResults.map((m) => (
-                  <div
-                    key={m.id}
-                    onClick={() => handleSelectMeat(String(m.id), m.name)}
-                    className="p-2 hover:bg-orange-50 cursor-pointer flex items-center justify-between transition-colors"
-                  >
-                    <span className="font-medium text-slate-900">{m.name}</span>
-                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-semibold">
-                      {m.count} mov{m.count > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+                return (
+                  <div key={group.insumoId} className="space-y-2 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-200 shadow-sm">
+                    {/* Encabezado del Insumo */}
+                    <div className="flex items-center justify-between flex-wrap gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
+                        <span className="font-medium text-slate-900 text-sm">{group.carneName}</span>
+                        {group.categoria && (
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
+                            {group.categoria}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-400 font-normal">
+                          • {group.movs.length} movimiento{group.movs.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
 
-      {/* Movement List Stream (Vertical Connected Track) */}
-      {finalFilteredMovs.length === 0 ? (
-        <div className="py-12 text-center text-slate-400 space-y-2">
-          <Clock className="w-7 h-7 mx-auto text-slate-300" />
-          <p className="text-xs font-medium">No hay movimientos registrados para esta fecha o carne.</p>
-        </div>
-      ) : (
-        <div className="relative pl-6 md:pl-8 border-l-2 border-slate-200 space-y-4 my-2 ml-3">
-          {finalFilteredMovs.map((m, idx) => {
-            const tipo = m.tipo_movimiento;
-            const carneName = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
-            const rawDate = m.fecha_hora || m.fecha || m.fecha_movimiento;
-            const timeStr = rawDate ? new Date(rawDate).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
-            const dateStr = rawDate ? new Date(rawDate).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
+                      {/* Stock Actual */}
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <span className="text-slate-400">Stock Actual:</span>
+                        <span className="font-medium text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                          📦 {stock ? `${stock.bodega_porc_und} und (${stock.bodega_porc_kg.toFixed(2)} Kg) / Entero: ${stock.bodega_sin_porc_kg.toFixed(2)} Kg` : 'Sin datos'}
+                        </span>
+                      </div>
+                    </div>
 
-            let dotColor = 'border-blue-500 text-blue-500 bg-blue-50';
-            let tagBg = 'bg-[#dbeafe] text-[#1d4ed8]';
-            let qtyBg = 'bg-blue-50 text-blue-700 border-blue-200';
-            let Icon = PlusCircle;
-            let label = '1. ENTRADA POR COMPRA';
-            let impactText = `+${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                    {/* Tarjetas de Movimientos Aprobados de este Insumo en Orden Lógico */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pl-1">
+                      {group.movs.map((m: any) => {
+                        const tipo = m.tipo_movimiento;
+                        const timeStr = m.fecha_hora ? new Date(m.fecha_hora).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
 
-            if (tipo === 'PORCIONADO') {
-              dotColor = 'border-purple-500 text-purple-500 bg-purple-50';
-              tagBg = 'bg-[#f3e8ff] text-[#7e22ce]';
-              qtyBg = 'bg-purple-50 text-purple-700 border-purple-200';
-              Icon = Scissors;
-              label = '2. PORCIONADO Y PESADO';
-              impactText = `${m.porciones_und || 0} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)`;
-            } else if (tipo === 'TRASLADO_COCINA') {
-              dotColor = 'border-orange-500 text-orange-500 bg-orange-50';
-              tagBg = 'bg-[#ffedd5] text-[#c2410c]';
-              qtyBg = 'bg-orange-50 text-orange-700 border-orange-200';
-              Icon = ArrowRightCircle;
-              label = '3. TRASLADO A COCINA';
-              impactText = m.porciones_und ? `${m.porciones_und} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
-            } else if (tipo === 'DEVOLUCION_COCINA') {
-              dotColor = 'border-emerald-500 text-emerald-500 bg-emerald-50';
-              tagBg = 'bg-[#d1fae5] text-[#047857]';
-              qtyBg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-              Icon = CornerDownLeft;
-              label = '4. DEVOLUCION DE COCINA';
-              impactText = m.porciones_und ? `+${m.porciones_und} und` : `+${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
-            }
+                        let typeTag = 'bg-blue-100 text-blue-800 border-blue-200';
+                        let typeLabel = '1. ENTRADA COMPRA';
+                        let qtyText = `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
 
-            return (
-              <div key={m.id || idx} className="relative group">
-                {/* Node Bullet Circle on Timeline Track */}
-                <div
-                  className={`absolute -left-[35px] md:-left-[43px] top-3.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shadow-sm z-10 ${dotColor}`}
-                >
-                  <Icon className="w-2.5 h-2.5" />
-                </div>
+                        if (tipo === 'PORCIONADO') {
+                          typeTag = 'bg-purple-100 text-purple-800 border-purple-200';
+                          typeLabel = '2. PORCIONADO';
+                          qtyText = `${m.porciones_und || 0} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)`;
+                        } else if (tipo === 'DEVOLUCION_COCINA') {
+                          typeTag = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                          typeLabel = '3. DEVOLUCIÓN COCINA';
+                          qtyText = m.porciones_und ? `+${m.porciones_und} und` : `+${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                        } else if (tipo === 'TRASLADO_COCINA') {
+                          typeTag = 'bg-orange-100 text-orange-800 border-orange-200';
+                          typeLabel = '4. TRASLADO COCINA';
+                          qtyText = m.porciones_und ? `${m.porciones_und} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                        } else if (tipo === 'AJUSTE_INVENTARIO') {
+                          typeTag = 'bg-amber-100 text-amber-900 border-amber-200';
+                          typeLabel = '5. AJUSTE DE INVENTARIO';
+                          qtyText = m.porciones_und ? `${m.porciones_und} und` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                        } else if (tipo === 'INVENTARIO_INICIAL') {
+                          typeTag = 'bg-indigo-100 text-indigo-800 border-indigo-200';
+                          typeLabel = '📦 APERTURA INICIAL';
+                          qtyText = m.porciones_und ? `${m.porciones_und} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                        }
 
-                {/* Card Container (Exact match to screenshot 2) */}
-                <div className="p-3.5 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-md transition-all space-y-2">
-                  {/* Header Row */}
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold tracking-wide ${tagBg}`}>
-                      {label}
-                    </span>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 font-normal">
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3 text-slate-400" /> {m.usuario || 'Bodeguero'}
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-400" /> {dateStr}, {timeStr}
-                      </span>
+                        return (
+                          <div
+                            key={m.id}
+                            className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm space-y-2 text-xs font-normal"
+                          >
+                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${typeTag}`}>
+                                {typeLabel}
+                              </span>
+                              <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                                <span>{m.usuario || 'Bodeguero'}</span>
+                                <span>•</span>
+                                <span>{timeStr || m.fecha}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-slate-900 text-xs md:text-sm">
+                                {qtyText}
+                              </span>
+                              {m.valor_total_movimiento ? (
+                                <span className="text-slate-800 font-medium">
+                                  $ {formatMoney(m.valor_total_movimiento)}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {m.observaciones && (
+                              <p className="text-[11px] text-slate-600 line-clamp-2 pt-0.5 border-t border-slate-100 mt-1">
+                                {m.observaciones.replace(/\[PENDIENTE_APROBAR\]/g, '').trim()}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-
-                  {/* Main Title & Quantity Badge */}
-                  <div className="flex items-center justify-between flex-wrap gap-1">
-                    <h3 className="font-bold text-sm md:text-base text-slate-900">
-                      {carneName}
-                    </h3>
-                    <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border ${qtyBg}`}>
-                      {impactText}
-                    </span>
-                  </div>
-
-                  {/* Memo Notes */}
-                  {m.observaciones && (
-                    <div className="text-xs text-slate-600 flex items-start gap-1">
-                      <span>📝</span>
-                      <span>{m.observaciones}</span>
-                    </div>
-                  )}
-
-                  {/* Snapshot Bar */}
-                  <div className="bg-[#f8fafc] border border-dashed border-slate-200 rounded-lg p-2 text-[11px] text-slate-600 flex items-center gap-3.5 flex-wrap">
-                    {tipo === 'ENTRADA_COMPRA' && (
-                      <>
-                        <span><strong>Origen:</strong> {m.origen || 'PROVEEDOR'}</span>
-                        <span>•</span>
-                        <span><strong>Bodega Entero:</strong> {(m.bodega_sin_porc_anterior_kg || 0).toFixed(2)} Kg ➔ <strong>{(m.bodega_sin_porc_nuevo_kg || 0).toFixed(2)} Kg</strong></span>
-                        {m.valor_total_movimiento ? (
-                          <>
-                            <span>•</span>
-                            <span><strong>Valor:</strong> ${formatMoney(m.valor_total_movimiento)}</span>
-                          </>
-                        ) : null}
-                      </>
-                    )}
-
-                    {tipo === 'PORCIONADO' && (
-                      <>
-                        <span><strong>Procesado:</strong> {(m.cant_sin_porcionar_kg || 0).toFixed(2)} Kg</span>
-                        <span>•</span>
-                        <span className="text-rose-600 font-semibold"><strong>Merma:</strong> {(m.merma_kg || 0).toFixed(2)} Kg</span>
-                        <span>•</span>
-                        <span><strong>Bodega Entero:</strong> {(m.bodega_sin_porc_anterior_kg || 0).toFixed(2)} Kg ➔ <strong>{(m.bodega_sin_porc_nuevo_kg || 0).toFixed(2)} Kg</strong></span>
-                        <span>•</span>
-                        <span><strong>Bodega Porc:</strong> {m.bodega_porc_anterior_und || 0} und ➔ <strong>{m.bodega_porc_nuevo_und || 0} und</strong></span>
-                      </>
-                    )}
-
-                    {tipo === 'TRASLADO_COCINA' && (
-                      <>
-                        <span><strong>Destino:</strong> {m.destino || 'COCINA'}</span>
-                        <span>•</span>
-                        <span><strong>Bodega Porc:</strong> {m.bodega_porc_anterior_und || 0} und ➔ <strong>{m.bodega_porc_nuevo_und || 0} und</strong></span>
-                        <span>•</span>
-                        <span><strong>Cocina Porc:</strong> {m.cocina_porc_anterior_und || 0} und ➔ <strong>{m.cocina_porc_nuevo_und || 0} und</strong></span>
-                      </>
-                    )}
-
-                    {tipo === 'DEVOLUCION_COCINA' && (
-                      <>
-                        <span><strong>Reintegro:</strong> COCINA ➔ BODEGA</span>
-                        <span>•</span>
-                        <span><strong>Bodega Porc:</strong> {m.bodega_porc_anterior_und || 0} und ➔ <strong>{m.bodega_porc_nuevo_und || 0} und</strong></span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })
+            )}
+          </div>
         </div>
       )}
+
+      {/* 📝 MODAL DE EDICIÓN DE MOVIMIENTO PENDIENTE */}
+      <Modal
+        isOpen={!!editingMov}
+        onClose={() => setEditingMov(null)}
+        title="Editar Movimiento Pendiente"
+        icon={<Edit2 className="w-5 h-5 text-orange-500" />}
+        maxWidth="max-w-md"
+      >
+        {editingMov && (
+          <form onSubmit={handleSaveEdit} className="space-y-3 text-xs font-normal">
+            <div>
+              <label className="block text-slate-700 font-medium mb-1">Materia Prima / Insumo</label>
+              <select
+                value={editInsumoId}
+                onChange={(e) => setEditInsumoId(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 bg-white"
+              >
+                {insumos.map((i) => (
+                  <option key={i.insumo_id} value={i.insumo_id}>
+                    {(i as any).nombre_insumo || i.insumo || `Insumo #${i.insumo_id}`} ({i.categoria})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Kilos (Entero)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editCantKg}
+                  onChange={(e) => setEditCantKg(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Porciones (Und)</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={editPorciones}
+                  onChange={(e) => setEditPorciones(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Peso Porciones (Kg)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editPesoPorciones}
+                  onChange={(e) => setEditPesoPorciones(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Valor Total ($)</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={editCostoTotal}
+                  onChange={(e) => setEditCostoTotal(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-medium mb-1">Observaciones</label>
+              <input
+                type="text"
+                value={editObs}
+                onChange={(e) => setEditObs(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingMov(null)}
+                className="px-3 py-1.5 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-normal"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="px-4 py-1.5 text-xs text-white bg-orange-500 hover:bg-orange-600 rounded-lg font-medium shadow-sm transition-all"
+              >
+                {savingEdit ? 'Guardando...' : 'Guardar Cambios'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* 🛠️ MODAL DE AJUSTE RÁPIDO POR STOCK INSUFICIENTE */}
+      <Modal
+        isOpen={!!quickAjusteModal}
+        onClose={() => setQuickAjusteModal(null)}
+        title="Ajuste Rápido de Stock por Error de Conteo"
+        icon={<Wrench className="w-5 h-5 text-amber-600" />}
+        maxWidth="max-w-md"
+      >
+        {quickAjusteModal && (
+          <form onSubmit={handleSaveQuickAjuste} className="space-y-3 text-xs font-normal">
+            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-slate-700 text-[11px] space-y-1">
+              <span className="font-medium text-amber-950 block">💡 Ajuste automático sugerido</span>
+              <p>
+                Se aplicará un ingreso de stock necesario en <strong>{quickAjusteModal.ubicacionLabel}</strong> para que puedas aprobar este movimiento sin descuadres.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-medium mb-1">Materia Prima / Carne</label>
+              <input
+                type="text"
+                disabled
+                value={quickAjusteModal.insumoName}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-slate-100 text-slate-700 font-medium"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Ubicación</label>
+                <select
+                  value={quickAjusteModal.ubicacion}
+                  onChange={(e) => setQuickAjusteModal({ ...quickAjusteModal, ubicacion: e.target.value })}
+                  className="w-full h-8 px-2 rounded-lg border border-slate-300 focus:border-amber-500 text-slate-800 bg-white"
+                >
+                  <option value="BODEGA_PORCIONADO">Bodega (Und)</option>
+                  <option value="BODEGA_ENTERO">Bodega (Kg)</option>
+                  <option value="COCINA_PORCIONADO">Cocina (Und)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Cantidad a Ajustar (+)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={quickAjusteModal.cantidad}
+                  onChange={(e) => setQuickAjusteModal({ ...quickAjusteModal, cantidad: e.target.value })}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-amber-500 text-slate-900 font-bold"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-medium mb-1">Motivo Tipificado</label>
+              <select
+                value={quickAjusteModal.motivo}
+                onChange={(e) => setQuickAjusteModal({ ...quickAjusteModal, motivo: e.target.value })}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-amber-500 text-slate-800 bg-white"
+              >
+                <option value="ERROR_CONTEO_PREVIO">Corrección por Error de Conteo</option>
+                <option value="MERMA_POR_DESCONGELACION">Merma por Descongelación</option>
+                <option value="DETERIORO_CALIDAD">Deterioro de Calidad / Descarte</option>
+                <option value="DONACION_O_DEGUSTACION">Donación o Muestra Comercial</option>
+                <option value="CONSUMO_INTERNO">Consumo Interno / Pruebas</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-medium mb-1">Justificación / Observaciones</label>
+              <input
+                type="text"
+                required
+                value={quickAjusteModal.justificacion}
+                onChange={(e) => setQuickAjusteModal({ ...quickAjusteModal, justificacion: e.target.value })}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-amber-500 text-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setQuickAjusteModal(null)}
+                className="px-3 py-1.5 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-normal"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingQuickAjuste}
+                className="px-4 py-1.5 text-xs text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-medium shadow-sm transition-all flex items-center gap-1"
+              >
+                {savingQuickAjuste ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                <span>Guardar Ajuste y Actualizar</span>
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }
