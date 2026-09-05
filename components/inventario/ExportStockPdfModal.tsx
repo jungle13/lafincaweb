@@ -33,8 +33,7 @@ export default function ExportStockPdfModal({
       // 1. Filtro de tipo
       if (filterType === 'WITH_STOCK') {
         const totalBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0);
-        const totalCocina = (item.cocina_sin_porc_kg || 0) + (item.cocina_porc_kg || 0);
-        if (totalBodega <= 0 && totalCocina <= 0 && (item.bodega_porc_und || 0) <= 0) return false;
+        if (totalBodega <= 0 && (item.bodega_porc_und || 0) <= 0) return false;
       } else if (filterType === 'CARNES') {
         if (item.es_carne === false) return false;
       }
@@ -51,8 +50,6 @@ export default function ExportStockPdfModal({
   const summary = useMemo(() => {
     let tBodegaKg = 0;
     let tBodegaUnd = 0;
-    let tCocinaKg = 0;
-    let tCocinaUnd = 0;
     let tAcumCocinaKg = 0;
     let tAcumCocinaUnd = 0;
     let tMermaKg = 0;
@@ -62,8 +59,6 @@ export default function ExportStockPdfModal({
       const vBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
       tBodegaKg += (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0);
       tBodegaUnd += item.bodega_porc_und || 0;
-      tCocinaKg += (item.cocina_sin_porc_kg || 0) + (item.cocina_porc_kg || 0);
-      tCocinaUnd += item.cocina_porc_und || 0;
       tAcumCocinaKg += item.traslado_cocina_acumulado_kg || 0;
       tAcumCocinaUnd += item.traslado_cocina_acumulado_und || 0;
       tMermaKg += item.merma_acumulada_kg || 0;
@@ -73,8 +68,6 @@ export default function ExportStockPdfModal({
     return {
       tBodegaKg,
       tBodegaUnd,
-      tCocinaKg,
-      tCocinaUnd,
       tAcumCocinaKg,
       tAcumCocinaUnd,
       tMermaKg,
@@ -99,6 +92,23 @@ export default function ExportStockPdfModal({
       maxWidth="max-w-6xl"
     >
       <div className="space-y-3 text-xs font-normal">
+        {/* Estilo CSS especial para impresión en hoja horizontal limpia */}
+        <style jsx global>{`
+          @media print {
+            @page {
+              size: landscape;
+              margin: 8mm;
+            }
+            body {
+              background: white !important;
+              color: black !important;
+            }
+            nav, header, aside, .print\\:hidden {
+              display: none !important;
+            }
+          }
+        `}</style>
+
         {/* Barra Superior de Filtros y Controles del Documento (Oculta al imprimir) */}
         <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between flex-wrap gap-2.5 print:hidden">
           <div className="flex items-center gap-2 flex-wrap">
@@ -113,7 +123,7 @@ export default function ExportStockPdfModal({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                🥩 Con Existencias (&gt;0)
+                🥩 Con Existencias Bodega (&gt;0)
               </button>
               <button
                 type="button"
@@ -205,26 +215,21 @@ export default function ExportStockPdfModal({
           </div>
 
           {/* Resumen Ejecutivo */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
+          <div className="grid grid-cols-3 gap-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
             <div>
               <span className="text-[9px] text-slate-500 font-medium uppercase block">Total en Bodega</span>
               <span className="text-xs font-bold text-slate-900">{summary.tBodegaKg.toFixed(2)} Kg</span>
               <span className="text-[9px] text-purple-700 block">({summary.tBodegaUnd} porciones)</span>
             </div>
             <div>
-              <span className="text-[9px] text-slate-500 font-medium uppercase block">Acumulado a Cocina</span>
+              <span className="text-[9px] text-slate-500 font-medium uppercase block">Acumulado Despachado a Cocina</span>
               <span className="text-xs font-bold text-amber-800">{summary.tAcumCocinaKg.toFixed(2)} Kg</span>
               <span className="text-[9px] text-amber-700 block">({summary.tAcumCocinaUnd} porciones)</span>
-            </div>
-            <div>
-              <span className="text-[9px] text-slate-500 font-medium uppercase block">Saldo en Cocina</span>
-              <span className="text-xs font-bold text-slate-900">{summary.tCocinaKg.toFixed(2)} Kg</span>
-              <span className="text-[9px] text-slate-600 block">({summary.tCocinaUnd} porciones)</span>
             </div>
             <div className="bg-slate-900 text-white p-1 rounded-md">
               <span className="text-[9px] text-amber-300 font-medium uppercase block">Valor Total Stock Bodega</span>
               <span className="text-xs font-bold text-amber-400">$ {formatMoney(summary.tValorBodega)}</span>
-              <span className="text-[9px] text-slate-300 block">(Sin incluir Cocina)</span>
+              <span className="text-[9px] text-slate-300 block">(Kilogramos Custodiados en Bodega)</span>
             </div>
           </div>
 
@@ -234,12 +239,10 @@ export default function ExportStockPdfModal({
               <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-sm text-slate-800 font-bold uppercase text-[9px] border-b border-slate-300 shadow-2xs">
                 <tr>
                   <th className="p-1.5 border-r border-slate-300 whitespace-nowrap">Carne / Insumo</th>
-                  <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap">Categoría</th>
                   <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap">Bodega Entero (Kg)</th>
                   <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap">Bodega Porc. (Und / Kg)</th>
                   <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap font-bold bg-blue-50/70">Total Bodega (Kg)</th>
                   <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap bg-amber-50/80">Acumulado Cocina</th>
-                  <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap">En Cocina (Saldo)</th>
                   <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap text-rose-700">Merma Acum.</th>
                   <th className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap">Costo / Kg</th>
                   <th className="p-1.5 text-right bg-slate-200 whitespace-nowrap font-bold">Valor Stock Bodega</th>
@@ -248,7 +251,7 @@ export default function ExportStockPdfModal({
               <tbody className="divide-y divide-slate-200 font-normal">
                 {paginatedList.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-6 text-center text-slate-400 font-normal">
+                    <td colSpan={8} className="p-6 text-center text-slate-400 font-normal">
                       No se encontraron insumos para exportar.
                     </td>
                   </tr>
@@ -257,8 +260,6 @@ export default function ExportStockPdfModal({
                     const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
                     const acumUnd = item.traslado_cocina_acumulado_und || 0;
                     const acumKg = item.traslado_cocina_acumulado_kg || 0;
-                    const cocinaUnd = item.cocina_porc_und || 0;
-                    const cocinaKg = item.peso_total_cocina_kg || (item.cocina_porc_kg + item.cocina_sin_porc_kg) || 0;
 
                     return (
                       <tr key={item.insumo_id} className="hover:bg-slate-50/50">
@@ -268,11 +269,6 @@ export default function ExportStockPdfModal({
                           {item.peso_porc_gramos > 0 && (
                             <span className="text-[8.5px] text-slate-400 block">{item.peso_porc_gramos}g / porción</span>
                           )}
-                        </td>
-
-                        {/* Categoría */}
-                        <td className="p-1.5 text-center border-r border-slate-200 text-slate-500 text-[10px] whitespace-nowrap">
-                          {item.categoria}
                         </td>
 
                         {/* Bodega Entero */}
@@ -298,15 +294,6 @@ export default function ExportStockPdfModal({
                         <td className="p-1.5 text-center border-r border-slate-200 font-medium text-amber-900 bg-amber-50/40 whitespace-nowrap">
                           {acumUnd > 0 || acumKg > 0 ? (
                             <span>{acumUnd} und <small className="text-amber-700">({acumKg.toFixed(2)}k)</small></span>
-                          ) : (
-                            <span className="text-slate-300">0</span>
-                          )}
-                        </td>
-
-                        {/* En Cocina Saldo */}
-                        <td className="p-1.5 text-center border-r border-slate-200 font-medium text-slate-800 whitespace-nowrap">
-                          {cocinaUnd > 0 || cocinaKg > 0 ? (
-                            <span>{cocinaUnd} und <small className="text-slate-400">({cocinaKg.toFixed(2)}k)</small></span>
                           ) : (
                             <span className="text-slate-300">0</span>
                           )}
