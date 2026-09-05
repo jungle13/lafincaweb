@@ -5,6 +5,7 @@ import StockKpis from '@/components/inventario/StockKpis';
 import CategoryFilterChips from '@/components/inventario/CategoryFilterChips';
 import StockTableDesktop from '@/components/inventario/StockTableDesktop';
 import StockCardsMobile from '@/components/inventario/StockCardsMobile';
+import ExportStockPdfModal from '@/components/inventario/ExportStockPdfModal';
 import { InsumoItem } from '@/types';
 import { 
   Search, 
@@ -16,7 +17,8 @@ import {
   Filter, 
   Info,
   CheckCircle2,
-  CalendarRange
+  CalendarRange,
+  Printer
 } from 'lucide-react';
 import { normalizeStr, formatMoney } from '@/lib/formatters';
 import { usePeriodo } from '@/context/PeriodoContext';
@@ -28,6 +30,7 @@ export default function InventarioPage() {
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
 
   // Modos de corte: 'ACTUAL' | 'INICIAL' | 'FECHA'
   const [cutoffMode, setCutoffMode] = useState<'ACTUAL' | 'INICIAL' | 'FECHA'>('ACTUAL');
@@ -308,15 +311,27 @@ export default function InventarioPage() {
           <p className="text-xs text-slate-500 font-normal">Monitoreo en vivo de bodega, cocina, mermas y costos ({currentPeriodo?.nombre || 'Periodo Activo'})</p>
         </div>
 
-        <div className="relative w-full md:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar carne por nombre o código..."
-            className="w-full h-9 pl-9 pr-3 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 font-normal"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 sm:w-64 md:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar carne por nombre o código..."
+              className="w-full h-9 pl-9 pr-3 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 font-normal"
+            />
+          </div>
+
+          {/* Botón Exportar PDF de Inventario */}
+          <button
+            type="button"
+            onClick={() => setIsPdfModalOpen(true)}
+            className="h-9 px-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 active:scale-95 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap"
+          >
+            <Printer className="w-3.5 h-3.5 text-blue-600" />
+            <span>Exportar PDF</span>
+          </button>
         </div>
       </div>
 
@@ -335,6 +350,21 @@ export default function InventarioPage() {
           <StockCardsMobile insumos={filteredInsumos} />
         </>
       )}
+
+      {/* Modal de Exportación a PDF Oficial */}
+      <ExportStockPdfModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        insumos={insumos}
+        periodoNombre={currentPeriodo?.nombre || 'Periodo en Curso'}
+        cutoffInfo={
+          cutoffMode === 'INICIAL' 
+            ? 'Inventario Inicial' 
+            : cutoffMode === 'FECHA' 
+            ? `Corte al ${selectedDate}` 
+            : 'Inventario Actual en Vivo'
+        }
+      />
     </div>
   );
 }

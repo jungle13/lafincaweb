@@ -25,3 +25,4 @@ Thumbs.db
 # Temp Excel files
 ~$*.xlsx
 tsconfig.tsbuildinfo
+.vercel
