@@ -6,10 +6,17 @@ import {
   ChevronRight, 
   Loader2, 
   Receipt, 
-  Check 
+  Check,
+  Calendar,
+  DollarSign,
+  Package,
+  FileText,
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { formatMoney, normalizeStr } from '@/lib/formatters';
+import { usePeriodo } from '@/context/PeriodoContext';
 
 interface CompraItem {
   id: string;
@@ -29,6 +36,7 @@ interface CompraItem {
 type SortField = 'fecha' | 'factura' | 'proveedor' | 'insumo' | 'cantidadKg' | 'costoUnitarioKg' | 'totalPesos';
 
 export default function ComprasPage() {
+  const { currentPeriodo, selectedPeriodoId } = usePeriodo();
   const [compras, setCompras] = useState<CompraItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,12 +58,22 @@ export default function ComprasPage() {
   const [saving, setSaving] = useState(false);
 
   const loadCompras = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(`/api/compras?t=${Date.now()}`, { cache: 'no-store' });
+      const startParam = currentPeriodo?.fecha_inicio ? `&fecha_inicio=${currentPeriodo.fecha_inicio}` : '';
+      const endParam = currentPeriodo?.fecha_fin ? `&fecha_fin=${currentPeriodo.fecha_fin}` : '';
+      const periodParam = selectedPeriodoId ? `&periodo_id=${selectedPeriodoId}` : '';
+
+      const res = await fetch(`/api/compras?t=${Date.now()}${startParam}${endParam}${periodParam}`, { cache: 'no-store' });
       const data = await res.json();
-      if (data.data) setCompras(data.data);
+      if (data.data) {
+        setCompras(data.data);
+      } else {
+        setCompras([]);
+      }
     } catch (e) {
       console.error('Error fetching compras:', e);
+      setCompras([]);
     } finally {
       setLoading(false);
     }
@@ -63,23 +81,53 @@ export default function ComprasPage() {
 
   useEffect(() => {
     loadCompras();
-  }, []);
+    setCurrentPage(1);
+  }, [currentPeriodo?.id, currentPeriodo?.fecha_inicio, currentPeriodo?.fecha_fin, selectedPeriodoId]);
 
+  // Filtrado estricto por periodo como safeguard
+  const periodFilteredCompras = useMemo(() => {
+    if (!currentPeriodo) return compras;
+    const start = currentPeriodo.fecha_inicio;
+    const end = currentPeriodo.fecha_fin;
+    return compras.filter((c) => {
+      if (!c.fecha) return true;
+      if (start && c.fecha < start) return false;
+      if (end && c.fecha > end) return false;
+      return true;
+    });
+  }, [compras, currentPeriodo]);
+
+  // KPIs del periodo
   const totalInvertido = useMemo(() => {
-    return compras.reduce((acc, c) => acc + (c.totalPesos || 0), 0);
-  }, [compras]);
+    return periodFilteredCompras.reduce((acc, c) => acc + (c.totalPesos || 0), 0);
+  }, [periodFilteredCompras]);
 
-  // Filtrado
+  const totalKgComprados = useMemo(() => {
+    return periodFilteredCompras.reduce((acc, c) => acc + (c.cantidadKg || 0), 0);
+  }, [periodFilteredCompras]);
+
+  const facturasPendientesCount = useMemo(() => {
+    return periodFilteredCompras.filter(
+      (c) =>
+        c.estadoFactura === 'PENDIENTE' ||
+        c.factura === 'Pendiente' ||
+        c.factura === 'PENDIENTE' ||
+        c.proveedor === 'Pendiente de Factura' ||
+        c.proveedor === 'Proveedor Local'
+    ).length;
+  }, [periodFilteredCompras]);
+
+  // Filtrado por buscador
   const filteredCompras = useMemo(() => {
     const cleanSearch = normalizeStr(searchQuery);
-    if (!cleanSearch) return compras;
-    return compras.filter((c) => {
+    if (!cleanSearch) return periodFilteredCompras;
+    return periodFilteredCompras.filter((c) => {
       const prov = normalizeStr(c.proveedor);
       const fac = normalizeStr(c.factura);
       const ins = normalizeStr(c.insumo);
       return prov.includes(cleanSearch) || fac.includes(cleanSearch) || ins.includes(cleanSearch);
     });
-  }, [compras, searchQuery]);
+  }, [periodFilteredCompras, searchQuery]);
 
   // Ordenamiento
   const sortedCompras = useMemo(() => {
@@ -155,45 +203,99 @@ export default function ComprasPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-        <p className="text-xs font-normal">Cargando Módulo de Compras...</p>
+        <p className="text-xs font-normal">Cargando Compras del Periodo {currentPeriodo?.nombre || ''}...</p>
       </div>
     );
   }
 
   return (
     <div className="w-full space-y-4 animate-fade-in font-normal">
-      {/* Barra Superior Plana */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-medium text-slate-900 tracking-tight">
-            Registro Detallado de Compras
-          </h2>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-orange-50/80 border border-orange-200/60 text-xs font-normal text-slate-700">
-            <span className="text-slate-500">Inversión:</span>
-            <span className="text-orange-600 font-medium">$ {formatMoney(totalInvertido)}</span>
-          </span>
+      {/* 🏷️ BANNER DEL PERIODO SELECCIONADO Y KPIS */}
+      <div className="p-4 bg-gradient-to-r from-orange-50/90 via-amber-50/70 to-slate-50 border border-orange-200/80 rounded-2xl shadow-sm space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 bg-orange-600 text-white rounded-xl shadow-sm">
+              <Receipt className="w-5 h-5" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">
+                  Registro de Compras
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-900 border border-orange-300">
+                  {currentPeriodo?.nombre || 'Periodo Activo'}
+                </span>
+                {currentPeriodo?.estado === 'CERRADO' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-200 text-slate-700">
+                    🔒 Cerrado
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800">
+                    🟢 En Curso
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>
+                  Rango del periodo: <strong>{currentPeriodo?.fecha_inicio || 'Inicio'}</strong> al <strong>{currentPeriodo?.fecha_fin || 'Fin'}</strong>
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Buscador Rápido */}
+          <div className="relative w-full md:w-80">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Buscar por insumo, factura o proveedor..."
+              className="w-full h-9 px-3 text-xs rounded-xl border border-slate-300 outline-none focus:border-orange-500 bg-white text-slate-800 placeholder-slate-400 shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              >
+                &times;
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Buscador */}
-        <div className="relative w-full md:w-72">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="Buscar por insumo, factura o proveedor"
-            className="w-full h-8 px-3 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 text-slate-800 placeholder-slate-400 font-normal"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-normal"
-            >
-              &times;
-            </button>
-          )}
+        {/* Mini KPIs del Periodo */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+          <div className="p-2.5 bg-white rounded-xl border border-orange-200/70 shadow-2xs">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Inversión del Periodo</span>
+            <span className="text-sm md:text-base font-bold text-orange-600 mt-0.5 block">
+              $ {formatMoney(totalInvertido)}
+            </span>
+          </div>
+
+          <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Volumen Ingresado</span>
+            <span className="text-sm md:text-base font-bold text-slate-900 mt-0.5 block">
+              {totalKgComprados.toFixed(2)} Kg
+            </span>
+          </div>
+
+          <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Total Compras / Lotes</span>
+            <span className="text-sm md:text-base font-bold text-slate-800 mt-0.5 block">
+              {periodFilteredCompras.length} registros
+            </span>
+          </div>
+
+          <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Pendientes Liquidar</span>
+            <span className={`text-sm md:text-base font-bold mt-0.5 block ${facturasPendientesCount > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
+              {facturasPendientesCount > 0 ? `⚠️ ${facturasPendientesCount} facturas` : '✓ 0 pendientes'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -254,8 +356,17 @@ export default function ComprasPage() {
           <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-normal">
             {paginatedCompras.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-400 font-normal">
-                  No se encontraron compras con el filtro ingresado.
+                <td colSpan={8} className="py-14 text-center text-slate-400 font-normal">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Receipt className="w-8 h-8 text-slate-300" />
+                    <p className="text-xs text-slate-600 font-medium">
+                      No hay compras registradas en {currentPeriodo?.nombre || 'este periodo'}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Rango: {currentPeriodo?.fecha_inicio || ''} al {currentPeriodo?.fecha_fin || ''}
+                      {searchQuery ? ` • Filtro: "${searchQuery}"` : ''}
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -344,7 +455,9 @@ export default function ComprasPage() {
       <div className="block md:hidden space-y-3 pt-1">
         {paginatedCompras.length === 0 ? (
           <div className="text-center py-12 text-slate-400 font-normal text-xs">
-            No se encontraron compras con el filtro ingresado.
+            <Receipt className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+            <p className="font-medium text-slate-600">No hay compras en {currentPeriodo?.nombre || 'este periodo'}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{currentPeriodo?.fecha_inicio} al {currentPeriodo?.fecha_fin}</p>
           </div>
         ) : (
           paginatedCompras.map((row) => {

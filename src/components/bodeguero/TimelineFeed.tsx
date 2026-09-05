@@ -30,6 +30,7 @@ import {
 import Modal from '@/components/ui/Modal';
 import { formatMoney, normalizeStr } from '@/lib/formatters';
 import { InsumoItem, MovimientoItem } from '@/types';
+import { usePeriodo } from '@/context/PeriodoContext';
 
 interface Props {
   movimientos: MovimientoItem[];
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export default function TimelineFeed({ movimientos, filterDate, onDateChange, onSuccess, insumos = [] }: Props) {
+  const { currentPeriodo } = usePeriodo();
   // Pestaña principal: 'PENDIENTES' | 'HISTORIAL'
   const [activeFeedTab, setActiveFeedTab] = useState<'PENDIENTES' | 'HISTORIAL'>('PENDIENTES');
 
@@ -54,12 +56,14 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
   // Estados de acciones
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [approvingBatchDate, setApprovingBatchDate] = useState<string | null>(null);
+  const [autoAdjustingDate, setAutoAdjustingDate] = useState<string | null>(null);
   const [deletingDate, setDeletingDate] = useState<string | null>(null);
   const [revertingDate, setRevertingDate] = useState<string | null>(null);
 
   // Modal de Edición de Movimiento
   const [editingMov, setEditingMov] = useState<MovimientoItem | null>(null);
   const [editInsumoId, setEditInsumoId] = useState<string | number>('');
+  const [editFecha, setEditFecha] = useState<string>('');
   const [editCantKg, setEditCantKg] = useState<string>('');
   const [editPorciones, setEditPorciones] = useState<string>('');
   const [editPesoPorciones, setEditPesoPorciones] = useState<string>('');
@@ -67,9 +71,71 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
   const [editObs, setEditObs] = useState<string>('');
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Insumo seleccionado para la edición actual
+  const selectedEditInsumo = useMemo(() => {
+    if (!editInsumoId) return null;
+    return insumos.find((i) => String(i.insumo_id) === String(editInsumoId)) || null;
+  }, [insumos, editInsumoId]);
+
+  const handleEditInsumoChange = (newInsumoId: string) => {
+    setEditInsumoId(newInsumoId);
+    const found = insumos.find((i) => String(i.insumo_id) === String(newInsumoId));
+    const unitPrice = found?.costo_unitario_kg || 0;
+    const pesoStdKg = found?.peso_porc_gramos ? found.peso_porc_gramos / 1000 : 0.35;
+
+    let currentPesoPorc = parseFloat(editPesoPorciones) || 0;
+    const und = parseInt(editPorciones) || 0;
+    if (und > 0) {
+      currentPesoPorc = Number((und * pesoStdKg).toFixed(2));
+      setEditPesoPorciones(String(currentPesoPorc));
+    }
+
+    const cantKg = parseFloat(editCantKg) || 0;
+    const totalKg = cantKg + currentPesoPorc;
+    setEditCostoTotal(String(Math.round(totalKg * unitPrice)));
+  };
+
+  const handleEditCantKgChange = (newCantKg: string) => {
+    setEditCantKg(newCantKg);
+    const cantKg = parseFloat(newCantKg) || 0;
+    const pesoPorc = parseFloat(editPesoPorciones) || 0;
+    const unitPrice = selectedEditInsumo?.costo_unitario_kg || (editingMov?.costo_unitario_kg || 0);
+    const totalKg = cantKg + pesoPorc;
+    setEditCostoTotal(String(Math.round(totalKg * unitPrice)));
+  };
+
+  const handleEditPorcionesChange = (newPorcUnd: string) => {
+    setEditPorciones(newPorcUnd);
+    const und = parseInt(newPorcUnd) || 0;
+    const pesoStdKg = selectedEditInsumo?.peso_porc_gramos ? selectedEditInsumo.peso_porc_gramos / 1000 : 0.35;
+    
+    let pesoPorc = 0;
+    if (und > 0) {
+      pesoPorc = Number((und * pesoStdKg).toFixed(2));
+      setEditPesoPorciones(String(pesoPorc));
+    } else {
+      setEditPesoPorciones('0');
+    }
+
+    const cantKg = parseFloat(editCantKg) || 0;
+    const unitPrice = selectedEditInsumo?.costo_unitario_kg || (editingMov?.costo_unitario_kg || 0);
+    const totalKg = cantKg + pesoPorc;
+    setEditCostoTotal(String(Math.round(totalKg * unitPrice)));
+  };
+
+  const handleEditPesoPorcionesChange = (newPesoPorc: string) => {
+    setEditPesoPorciones(newPesoPorc);
+    const pesoPorc = parseFloat(newPesoPorc) || 0;
+    const cantKg = parseFloat(editCantKg) || 0;
+    const unitPrice = selectedEditInsumo?.costo_unitario_kg || (editingMov?.costo_unitario_kg || 0);
+    const totalKg = cantKg + pesoPorc;
+    setEditCostoTotal(String(Math.round(totalKg * unitPrice)));
+  };
+
   // 🛠️ Modal de Ajuste Rápido por Stock Insuficiente
   const [quickAjusteModal, setQuickAjusteModal] = useState<{
     isOpen: boolean;
+    fecha: string;
     insumoId: string | number;
     insumoName: string;
     ubicacion: string;
@@ -325,6 +391,39 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
     }
   };
 
+  // 🛠️ Manejador: Auto-Ajustar Inconsistencias y Faltantes de una Fecha
+  const handleAutoAjustarDia = async (targetDate: string) => {
+    if (!confirm(`🛠️ ¿Deseas aplicar automáticamente los ajustes de inventario necesarios (por error de conteo previo) para subsanar todos los faltantes de stock del día ${targetDate}?\n\nEsta acción registrará las auditorías correspondientes y habilitará la aprobación inmediata del día.`)) return;
+
+    setAutoAdjustingDate(targetDate);
+    try {
+      const res = await fetch('/api/bodega/ajustes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'AUTO_AJUSTAR_FECHA',
+          fecha: targetDate,
+          usuario: 'Administrador',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al auto-ajustar día');
+
+      if (data.count === 0) {
+        alert(data.message || `✅ Todos los movimientos del día ${targetDate} tienen stock suficiente. No se requirieron ajustes.`);
+      } else {
+        alert(`${data.message}\n\nLos cortes ahora cuentan con existencias suficientes para ser aprobados.`);
+      }
+
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAutoAdjustingDate(null);
+    }
+  };
+
   // Manejador: Aprobar Todos los Movimientos de un Día Completo en Orden
   const handleAprobarDia = async (targetDate: string) => {
     if (!confirm(`¿Estás seguro de aprobar TODOS los movimientos pendientes del día ${targetDate} en orden cronológico?`)) return;
@@ -442,10 +541,22 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
   const handleOpenEdit = (m: MovimientoItem) => {
     setEditingMov(m);
     setEditInsumoId(m.insumo_id);
-    setEditCantKg(String(m.cant_sin_porcionar_kg || 0));
-    setEditPorciones(String(m.porciones_und || 0));
-    setEditPesoPorciones(String(m.peso_porciones_kg || 0));
-    setEditCostoTotal(String(m.valor_total_movimiento || 0));
+    const movDate = (m.fecha || m.fecha_hora || todayStr).split('T')[0];
+    setEditFecha(movDate);
+    const cantKgStr = String(m.cant_sin_porcionar_kg || 0);
+    const porcStr = String(m.porciones_und || 0);
+    const pesoPorcStr = String(m.peso_porciones_kg || 0);
+    
+    setEditCantKg(cantKgStr);
+    setEditPorciones(porcStr);
+    setEditPesoPorciones(pesoPorcStr);
+
+    const targetInsumo = insumos.find((i) => String(i.insumo_id) === String(m.insumo_id));
+    const unitPrice = targetInsumo?.costo_unitario_kg || m.costo_unitario_kg || 0;
+    const totalKg = (parseFloat(cantKgStr) || 0) + (parseFloat(pesoPorcStr) || 0);
+    const initialTotal = m.valor_total_movimiento ? m.valor_total_movimiento : Math.round(totalKg * unitPrice);
+
+    setEditCostoTotal(String(initialTotal));
     setEditObs(m.observaciones?.replace(/\[PENDIENTE_APROBAR\]/g, '').trim() || '');
   };
 
@@ -464,6 +575,7 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
           movimientoId: editingMov.id,
           overrides: {
             insumo_id: editInsumoId,
+            fecha: editFecha,
             cant_sin_porcionar_kg: parseFloat(editCantKg) || 0,
             porciones_und: parseInt(editPorciones) || 0,
             peso_porciones_kg: parseFloat(editPesoPorciones) || 0,
@@ -528,8 +640,11 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
       }
     }
 
+    const targetFecha = (m.fecha || m.fecha_hora || todayStr).split('T')[0];
+
     setQuickAjusteModal({
       isOpen: true,
+      fecha: targetFecha,
       insumoId: m.insumo_id,
       insumoName: carneName || m.catalogo_insumos?.nombre || `Insumo #${m.insumo_id}`,
       ubicacion: ubicacion,
@@ -551,6 +666,7 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          fecha: quickAjusteModal.fecha,
           insumo_id: quickAjusteModal.insumoId,
           tipo_ajuste: quickAjusteModal.motivo,
           ubicacion: quickAjusteModal.ubicacion,
@@ -726,21 +842,38 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                     </p>
                   </div>
 
-                  {/* Botón de Aprobación en Lote de la Fecha Activa */}
+                  {/* Botones de Acción en Lote de la Fecha Activa */}
                   {earliestPendingDate && (pendingDateFilter === 'ALL' || pendingDateFilter === earliestPendingDate) && (
-                    <button
-                      type="button"
-                      disabled={approvingBatchDate === earliestPendingDate}
-                      onClick={() => handleAprobarDia(earliestPendingDate)}
-                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
-                    >
-                      {approvingBatchDate === earliestPendingDate ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Zap className="w-3.5 h-3.5 text-emerald-200" />
-                      )}
-                      <span>Aprobar Todo el Día {earliestPendingDate} ({sortedPendingDates[0]?.count})</span>
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        disabled={autoAdjustingDate === earliestPendingDate || approvingBatchDate === earliestPendingDate}
+                        onClick={() => handleAutoAjustarDia(earliestPendingDate)}
+                        className="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-900 border border-amber-400/50 rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                        title={`Calcular y subsanar automáticamente faltantes de stock por conteo previo para el día ${earliestPendingDate}`}
+                      >
+                        {autoAdjustingDate === earliestPendingDate ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-700" />
+                        ) : (
+                          <Wrench className="w-3.5 h-3.5 text-amber-700" />
+                        )}
+                        <span>Auto-Ajustar Inconsistencias ({earliestPendingDate})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={approvingBatchDate === earliestPendingDate || autoAdjustingDate === earliestPendingDate}
+                        onClick={() => handleAprobarDia(earliestPendingDate)}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                      >
+                        {approvingBatchDate === earliestPendingDate ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Zap className="w-3.5 h-3.5 text-emerald-200" />
+                        )}
+                        <span>Aprobar Todo el Día {earliestPendingDate} ({sortedPendingDates[0]?.count})</span>
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -760,7 +893,6 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                               ({group.movs.length} movimiento{group.movs.length !== 1 ? 's' : ''})
                             </span>
                           </div>
-
                           {/* Stock Actual en Bodega */}
                           <div className="flex items-center gap-2 text-xs text-slate-600">
                             <span className="text-slate-400">Stock Actual en Bodega:</span>
@@ -771,124 +903,163 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                         </div>
 
                         {/* Tarjetas de Movimientos de esta Carne */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pl-2">
-                          {group.movs.map((m: any) => {
-                            const tipo = m.tipo_movimiento;
-                            const dateStr = (m.fecha || m.fecha_hora || '').split('T')[0];
-                            const isLoading = actionLoadingId === m.id;
-                            const isDateLocked = earliestPendingDate ? dateStr > earliestPendingDate : false;
+                        {(() => {
+                          let runningBSinPorc = stock ? parseFloat(String(stock.bodega_sin_porc_kg || 0)) : 0;
+                          let runningBPorcUnd = stock ? parseInt(String(stock.bodega_porc_und || 0)) : 0;
+                          let runningBPorcKg = stock ? parseFloat(String(stock.bodega_porc_kg || 0)) : 0;
+                          let runningCSinPorc = stock ? parseFloat(String(stock.cocina_sin_porc_kg || 0)) : 0;
+                          let runningCPorcUnd = stock ? parseInt(String(stock.cocina_porc_und || 0)) : 0;
 
-                            let typeTag = 'bg-blue-100 text-blue-800 border-blue-200';
-                            let typeLabel = '1. ENTRADA COMPRA';
-                            let qtyText = `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                          return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pl-2">
+                              {group.movs.map((m: any) => {
+                                const tipo = m.tipo_movimiento;
+                                const dateStr = (m.fecha || m.fecha_hora || '').split('T')[0];
+                                const isLoading = actionLoadingId === m.id;
+                                const isDateLocked = earliestPendingDate ? dateStr > earliestPendingDate : false;
 
-                            if (tipo === 'PORCIONADO') {
-                              typeTag = 'bg-purple-100 text-purple-800 border-purple-200';
-                              typeLabel = '2. PORCIONADO';
-                              qtyText = `${m.porciones_und || 0} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)`;
-                            } else if (tipo === 'DEVOLUCION_COCINA') {
-                              typeTag = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                              typeLabel = '3. DEVOLUCIÓN COCINA';
-                              qtyText = m.porciones_und ? `+${m.porciones_und} und` : `+${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
-                            } else if (tipo === 'TRASLADO_COCINA') {
-                              typeTag = 'bg-orange-100 text-orange-800 border-orange-200';
-                              typeLabel = '4. TRASLADO COCINA';
-                              qtyText = m.porciones_und ? `${m.porciones_und} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
-                            }
+                                let typeTag = 'bg-blue-100 text-blue-800 border-blue-200';
+                                let typeLabel = '1. ENTRADA COMPRA';
+                                let qtyText = `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
 
-                            // VALIDACIÓN Y COHERENCIA DE STOCK ACTUAL Y RESULTANTE
-                            let stockImpactHtml = null;
-                            let isStockInsufficient = false;
-
-                            if (stock) {
-                              if (tipo === 'TRASLADO_COCINA') {
-                                if (m.porciones_und > 0) {
-                                  const currentUnd = stock.bodega_porc_und;
-                                  const resultUnd = currentUnd - m.porciones_und;
-                                  isStockInsufficient = resultUnd < 0;
-
-                                  stockImpactHtml = (
-                                    <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-slate-500">Bodega:</span>
-                                      <span>{currentUnd} und</span>
-                                      <span className="text-slate-400">➔</span>
-                                      <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
-                                        {resultUnd} und
-                                      </span>
-                                      {isStockInsufficient && (
-                                        <span className="text-red-600 font-medium bg-red-100 px-1.5 py-0.2 rounded text-[10px]">
-                                          ⚠️ Stock insuficiente
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                } else {
-                                  const currentKg = stock.bodega_sin_porc_kg;
-                                  const resultKg = currentKg - (parseFloat(m.cant_sin_porcionar_kg) || 0);
-                                  isStockInsufficient = resultKg < 0;
-
-                                  stockImpactHtml = (
-                                    <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-slate-500">Bodega Entero:</span>
-                                      <span>{currentKg.toFixed(2)} Kg</span>
-                                      <span className="text-slate-400">➔</span>
-                                      <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
-                                        {resultKg.toFixed(2)} Kg
-                                      </span>
-                                      {isStockInsufficient && (
-                                        <span className="text-red-600 font-medium bg-red-100 px-1.5 py-0.2 rounded text-[10px]">
-                                          ⚠️ Stock insuficiente
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
+                                if (tipo === 'PORCIONADO') {
+                                  typeTag = 'bg-purple-100 text-purple-800 border-purple-200';
+                                  typeLabel = '2. PORCIONADO';
+                                  qtyText = `${m.porciones_und || 0} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)`;
+                                } else if (tipo === 'DEVOLUCION_COCINA') {
+                                  typeTag = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                                  typeLabel = '3. DEVOLUCIÓN COCINA';
+                                  qtyText = m.porciones_und ? `+${m.porciones_und} und` : `+${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                                } else if (tipo === 'TRASLADO_COCINA') {
+                                  typeTag = 'bg-orange-100 text-orange-800 border-orange-200';
+                                  typeLabel = '4. TRASLADO COCINA';
+                                  qtyText = m.porciones_und ? `${m.porciones_und} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
                                 }
-                              } else if (tipo === 'PORCIONADO') {
-                                const currentKg = stock.bodega_sin_porc_kg;
-                                const resultKg = currentKg - (parseFloat(m.cant_sin_porcionar_kg) || 0);
-                                isStockInsufficient = resultKg < 0;
 
-                                stockImpactHtml = (
-                                  <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-slate-500">Bodega Entero:</span>
-                                    <span>{currentKg.toFixed(2)} Kg</span>
-                                    <span className="text-slate-400">➔</span>
-                                    <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
-                                      {resultKg.toFixed(2)} Kg
-                                    </span>
-                                  </div>
-                                );
-                              } else if (tipo === 'ENTRADA_COMPRA') {
-                                const currentKg = stock.bodega_sin_porc_kg;
-                                const resultKg = currentKg + (parseFloat(m.cant_sin_porcionar_kg) || 0);
-                                stockImpactHtml = (
-                                  <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-slate-500">Bodega Entero:</span>
-                                    <span>{currentKg.toFixed(2)} Kg</span>
-                                    <span className="text-slate-400">➔</span>
-                                    <span className="text-emerald-700 font-medium">
-                                      +{parseFloat(m.cant_sin_porcionar_kg).toFixed(2)} Kg ({resultKg.toFixed(2)} Kg)
-                                    </span>
-                                  </div>
-                                );
-                              } else if (tipo === 'DEVOLUCION_COCINA') {
-                                const currentUnd = stock.bodega_porc_und;
-                                const resultUnd = currentUnd + (m.porciones_und || 0);
-                                stockImpactHtml = (
-                                  <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-slate-500">Reintegro Bodega:</span>
-                                    <span>{currentUnd} und</span>
-                                    <span className="text-slate-400">➔</span>
-                                    <span className="text-emerald-700 font-medium">{resultUnd} und</span>
-                                  </div>
-                                );
-                              }
-                            }
+                                // VALIDACIÓN Y COHERENCIA DE STOCK SECUENCIAL
+                                let stockImpactHtml = null;
+                                let isStockInsufficient = false;
 
-                            return (
-                              <div
-                                key={m.id}
-                                className={`p-3 rounded-xl border shadow-sm space-y-2 text-xs font-normal transition-all ${
+                                const cantKg = parseFloat(String(m.cant_sin_porcionar_kg || 0));
+                                const porcUnd = parseInt(String(m.porciones_und || 0));
+                                const porcKg = parseFloat(String(m.peso_porciones_kg || 0));
+
+                                if (stock) {
+                                  if (tipo === 'ENTRADA_COMPRA') {
+                                    const startKg = runningBSinPorc;
+                                    runningBSinPorc += cantKg;
+                                    stockImpactHtml = (
+                                      <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-slate-500">Bodega Entero:</span>
+                                        <span>{startKg.toFixed(2)} Kg</span>
+                                        <span className="text-slate-400">➔</span>
+                                        <span className="text-emerald-700 font-medium">
+                                          +{cantKg.toFixed(2)} Kg ({runningBSinPorc.toFixed(2)} Kg)
+                                        </span>
+                                      </div>
+                                    );
+                                  } else if (tipo === 'PORCIONADO') {
+                                    const startKg = runningBSinPorc;
+                                    const resultKg = startKg - cantKg;
+                                    isStockInsufficient = resultKg < 0;
+                                    runningBSinPorc = Math.max(0, resultKg);
+                                    runningBPorcUnd += porcUnd;
+                                    runningBPorcKg += porcKg;
+
+                                    stockImpactHtml = (
+                                      <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-slate-500">Bodega Entero:</span>
+                                        <span>{startKg.toFixed(2)} Kg</span>
+                                        <span className="text-slate-400">➔</span>
+                                        <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
+                                          {resultKg.toFixed(2)} Kg
+                                        </span>
+                                        {isStockInsufficient && (
+                                          <span className="text-red-600 font-medium bg-red-100 px-1.5 py-0.2 rounded text-[10px]">
+                                            ⚠️ Stock insuficiente
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  } else if (tipo === 'DEVOLUCION_COCINA') {
+                                    if (porcUnd > 0) {
+                                      const startUnd = runningBPorcUnd;
+                                      runningBPorcUnd += porcUnd;
+                                      runningCPorcUnd = Math.max(0, runningCPorcUnd - porcUnd);
+                                      stockImpactHtml = (
+                                        <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-slate-500">Reintegro Bodega:</span>
+                                          <span>{startUnd} und</span>
+                                          <span className="text-slate-400">➔</span>
+                                          <span className="text-emerald-700 font-medium">{runningBPorcUnd} und</span>
+                                        </div>
+                                      );
+                                    } else {
+                                      const startKg = runningBSinPorc;
+                                      runningBSinPorc += cantKg;
+                                      runningCSinPorc = Math.max(0, runningCSinPorc - cantKg);
+                                      stockImpactHtml = (
+                                        <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-slate-500">Reintegro Bodega Entero:</span>
+                                          <span>{startKg.toFixed(2)} Kg</span>
+                                          <span className="text-slate-400">➔</span>
+                                          <span className="text-emerald-700 font-medium">{runningBSinPorc.toFixed(2)} Kg</span>
+                                        </div>
+                                      );
+                                    }
+                                  } else if (tipo === 'TRASLADO_COCINA') {
+                                    if (porcUnd > 0) {
+                                      const startUnd = runningBPorcUnd;
+                                      const resultUnd = startUnd - porcUnd;
+                                      isStockInsufficient = resultUnd < 0;
+                                      runningBPorcUnd = Math.max(0, resultUnd);
+                                      runningCPorcUnd += porcUnd;
+
+                                      stockImpactHtml = (
+                                        <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-slate-500">Bodega:</span>
+                                          <span>{startUnd} und</span>
+                                          <span className="text-slate-400">➔</span>
+                                          <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
+                                            {resultUnd} und
+                                          </span>
+                                          {isStockInsufficient && (
+                                            <span className="text-red-600 font-medium bg-red-100 px-1.5 py-0.2 rounded text-[10px]">
+                                              ⚠️ Stock insuficiente
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    } else {
+                                      const startKg = runningBSinPorc;
+                                      const resultKg = startKg - cantKg;
+                                      isStockInsufficient = resultKg < 0;
+                                      runningBSinPorc = Math.max(0, resultKg);
+                                      runningCSinPorc += cantKg;
+
+                                      stockImpactHtml = (
+                                        <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-slate-500">Bodega Entero:</span>
+                                          <span>{startKg.toFixed(2)} Kg</span>
+                                          <span className="text-slate-400">➔</span>
+                                          <span className={isStockInsufficient ? 'text-red-600 font-medium' : 'text-slate-900 font-medium'}>
+                                            {resultKg.toFixed(2)} Kg
+                                          </span>
+                                          {isStockInsufficient && (
+                                            <span className="text-red-600 font-medium bg-red-100 px-1.5 py-0.2 rounded text-[10px]">
+                                              ⚠️ Stock insuficiente
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+                                  }
+                                }
+
+                                return (
+                                  <div
+                                    key={m.id}
+                                    className={`p-3 rounded-xl border shadow-sm space-y-2 text-xs font-normal transition-all ${
                                   isDateLocked
                                     ? 'bg-slate-50/70 border-slate-200 opacity-80'
                                     : isStockInsufficient
@@ -998,8 +1169,10 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                             );
                           })}
                         </div>
-                      </div>
-                    );
+                      );
+                    })()}
+                  </div>
+                );
                   })}
                 </div>
               </div>
@@ -1027,11 +1200,13 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
             <div className="flex items-center gap-2">
               <input
                 type="date"
+                min={currentPeriodo?.fecha_inicio}
+                max={currentPeriodo?.fecha_fin}
                 value={filterDate === 'ALL' ? '' : filterDate}
                 onChange={(e) => onDateChange(e.target.value)}
                 className="h-8 px-2.5 rounded-lg border border-slate-300 text-xs font-normal text-slate-800 bg-white outline-none focus:border-orange-500 shadow-sm"
               />
-              {filterDate !== todayStr && (
+              {currentPeriodo?.fecha_inicio && todayStr >= currentPeriodo.fecha_inicio && todayStr <= currentPeriodo.fecha_fin && filterDate !== todayStr && (
                 <button
                   type="button"
                   onClick={() => onDateChange(todayStr)}
@@ -1298,22 +1473,60 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
         maxWidth="max-w-md"
       >
         {editingMov && (
-          <form onSubmit={handleSaveEdit} className="space-y-3 text-xs font-normal">
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">Materia Prima / Insumo</label>
-              <select
-                value={editInsumoId}
-                onChange={(e) => setEditInsumoId(e.target.value)}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 bg-white"
-              >
-                {insumos.map((i) => (
-                  <option key={i.insumo_id} value={i.insumo_id}>
-                    {(i as any).nombre_insumo || i.insumo || `Insumo #${i.insumo_id}`} ({i.categoria})
-                  </option>
-                ))}
-              </select>
+          <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs font-normal">
+            {/* 1. Selector de Fecha del Movimiento y Materia Prima */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-700 font-medium mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-orange-500" />
+                  <span>Fecha de la Jornada</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  min={currentPeriodo?.fecha_inicio}
+                  max={currentPeriodo?.fecha_fin}
+                  value={editFecha}
+                  onChange={(e) => setEditFecha(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Materia Prima / Insumo</label>
+                <select
+                  value={editInsumoId}
+                  onChange={(e) => handleEditInsumoChange(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 bg-white font-medium cursor-pointer"
+                >
+                  {insumos.map((i) => (
+                    <option key={i.insumo_id} value={i.insumo_id}>
+                      {(i as any).nombre_insumo || i.insumo || `Insumo #${i.insumo_id}`} ({i.categoria})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
+            {/* 🏷️ Indicador de Precio Unitario y Rendimiento del Catálogo */}
+            {selectedEditInsumo && (
+              <div className="grid grid-cols-2 gap-2 bg-orange-50/70 border border-orange-200/80 rounded-lg p-2.5 text-slate-700 shadow-sm">
+                <div>
+                  <span className="text-[10px] text-slate-500 font-normal block">Precio Unitario Catálogo:</span>
+                  <span className="font-semibold text-slate-900 text-xs">
+                    $ {formatMoney(selectedEditInsumo.costo_unitario_kg || 0)} <span className="text-[10px] font-normal text-slate-500">/ Kg</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 font-normal block">Rendimiento por Porción:</span>
+                  <span className="font-semibold text-slate-900 text-xs">
+                    {selectedEditInsumo.peso_porc_gramos || 350} <span className="text-[10px] font-normal text-slate-500">g ({(selectedEditInsumo.peso_porc_gramos ? selectedEditInsumo.peso_porc_gramos / 1000 : 0.35).toFixed(3)} Kg)</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 2. Inputs de Kilos (Entero) y Porciones (Und) */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-slate-700 font-medium mb-1">Kilos (Entero)</label>
@@ -1321,7 +1534,8 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                   type="number"
                   step="0.01"
                   value={editCantKg}
-                  onChange={(e) => setEditCantKg(e.target.value)}
+                  onChange={(e) => handleEditCantKgChange(e.target.value)}
+                  placeholder="0.00"
                   className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
                 />
               </div>
@@ -1331,57 +1545,72 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                   type="number"
                   step="1"
                   value={editPorciones}
-                  onChange={(e) => setEditPorciones(e.target.value)}
+                  onChange={(e) => handleEditPorcionesChange(e.target.value)}
+                  placeholder="0"
                   className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
                 />
               </div>
             </div>
 
+            {/* 3. Inputs de Peso Porciones (Kg) y Valor Total ($) */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-slate-700 font-medium mb-1">Peso Porciones (Kg)</label>
+                <label className="block text-slate-700 font-medium mb-1">
+                  <span>Peso Porciones (Kg)</span>
+                  {parseInt(editPorciones) > 0 && (
+                    <span className="text-[10px] text-orange-600 font-normal ml-1">(Sugerido)</span>
+                  )}
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   value={editPesoPorciones}
-                  onChange={(e) => setEditPesoPorciones(e.target.value)}
+                  onChange={(e) => handleEditPesoPorcionesChange(e.target.value)}
+                  placeholder="0.00"
                   className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
                 />
               </div>
               <div>
-                <label className="block text-slate-700 font-medium mb-1">Valor Total ($)</label>
+                <label className="block text-slate-700 font-medium mb-1">
+                  <span>Valor Total ($)</span>
+                  <span className="text-[10px] text-emerald-600 font-normal ml-1">(Calculado)</span>
+                </label>
                 <input
                   type="number"
                   step="1"
                   value={editCostoTotal}
                   onChange={(e) => setEditCostoTotal(e.target.value)}
-                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
+                  placeholder="0"
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-900 font-semibold bg-slate-50/50"
                 />
               </div>
             </div>
 
+            {/* 4. Observaciones */}
             <div>
               <label className="block text-slate-700 font-medium mb-1">Observaciones</label>
               <input
                 type="text"
                 value={editObs}
                 onChange={(e) => setEditObs(e.target.value)}
+                placeholder="Detalle u observación..."
                 className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
               />
             </div>
 
+            {/* Botones de acción */}
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setEditingMov(null)}
-                className="px-3 py-1.5 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-normal"
+                className="px-3 py-1.5 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-normal cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={savingEdit}
-                className="px-4 py-1.5 text-xs text-white bg-orange-500 hover:bg-orange-600 rounded-lg font-medium shadow-sm transition-all"
+                className="px-4 py-1.5 text-xs text-white bg-orange-500 hover:bg-orange-600 rounded-lg font-medium shadow-sm transition-all cursor-pointer"
               >
                 {savingEdit ? 'Guardando...' : 'Guardar Cambios'}
               </button>
@@ -1407,14 +1636,32 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
               </p>
             </div>
 
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">Materia Prima / Carne</label>
-              <input
-                type="text"
-                disabled
-                value={quickAjusteModal.insumoName}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-slate-100 text-slate-700 font-medium"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-700 font-medium mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Fecha a Ajustar</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  min={currentPeriodo?.fecha_inicio}
+                  max={currentPeriodo?.fecha_fin}
+                  value={quickAjusteModal.fecha}
+                  onChange={(e) => setQuickAjusteModal({ ...quickAjusteModal, fecha: e.target.value })}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-amber-500 text-slate-800 bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Materia Prima / Carne</label>
+                <input
+                  type="text"
+                  disabled
+                  value={quickAjusteModal.insumoName}
+                  className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-slate-100 text-slate-700 font-medium"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">

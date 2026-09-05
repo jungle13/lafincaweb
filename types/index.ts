@@ -16,9 +16,12 @@ export interface InsumoItem {
   peso_porc_gramos: number;
   costo_unitario_kg: number;
   valor_total_general_pesos: number;
+  valor_total_bodega_pesos?: number;
+  traslado_cocina_acumulado_kg?: number;
+  traslado_cocina_acumulado_und?: number;
   merma_acumulada_kg: number;
   merma_acumulada_pesos: number;
-  estado_stock: 'OPTIMO' | 'BAJO' | 'AGOTADO';
+  estado_stock?: 'OPTIMO' | 'BAJO' | 'AGOTADO';
 }
 
 export interface MovimientoItem {
@@ -43,6 +46,7 @@ export interface MovimientoItem {
   peso_porciones_kg?: number;
   merma_kg?: number;
   merma_pesos?: number;
+  costo_unitario_kg?: number;
   valor_total_movimiento?: number;
   bodega_sin_porc_anterior_kg?: number;
   bodega_sin_porc_nuevo_kg?: number;

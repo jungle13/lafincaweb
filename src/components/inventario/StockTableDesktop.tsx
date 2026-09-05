@@ -15,11 +15,12 @@ type SortField =
   | 'bodega_sin_porc_kg'
   | 'bodega_porc_und'
   | 'peso_total_bodega_kg'
+  | 'traslado_cocina_acumulado_kg'
   | 'cocina_porc_und'
+  | 'peso_total_cocina_kg'
   | 'merma_acumulada_kg'
   | 'costo_unitario_kg'
-  | 'valor_total_general_pesos'
-  | 'estado_stock';
+  | 'valor_total_bodega_pesos';
 
 export default function StockTableDesktop({ insumos }: Props) {
   const [sortField, setSortField] = useState<SortField>('insumo');
@@ -36,8 +37,13 @@ export default function StockTableDesktop({ insumos }: Props) {
 
   const sortedInsumos = useMemo(() => {
     return [...insumos].sort((a, b) => {
-      let valA: any = a[sortField];
-      let valB: any = b[sortField];
+      let valA: any = a[sortField as keyof InsumoItem];
+      let valB: any = b[sortField as keyof InsumoItem];
+
+      if (sortField === 'valor_total_bodega_pesos') {
+        valA = a.valor_total_bodega_pesos ?? Math.round((a.peso_total_bodega_kg || 0) * (a.costo_unitario_kg || 0));
+        valB = b.valor_total_bodega_pesos ?? Math.round((b.peso_total_bodega_kg || 0) * (b.costo_unitario_kg || 0));
+      }
 
       if (typeof valA === 'string') {
         valA = valA.toLowerCase();
@@ -120,18 +126,29 @@ export default function StockTableDesktop({ insumos }: Props) {
                 </div>
               </th>
 
+              {/* Acumulado Cocina */}
+              <th 
+                onClick={() => handleSort('traslado_cocina_acumulado_kg')}
+                className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap text-amber-800 bg-amber-50/40"
+              >
+                <div className="flex items-center justify-end gap-1.5">
+                  <span>Acumulado Cocina</span>
+                  {renderSortIcon('traslado_cocina_acumulado_kg')}
+                </div>
+              </th>
+
               {/* En Cocina */}
               <th 
-                onClick={() => handleSort('cocina_porc_und')}
+                onClick={() => handleSort('peso_total_cocina_kg')}
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
               >
                 <div className="flex items-center justify-end gap-1.5">
                   <span>En Cocina</span>
-                  {renderSortIcon('cocina_porc_und')}
+                  {renderSortIcon('peso_total_cocina_kg')}
                 </div>
               </th>
 
-              {/* Merma */}
+              {/* Merma Acumulada */}
               <th 
                 onClick={() => handleSort('merma_acumulada_kg')}
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap text-rose-600"
@@ -142,7 +159,7 @@ export default function StockTableDesktop({ insumos }: Props) {
                 </div>
               </th>
 
-              {/* Costo */}
+              {/* Costo / Kg */}
               <th 
                 onClick={() => handleSort('costo_unitario_kg')}
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
@@ -153,45 +170,25 @@ export default function StockTableDesktop({ insumos }: Props) {
                 </div>
               </th>
 
-              {/* Valor Stock */}
+              {/* Valor Stock (Bodega) */}
               <th 
-                onClick={() => handleSort('valor_total_general_pesos')}
+                onClick={() => handleSort('valor_total_bodega_pesos')}
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap text-slate-800"
               >
                 <div className="flex items-center justify-end gap-1.5">
                   <span>Valor Stock</span>
-                  {renderSortIcon('valor_total_general_pesos')}
-                </div>
-              </th>
-
-              {/* Estado */}
-              <th 
-                onClick={() => handleSort('estado_stock')}
-                className="py-3 px-3 text-center cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
-              >
-                <div className="flex items-center justify-center gap-1.5">
-                  <span>Estado</span>
-                  {renderSortIcon('estado_stock')}
+                  {renderSortIcon('valor_total_bodega_pesos')}
                 </div>
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-normal">
             {sortedInsumos.map((item) => {
-              const statusBadge =
-                item.estado_stock === 'AGOTADO' ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-normal bg-rose-50 text-rose-600 border border-rose-200">
-                    AGOTADO
-                  </span>
-                ) : item.estado_stock === 'BAJO' ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-normal bg-amber-50 text-amber-700 border border-amber-200">
-                    BAJO
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    ÓPTIMO
-                  </span>
-                );
+              const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
+              const acumUnd = item.traslado_cocina_acumulado_und || 0;
+              const acumKg = item.traslado_cocina_acumulado_kg || 0;
+              const cocinaUnd = item.cocina_porc_und || 0;
+              const cocinaKg = item.peso_total_cocina_kg || (item.cocina_porc_kg + item.cocina_sin_porc_kg) || 0;
 
               return (
                 <tr
@@ -213,7 +210,7 @@ export default function StockTableDesktop({ insumos }: Props) {
 
                   {/* Bodega Porciones */}
                   <td className="py-2.5 px-3 text-right font-normal">
-                    <span className="text-purple-600">{item.bodega_porc_und}</span>{' '}
+                    <span className="text-purple-600 font-semibold">{item.bodega_porc_und}</span>{' '}
                     <span className="text-[10px] text-slate-400">und</span>
                     <div className="text-[10px] text-slate-400">
                       {item.bodega_porc_kg.toFixed(2)} Kg
@@ -225,12 +222,21 @@ export default function StockTableDesktop({ insumos }: Props) {
                     {item.peso_total_bodega_kg.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">Kg</span>
                   </td>
 
-                  {/* En Cocina */}
-                  <td className="py-2.5 px-3 text-right font-normal">
-                    <span className="text-amber-600">{item.cocina_porc_und}</span>{' '}
+                  {/* Acumulado Cocina (Total entregado en el periodo) */}
+                  <td className="py-2.5 px-3 text-right font-normal bg-amber-50/30">
+                    <span className="text-amber-800 font-semibold">{acumUnd}</span>{' '}
                     <span className="text-[10px] text-slate-400">und</span>
-                    <div className="text-[10px] text-slate-400">
-                      {item.cocina_porc_kg.toFixed(2)} Kg
+                    <div className="text-[10px] text-amber-900 font-medium">
+                      {acumKg.toFixed(2)} Kg
+                    </div>
+                  </td>
+
+                  {/* En Cocina (Existencia actual / a la fecha de corte) */}
+                  <td className="py-2.5 px-3 text-right font-normal">
+                    <span className="text-slate-800 font-semibold">{cocinaUnd}</span>{' '}
+                    <span className="text-[10px] text-slate-400">und</span>
+                    <div className="text-[10px] text-slate-500 font-medium">
+                      {cocinaKg.toFixed(2)} Kg
                     </div>
                   </td>
 
@@ -248,14 +254,9 @@ export default function StockTableDesktop({ insumos }: Props) {
                     $ {formatMoney(item.costo_unitario_kg)}
                   </td>
 
-                  {/* Valor Stock */}
+                  {/* Valor Stock (Solo Bodega) */}
                   <td className="py-2.5 px-3 text-right text-slate-900 font-medium">
-                    $ {formatMoney(item.valor_total_general_pesos)}
-                  </td>
-
-                  {/* Estado */}
-                  <td className="py-2.5 px-3 text-center">
-                    {statusBadge}
+                    $ {formatMoney(valorBodega)}
                   </td>
                 </tr>
               );
@@ -266,3 +267,4 @@ export default function StockTableDesktop({ insumos }: Props) {
     </div>
   );
 }
+

@@ -47,26 +47,28 @@ export default function Modal({
 
       {/* Modal Dialog Card */}
       <div 
-        className={`relative z-10 bg-white rounded-2xl border border-slate-200/90 shadow-2xl w-full ${maxWidth} p-5 md:p-6 space-y-4 animate-fade-in font-normal`}
+        className={`relative z-10 bg-white rounded-2xl border border-slate-200/90 shadow-2xl w-full ${maxWidth} max-h-[92vh] flex flex-col p-4 md:p-5 animate-fade-in font-normal overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2 text-slate-900 font-medium text-base md:text-lg">
+        {/* Header (Sticky at top of modal) */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+          <div className="flex items-center gap-2 text-slate-900 font-semibold text-sm md:text-base">
             {icon}
             <span>{title}</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div>{children}</div>
+        {/* Content (Scrollable internally) */}
+        <div className="overflow-y-auto flex-1 mt-3 pr-1 space-y-4 custom-scrollbar">
+          {children}
+        </div>
       </div>
     </div>,
     document.body

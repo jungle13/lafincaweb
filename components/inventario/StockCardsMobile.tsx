@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { InsumoItem } from '@/types';
 import { formatMoney } from '@/lib/formatters';
@@ -19,20 +19,11 @@ export default function StockCardsMobile({ insumos }: Props) {
   return (
     <div className="md:hidden space-y-3">
       {insumos.map((item) => {
-        const statusBadge =
-          item.estado_stock === 'AGOTADO' ? (
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-red-100 text-red-700 border border-red-200">
-              AGOTADO
-            </span>
-          ) : item.estado_stock === 'BAJO' ? (
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-700 border border-amber-200">
-              BAJO
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-700 border border-emerald-200">
-              ÓPTIMO
-            </span>
-          );
+        const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
+        const acumUnd = item.traslado_cocina_acumulado_und || 0;
+        const acumKg = item.traslado_cocina_acumulado_kg || 0;
+        const cocinaUnd = item.cocina_porc_und || 0;
+        const cocinaKg = item.peso_total_cocina_kg || (item.cocina_porc_kg + item.cocina_sin_porc_kg) || 0;
 
         return (
           <div
@@ -47,7 +38,10 @@ export default function StockCardsMobile({ insumos }: Props) {
                   {item.categoria}
                 </span>
               </div>
-              {statusBadge}
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block font-normal">Valor Bodega</span>
+                <span className="text-sm font-bold text-slate-900">${formatMoney(valorBodega)}</span>
+              </div>
             </div>
 
             {/* Metric Grid */}
@@ -60,18 +54,26 @@ export default function StockCardsMobile({ insumos }: Props) {
               </div>
 
               <div>
-                <span className="text-[10px] text-slate-500 font-semibold block">✂️ Porciones Listas</span>
+                <span className="text-[10px] text-slate-500 font-semibold block">✂️ Bodega Porciones</span>
                 <span className="font-extrabold text-purple-600 text-sm">
                   {item.bodega_porc_und} und{' '}
                   <small className="text-[10px] text-slate-400 font-normal">({item.bodega_porc_kg.toFixed(2)} Kg)</small>
                 </span>
               </div>
 
+              <div className="bg-amber-100/50 p-1.5 rounded-lg border border-amber-200/50">
+                <span className="text-[10px] text-amber-900 font-semibold block">🚚 Acumulado Cocina</span>
+                <span className="font-extrabold text-amber-800 text-sm">
+                  {acumUnd} und{' '}
+                  <small className="text-[10px] text-amber-700 font-normal">({acumKg.toFixed(2)} Kg)</small>
+                </span>
+              </div>
+
               <div>
-                <span className="text-[10px] text-slate-500 font-semibold block">🍳 En Cocina</span>
-                <span className="font-extrabold text-amber-600 text-sm">
-                  {item.cocina_porc_und} und{' '}
-                  <small className="text-[10px] text-slate-400 font-normal">({item.cocina_porc_kg.toFixed(2)} Kg)</small>
+                <span className="text-[10px] text-slate-500 font-semibold block">🍳 En Cocina (Saldo)</span>
+                <span className="font-extrabold text-slate-800 text-sm">
+                  {cocinaUnd} und{' '}
+                  <small className="text-[10px] text-slate-400 font-normal">({cocinaKg.toFixed(2)} Kg)</small>
                 </span>
               </div>
 
@@ -81,12 +83,13 @@ export default function StockCardsMobile({ insumos }: Props) {
                   {item.merma_acumulada_kg > 0 ? `${item.merma_acumulada_kg.toFixed(2)} Kg` : '0.00 Kg'}
                 </span>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between text-xs text-slate-600 pt-1 border-t border-slate-100 font-semibold">
-              <span>Valor Stock: <strong className="text-slate-900">${formatMoney(item.valor_total_general_pesos)}</strong></span>
-              <span>Costo/Kg: <strong className="text-slate-900">${formatMoney(item.costo_unitario_kg)}</strong></span>
+              <div>
+                <span className="text-[10px] text-slate-500 font-semibold block">🏷️ Costo / Kg</span>
+                <span className="font-extrabold text-slate-700 text-sm">
+                  ${formatMoney(item.costo_unitario_kg)}
+                </span>
+              </div>
             </div>
           </div>
         );
@@ -94,3 +97,4 @@ export default function StockCardsMobile({ insumos }: Props) {
     </div>
   );
 }
+

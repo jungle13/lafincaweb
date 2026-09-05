@@ -129,11 +129,16 @@ export default function SmartSearchInsumo({
                   </div>
 
                   <div className="text-right">
-                    <div className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                      Bodega: {item.bodega_sin_porc_kg.toFixed(1)} Kg | {item.bodega_porc_und} porc
+                    <div className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center justify-end gap-1">
+                      <span>Bodega: {item.bodega_sin_porc_kg.toFixed(1)} Kg | {item.bodega_porc_und} und</span>
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      ${formatMoney(item.costo_unitario_kg)} / Kg
+                    <div className="text-[10px] text-slate-500 mt-0.5 flex items-center justify-end gap-1.5">
+                      {item.peso_porc_gramos > 0 && (
+                        <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/60">
+                          {item.peso_porc_gramos}g/porc
+                        </span>
+                      )}
+                      <span>${formatMoney(item.costo_unitario_kg)}/Kg</span>
                     </div>
                   </div>
                 </div>

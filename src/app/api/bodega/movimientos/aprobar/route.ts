@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { recalibrateStockActual, calculatePeriodoStock } from '@/lib/periodos';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -7,7 +8,7 @@ export const revalidate = 0;
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action = 'APROBAR', movimientoId, fecha, usuario = 'Administrador', overrides = {} } = body;
+    const { action = 'APROBAR', movimientoId, fecha, usuario = 'Administrador', overrides = {}, periodoId = '' } = body;
 
     // ↺ ACCIÓN: REVERTIR_FECHA (Revertir todos los movimientos aprobados de un día a [PENDIENTE_APROBAR] y recalibrar stock)
     if (action === 'REVERTIR_FECHA') {
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
       // 2. Obtener todos los pendientes de esta fecha
       const { data: dayMovs, error: fetchErr } = await supabase
         .from('movimientos_inventario')
-        .select('*, catalogo_insumos(nombre, categoria)')
+        .select('*, catalogo_insumos(nombre, categoria, peso_estandar_porcion_kg, costo_unitario_kg)')
         .eq('fecha', fecha)
         .ilike('observaciones', '%[PENDIENTE_APROBAR]%');
 
@@ -95,12 +96,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, count: 0, message: 'No hay movimientos pendientes en esta fecha.' });
       }
 
-      // Ordenar: 1: ENTRADA_COMPRA, 2: PORCIONADO, 3: DEVOLUCION_COCINA, 4: TRASLADO_COCINA
+      // Ordenar: 1: ENTRADA_COMPRA, 2: PORCIONADO, 3: TRASLADO_COCINA, 4: DEVOLUCION_COCINA, 5: AJUSTE_INVENTARIO
       const orderMap: Record<string, number> = {
         ENTRADA_COMPRA: 10,
         PORCIONADO: 20,
-        DEVOLUCION_COCINA: 30,
-        TRASLADO_COCINA: 40,
+        TRASLADO_COCINA: 30,
+        DEVOLUCION_COCINA: 40,
+        AJUSTE_INVENTARIO: 50,
       };
 
       const sortedMovs = [...dayMovs].sort((a, b) => (orderMap[a.tipo_movimiento] || 50) - (orderMap[b.tipo_movimiento] || 50));
@@ -109,15 +111,17 @@ export async function POST(request: Request) {
       const insufficientItems: string[] = [];
       const tempStockMap = new Map<string, { bSinPorc: number; bPorcUnd: number; cPorcUnd: number; cSinPorc: number }>();
 
-      const { data: allStock } = await supabase.from('stock_actual').select('*');
-      allStock?.forEach(s => {
-        tempStockMap.set(String(s.insumo_id), {
-          bSinPorc: parseFloat(s.bodega_sin_porcionar_kg) || 0,
-          bPorcUnd: parseInt(s.bodega_porcionado_und) || 0,
-          cPorcUnd: parseInt(s.cocina_porcionado_und) || 0,
-          cSinPorc: parseFloat(s.cocina_sin_porcionar_kg) || 0,
+      const { stockMap } = await calculatePeriodoStock(periodoId || '');
+      if (stockMap) {
+        Object.values(stockMap).forEach((st: any) => {
+          tempStockMap.set(String(st.insumo_id), {
+            bSinPorc: st.bodega_sin_porcionar_kg || 0,
+            bPorcUnd: st.bodega_porcionado_und || 0,
+            cPorcUnd: st.cocina_porcionado_und || 0,
+            cSinPorc: st.cocina_sin_porcionar_kg || 0,
+          });
         });
-      });
+      }
 
       for (const mov of sortedMovs) {
         const idKey = String(mov.insumo_id);
@@ -141,7 +145,7 @@ export async function POST(request: Request) {
         } else if (mov.tipo_movimiento === 'TRASLADO_COCINA') {
           if (porcUnd > 0) {
             if (cur.bPorcUnd < porcUnd) {
-              insufficientItems.push(`${name} (Faltan ${porcUnd - cur.bPorcUnd} und en Bodega Porciones para traslado)`);
+              insufficientItems.push(`${name} (Faltan ${porcUnd - cur.bPorcUnd} und porcionadas en Bodega para traslado)`);
             } else {
               cur.bPorcUnd -= porcUnd;
               cur.cPorcUnd += porcUnd;
@@ -167,7 +171,7 @@ export async function POST(request: Request) {
 
       if (insufficientItems.length > 0) {
         return NextResponse.json({
-          error: `⚠️ No se puede aprobar todo el día ${fecha} porque hay stock insuficiente en:\n• ${insufficientItems.join('\n• ')}\n\nPor favor, usa el botón "🛠️ Ajustar" en cada tarjeta con stock insuficiente para corregir el inventario previo antes de aprobar el día.`
+          error: `⚠️ No se puede aprobar todo el día ${fecha} porque hay stock insuficiente en:\n• ${insufficientItems.join('\n• ')}\n\nPuedes presionar el botón "🛠️ Auto-Ajustar Día" o usar "🛠️ Ajustar" en cada tarjeta para conciliar el inventario antes de aprobar.`
         }, { status: 400 });
       }
 
@@ -187,10 +191,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falta movimientoId' }, { status: 400 });
     }
 
-    // 1. Obtener el movimiento
+    // 1. Obtener el movimiento individual
     const { data: mov, error: movErr } = await supabase
       .from('movimientos_inventario')
-      .select('*')
+      .select('*, catalogo_insumos(nombre, categoria, peso_estandar_porcion_kg, costo_unitario_kg)')
       .eq('id', movimientoId)
       .single();
 
@@ -198,7 +202,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 });
     }
 
-    // 2. Acción: DESCARTAR (Eliminar movimiento individual no deseado)
+    // 2. Acción: DESCARTAR (Eliminar movimiento individual)
     if (action === 'DESCARTAR') {
       const { error: delErr } = await supabase
         .from('movimientos_inventario')
@@ -218,6 +222,10 @@ export async function POST(request: Request) {
       if (overrides.peso_porciones_kg !== undefined) updateData.peso_porciones_kg = parseFloat(overrides.peso_porciones_kg) || 0;
       if (overrides.costo_unitario_kg !== undefined) updateData.costo_unitario_kg = parseFloat(overrides.costo_unitario_kg) || 0;
       if (overrides.valor_total_movimiento !== undefined) updateData.valor_total_movimiento = parseFloat(overrides.valor_total_movimiento) || 0;
+      if (overrides.fecha) {
+        updateData.fecha = overrides.fecha;
+        updateData.fecha_hora = `${overrides.fecha}T${new Date().toISOString().split('T')[1] || '12:00:00.000Z'}`;
+      }
       if (overrides.observaciones !== undefined) {
         const cleanObs = overrides.observaciones.replace(/\[PENDIENTE_APROBAR\]/g, '').trim();
         updateData.observaciones = `[PENDIENTE_APROBAR] ${cleanObs}`;
@@ -234,7 +242,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data: updated });
     }
 
-    // 4. Acción: APROBAR INDIVIDUAL CON VALIDACIÓN CRONOLÓGICA
+    // 4. Acción: APROBAR INDIVIDUAL CON VALIDACIÓN CRONOLÓGICA Y VALIDACIÓN ESTRICTA DE STOCK
     const movDate = mov.fecha || (mov.fecha_hora ? mov.fecha_hora.split('T')[0] : '');
 
     if (movDate) {
@@ -254,81 +262,45 @@ export async function POST(request: Request) {
       }
     }
 
+    // Validar stock actual para este movimiento específico
+    const insumoId = overrides.insumo_id || mov.insumo_id;
+    const { stockMap } = await calculatePeriodoStock(periodoId || '');
+    const stockData = (stockMap as Record<string, any>)?.[String(insumoId)];
+
+    const curBSinPorc = stockData ? (stockData.bodega_sin_porcionar_kg || 0) : 0;
+    const curBPorcUnd = stockData ? (stockData.bodega_porcionado_und || 0) : 0;
+    const cantKg = overrides.cant_sin_porcionar_kg !== undefined ? parseFloat(overrides.cant_sin_porcionar_kg) : parseFloat(mov.cant_sin_porcionar_kg) || 0;
+    const porciones = overrides.porciones_und !== undefined ? parseInt(overrides.porciones_und) : parseInt(mov.porciones_und) || 0;
+    const insumoNombre = mov.catalogo_insumos?.nombre || 'Insumo';
+
+    if (mov.tipo_movimiento === 'PORCIONADO') {
+      if (curBSinPorc < cantKg) {
+        return NextResponse.json({
+          error: `⚠️ Stock insuficiente para aprobar este porcionado:\n• ${insumoNombre}: Se requieren ${cantKg} Kg en Bodega Entero pero solo hay ${curBSinPorc} Kg.\n\nPor favor presiona "🛠️ Ajustar" en esta tarjeta para corregir el stock previo.`
+        }, { status: 400 });
+      }
+    } else if (mov.tipo_movimiento === 'TRASLADO_COCINA') {
+      if (porciones > 0) {
+        if (curBPorcUnd < porciones) {
+          return NextResponse.json({
+            error: `⚠️ Stock insuficiente para aprobar este traslado:\n• ${insumoNombre}: Se requieren ${porciones} und porcionadas en Bodega pero solo hay ${curBPorcUnd} und.\n\nPor favor presiona "🛠️ Ajustar" en esta tarjeta para ingresar el ajuste previo.`
+          }, { status: 400 });
+        }
+      } else if (cantKg > 0) {
+        if (curBSinPorc < cantKg) {
+          return NextResponse.json({
+            error: `⚠️ Stock insuficiente para aprobar este traslado:\n• ${insumoNombre}: Se requieren ${cantKg} Kg en Bodega Entero pero solo hay ${curBSinPorc} Kg.\n\nPor favor presiona "🛠️ Ajustar" en esta tarjeta para ingresar el ajuste previo.`
+          }, { status: 400 });
+        }
+      }
+    }
+
+    // Aprobar ÚNICAMENTE este movimiento específico
     const approvedMov = await approveSingleMovement(mov, usuario, overrides);
-    return NextResponse.json({ success: true, data: approvedMov });
+    await recalibrateStockActual();
+    return NextResponse.json({ success: true, data: approvedMov, message: `✅ Movimiento de ${insumoNombre} aprobado exitosamente.` });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-
-// Función auxiliar para recalibrar stock_actual desde todos los movimientos aprobados
-async function recalibrateStockActual() {
-  const { data: approvedMovs } = await supabase
-    .from('movimientos_inventario')
-    .select('*')
-    .not('observaciones', 'ilike', '%[PENDIENTE_APROBAR]%')
-    .order('fecha', { ascending: true });
-
-  const newStockMap = new Map<string, { bSinPorc: number; bPorcUnd: number; bPorcKg: number; cSinPorc: number; cPorcUnd: number; cPorcKg: number }>();
-  const { data: cat } = await supabase.from('catalogo_insumos').select('id');
-  cat?.forEach(c => {
-    newStockMap.set(String(c.id), { bSinPorc: 0, bPorcUnd: 0, bPorcKg: 0, cSinPorc: 0, cPorcUnd: 0, cPorcKg: 0 });
-  });
-
-  approvedMovs?.forEach(m => {
-    const idKey = String(m.insumo_id);
-    if (!newStockMap.has(idKey)) {
-      newStockMap.set(idKey, { bSinPorc: 0, bPorcUnd: 0, bPorcKg: 0, cSinPorc: 0, cPorcUnd: 0, cPorcKg: 0 });
-    }
-    const cur = newStockMap.get(idKey)!;
-    const cantKg = parseFloat(m.cant_sin_porcionar_kg) || 0;
-    const porcUnd = parseInt(m.porciones_und) || 0;
-    const porcKg = parseFloat(m.peso_porciones_kg) || 0;
-
-    if (m.tipo_movimiento === 'INVENTARIO_INICIAL' || m.tipo_movimiento === 'ENTRADA_COMPRA') {
-      cur.bSinPorc += cantKg;
-      cur.bPorcUnd += porcUnd;
-      cur.bPorcKg += porcKg;
-    } else if (m.tipo_movimiento === 'PORCIONADO') {
-      cur.bSinPorc = Math.max(0, cur.bSinPorc - cantKg);
-      cur.bPorcUnd += porcUnd;
-      cur.bPorcKg += porcKg;
-    } else if (m.tipo_movimiento === 'TRASLADO_COCINA') {
-      if (porcUnd > 0) {
-        cur.bPorcUnd = Math.max(0, cur.bPorcUnd - porcUnd);
-        cur.bPorcKg = Math.max(0, cur.bPorcKg - porcKg);
-        cur.cPorcUnd += porcUnd;
-        cur.cPorcKg += porcKg;
-      } else {
-        cur.bSinPorc = Math.max(0, cur.bSinPorc - cantKg);
-        cur.cSinPorc += cantKg;
-      }
-    } else if (m.tipo_movimiento === 'DEVOLUCION_COCINA') {
-      if (porcUnd > 0) {
-        cur.cPorcUnd = Math.max(0, cur.cPorcUnd - porcUnd);
-        cur.cPorcKg = Math.max(0, cur.cPorcKg - porcKg);
-        cur.bPorcUnd += porcUnd;
-        cur.bPorcKg += porcKg;
-      } else {
-        cur.cSinPorc = Math.max(0, cur.cSinPorc - cantKg);
-        cur.bSinPorc += cantKg;
-      }
-    }
-  });
-
-  const nowIso = new Date().toISOString();
-  const entries = Array.from(newStockMap.entries());
-  for (const [insumoId, st] of entries) {
-    await supabase.from('stock_actual').upsert({
-      insumo_id: Number(insumoId),
-      bodega_sin_porcionar_kg: parseFloat(st.bSinPorc.toFixed(2)),
-      bodega_porcionado_und: Math.max(0, Math.round(st.bPorcUnd)),
-      bodega_porcionado_kg: parseFloat(st.bPorcKg.toFixed(2)),
-      cocina_sin_porcionar_kg: parseFloat(st.cSinPorc.toFixed(2)),
-      cocina_porcionado_und: Math.max(0, Math.round(st.cPorcUnd)),
-      cocina_porcionado_kg: parseFloat(st.cPorcKg.toFixed(2)),
-      updated_at: nowIso,
-    });
   }
 }
 
@@ -342,19 +314,22 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
   let costoUnitarioKg = overrides.costo_unitario_kg !== undefined ? parseFloat(overrides.costo_unitario_kg) : parseFloat(mov.costo_unitario_kg) || 0;
   let totalPesos = overrides.valor_total_movimiento !== undefined ? parseFloat(overrides.valor_total_movimiento) : parseFloat(mov.valor_total_movimiento) || 0;
 
-  // Obtener stock actual
+  // Obtener stock actual a partir del periodo
+  const { stockMap } = await calculatePeriodoStock(mov.periodo_id || '');
+  const stPeriod = (stockMap as Record<string, any>)?.[String(insumoId)];
+
   let { data: stockData } = await supabase
     .from('stock_actual')
     .select('*')
     .eq('insumo_id', insumoId)
     .maybeSingle();
 
-  const prevBSinPorc = parseFloat(stockData?.bodega_sin_porcionar_kg) || 0;
-  const prevBPorcUnd = parseInt(stockData?.bodega_porcionado_und) || 0;
-  const prevBPorcKg = parseFloat(stockData?.bodega_porcionado_kg) || 0;
-  const prevCSinPorc = parseFloat(stockData?.cocina_sin_porcionar_kg) || 0;
-  const prevCPorcUnd = parseInt(stockData?.cocina_porcionado_und) || 0;
-  const prevCPorcKg = parseFloat(stockData?.cocina_porcionado_kg) || 0;
+  const prevBSinPorc = stPeriod ? (stPeriod.bodega_sin_porcionar_kg || 0) : (parseFloat(stockData?.bodega_sin_porcionar_kg) || 0);
+  const prevBPorcUnd = stPeriod ? (stPeriod.bodega_porcionado_und || 0) : (parseInt(stockData?.bodega_porcionado_und) || 0);
+  const prevBPorcKg = stPeriod ? (stPeriod.bodega_porcionado_kg || 0) : (parseFloat(stockData?.bodega_porcionado_kg) || 0);
+  const prevCSinPorc = stPeriod ? (stPeriod.cocina_sin_porcionar_kg || 0) : (parseFloat(stockData?.cocina_sin_porcionar_kg) || 0);
+  const prevCPorcUnd = stPeriod ? (stPeriod.cocina_porcionado_und || 0) : (parseInt(stockData?.cocina_porcionado_und) || 0);
+  const prevCPorcKg = stPeriod ? (stPeriod.cocina_porcionado_kg || 0) : (parseFloat(stockData?.cocina_porcionado_kg) || 0);
 
   const nowIso = new Date().toISOString();
   const todayStr = mov.fecha || nowIso.split('T')[0];
@@ -467,6 +442,11 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
       updateStockPayload.cocina_porcionado_und = newCPorcUnd;
       updateStockPayload.cocina_porcionado_kg = newCPorcKg;
 
+      movUpdatePayload.origen = 'BODEGA_PORCIONADO';
+      movUpdatePayload.destino = 'COCINA_PORCIONADO';
+      movUpdatePayload.cant_sin_porcionar_kg = 0;
+      movUpdatePayload.porciones_und = porciones;
+      movUpdatePayload.peso_porciones_kg = pesoPorciones;
       movUpdatePayload.bodega_porc_und_anterior = prevBPorcUnd;
       movUpdatePayload.bodega_porc_und_nuevo = newBPorcUnd;
       movUpdatePayload.bodega_porc_kg_anterior = prevBPorcKg;
@@ -482,6 +462,11 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
       updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
       updateStockPayload.cocina_sin_porcionar_kg = newCSinPorc;
 
+      movUpdatePayload.origen = 'BODEGA_ENTERO';
+      movUpdatePayload.destino = 'COCINA_ENTERO';
+      movUpdatePayload.cant_sin_porcionar_kg = cantKg;
+      movUpdatePayload.porciones_und = 0;
+      movUpdatePayload.peso_porciones_kg = 0;
       movUpdatePayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
       movUpdatePayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
     }
@@ -497,6 +482,11 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
       updateStockPayload.bodega_porcionado_und = newBPorcUnd;
       updateStockPayload.bodega_porcionado_kg = newBPorcKg;
 
+      movUpdatePayload.origen = 'COCINA_PORCIONADO';
+      movUpdatePayload.destino = 'BODEGA_PORCIONADO';
+      movUpdatePayload.cant_sin_porcionar_kg = 0;
+      movUpdatePayload.porciones_und = porciones;
+      movUpdatePayload.peso_porciones_kg = pesoPorciones;
       movUpdatePayload.cocina_porc_und_anterior = prevCPorcUnd;
       movUpdatePayload.cocina_porc_und_nuevo = newCPorcUnd;
       movUpdatePayload.cocina_porc_kg_anterior = prevCPorcKg;
@@ -512,32 +502,30 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
       updateStockPayload.cocina_sin_porcionar_kg = newCSinPorc;
       updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
 
+      movUpdatePayload.origen = 'COCINA_ENTERO';
+      movUpdatePayload.destino = 'BODEGA_ENTERO';
+      movUpdatePayload.cant_sin_porcionar_kg = cantKg;
+      movUpdatePayload.porciones_und = 0;
+      movUpdatePayload.peso_porciones_kg = 0;
       movUpdatePayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
       movUpdatePayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
     }
   }
 
   // Actualizar tabla movimientos_inventario
-  const { data: updatedMov, error: updMovErr } = await supabase
+  const { data: updatedMov, error: updateMovErr } = await supabase
     .from('movimientos_inventario')
     .update(movUpdatePayload)
     .eq('id', mov.id)
     .select('*, catalogo_insumos(nombre, categoria)')
     .single();
 
-  if (updMovErr) throw new Error(updMovErr.message);
+  if (updateMovErr) throw updateMovErr;
 
-  // Actualizar stock_actual
-  if (stockData) {
-    await supabase
-      .from('stock_actual')
-      .update(updateStockPayload)
-      .eq('insumo_id', insumoId);
-  } else {
-    await supabase
-      .from('stock_actual')
-      .insert([updateStockPayload]);
-  }
+  // Actualizar tabla stock_actual
+  await supabase
+    .from('stock_actual')
+    .upsert(updateStockPayload);
 
   return updatedMov;
 }

@@ -16,7 +16,8 @@ export default function StockKpis({ insumos }: Props) {
     let totalMermaKg = 0;
 
     insumos.forEach((item) => {
-      totalValor += item.valor_total_general_pesos || 0;
+      const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
+      totalValor += valorBodega || 0;
       totalBodegaKg += item.peso_total_bodega_kg || 0;
       totalCocinaKg += item.peso_total_cocina_kg || 0;
       totalMermaKg += item.merma_acumulada_kg || 0;

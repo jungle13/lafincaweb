@@ -74,6 +74,8 @@ export async function POST(request: Request) {
 
     const nowIso = new Date().toISOString();
     const todayStr = nowIso.split('T')[0];
+    const targetFecha = body.fecha || todayStr;
+    const targetFechaHora = body.fecha ? `${body.fecha}T${nowIso.split('T')[1] || '12:00:00.000Z'}` : nowIso;
 
     let updateStockPayload: any = { 
       insumo_id: insumoId,
@@ -90,10 +92,12 @@ export async function POST(request: Request) {
       tipo_movimiento: tipo,
       insumo_id: insumoId,
       usuario: usuario,
-      fecha: todayStr,
-      fecha_hora: nowIso,
+      fecha: targetFecha,
+      fecha_hora: targetFechaHora,
       costo_unitario_kg: costoUnitarioKg,
     };
+
+    let movsToInsert: any[] = [];
 
     if (tipo === 'ENTRADA_COMPRA') {
       const cantidadKg = parseFloat(body.cantidadKg) || 0;
@@ -146,6 +150,7 @@ export async function POST(request: Request) {
       insertMovPayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
       insertMovPayload.valor_total_movimiento = costoTotal;
       insertMovPayload.observaciones = body.observaciones || `Factura: ${factura} - Proveedor: ${proveedor}`;
+      movsToInsert = [insertMovPayload];
     } else if (tipo === 'PORCIONADO') {
       const kgAProcesar = parseFloat(body.kgAProcesar) || 0;
       const porciones = parseInt(body.porciones) || 0;
@@ -175,12 +180,85 @@ export async function POST(request: Request) {
       insertMovPayload.bodega_porc_kg_anterior = prevBPorcKg;
       insertMovPayload.bodega_porc_kg_nuevo = newBPorcKg;
       insertMovPayload.observaciones = body.observaciones || `Procesados ${kgAProcesar} Kg ➔ ${porciones} porc (${pesoPorcionesKg} Kg). Merma: ${mermaKg.toFixed(2)} Kg`;
+      movsToInsert = [insertMovPayload];
     } else if (tipo === 'TRASLADO_COCINA') {
       const isEntero = body.tipoEntrega === 'ENTERO';
-      const cantidad = isEntero ? (parseFloat(body.cantidad) || 0) : (parseInt(body.cantidad) || 0);
-      const pesoKg = parseFloat(body.pesoKg) || 0;
+      const autoPorcionar = !isEntero && (body.autoPorcionar === true);
 
-      if (!isEntero) {
+      if (autoPorcionar) {
+        const cantidad = parseInt(body.cantidad) || 0;
+        const pesoKg = parseFloat(body.pesoKg) || 0;
+        const kgTomadosEntero = parseFloat(body.kgTomadosEntero) || pesoKg;
+        const porcionesAuto = parseInt(body.porcionesAuto) || cantidad;
+        const pesoPorcionesAutoKg = parseFloat(body.pesoPorcionesAutoKg) || pesoKg;
+        const mermaAutoKg = parseFloat(body.mermaAutoKg) || Math.max(0, kgTomadosEntero - pesoPorcionesAutoKg);
+
+        const bSinPorcAfterPorc = Math.max(0, prevBSinPorc - kgTomadosEntero);
+        const bPorcUndAfterPorc = prevBPorcUnd + porcionesAuto;
+        const bPorcKgAfterPorc = prevBPorcKg + pesoPorcionesAutoKg;
+
+        const bPorcUndFinal = Math.max(0, bPorcUndAfterPorc - cantidad);
+        const bPorcKgFinal = Math.max(0, bPorcKgAfterPorc - pesoKg);
+        const cPorcUndFinal = prevCPorcUnd + cantidad;
+        const cPorcKgFinal = prevCPorcKg + pesoKg;
+
+        updateStockPayload.bodega_sin_porcionar_kg = bSinPorcAfterPorc;
+        updateStockPayload.bodega_porcionado_und = bPorcUndFinal;
+        updateStockPayload.bodega_porcionado_kg = bPorcKgFinal;
+        updateStockPayload.cocina_porcionado_und = cPorcUndFinal;
+        updateStockPayload.cocina_porcionado_kg = cPorcKgFinal;
+
+        const movPorcionado = {
+          tipo_movimiento: 'PORCIONADO',
+          insumo_id: insumoId,
+          usuario: usuario,
+          fecha: targetFecha,
+          fecha_hora: targetFechaHora,
+          costo_unitario_kg: costoUnitarioKg,
+          origen: 'BODEGA_ENTERO',
+          destino: 'BODEGA_PORCIONADO',
+          cant_sin_porcionar_kg: kgTomadosEntero,
+          porciones_und: porcionesAuto,
+          peso_porciones_kg: pesoPorcionesAutoKg,
+          merma_kg: mermaAutoKg,
+          merma_pesos: mermaAutoKg * costoUnitarioKg,
+          bodega_sin_porc_anterior_kg: prevBSinPorc,
+          bodega_sin_porc_nuevo_kg: bSinPorcAfterPorc,
+          bodega_porc_und_anterior: prevBPorcUnd,
+          bodega_porc_und_nuevo: bPorcUndAfterPorc,
+          bodega_porc_kg_anterior: prevBPorcKg,
+          bodega_porc_kg_nuevo: bPorcKgAfterPorc,
+          observaciones: `Auto-porcionado directo (${kgTomadosEntero} Kg entero ➔ ${porcionesAuto} porc)`,
+        };
+
+        const movTraslado = {
+          tipo_movimiento: 'TRASLADO_COCINA',
+          insumo_id: insumoId,
+          usuario: usuario,
+          fecha: targetFecha,
+          fecha_hora: new Date(new Date(targetFechaHora).getTime() + 1000).toISOString(),
+          costo_unitario_kg: costoUnitarioKg,
+          origen: 'BODEGA_PORCIONADO',
+          destino: 'COCINA_PORCIONADO',
+          cant_sin_porcionar_kg: 0,
+          porciones_und: cantidad,
+          peso_porciones_kg: pesoKg,
+          valor_total_movimiento: pesoKg * costoUnitarioKg,
+          bodega_porc_und_anterior: bPorcUndAfterPorc,
+          bodega_porc_und_nuevo: bPorcUndFinal,
+          bodega_porc_kg_anterior: bPorcKgAfterPorc,
+          bodega_porc_kg_nuevo: bPorcKgFinal,
+          cocina_porc_und_anterior: prevCPorcUnd,
+          cocina_porc_und_nuevo: cPorcUndFinal,
+          cocina_porc_kg_anterior: prevCPorcKg,
+          cocina_porc_kg_nuevo: cPorcKgFinal,
+          observaciones: body.observaciones || `Despacho directo a cocina: ${cantidad} porciones (${pesoKg} Kg) [Auto-porcionado]`,
+        };
+
+        movsToInsert = [movPorcionado, movTraslado];
+      } else if (!isEntero) {
+        const cantidad = parseInt(body.cantidad) || 0;
+        const pesoKg = parseFloat(body.pesoKg) || 0;
         const newBPorcUnd = Math.max(0, prevBPorcUnd - cantidad);
         const newBPorcKg = Math.max(0, prevBPorcKg - pesoKg);
         const newCPorcUnd = prevCPorcUnd + cantidad;
@@ -193,8 +271,10 @@ export async function POST(request: Request) {
 
         insertMovPayload.origen = 'BODEGA_PORCIONADO';
         insertMovPayload.destino = 'COCINA_PORCIONADO';
+        insertMovPayload.cant_sin_porcionar_kg = 0;
         insertMovPayload.porciones_und = cantidad;
         insertMovPayload.peso_porciones_kg = pesoKg;
+        insertMovPayload.valor_total_movimiento = pesoKg * costoUnitarioKg;
         insertMovPayload.bodega_porc_und_anterior = prevBPorcUnd;
         insertMovPayload.bodega_porc_und_nuevo = newBPorcUnd;
         insertMovPayload.bodega_porc_kg_anterior = prevBPorcKg;
@@ -203,7 +283,10 @@ export async function POST(request: Request) {
         insertMovPayload.cocina_porc_und_nuevo = newCPorcUnd;
         insertMovPayload.cocina_porc_kg_anterior = prevCPorcKg;
         insertMovPayload.cocina_porc_kg_nuevo = newCPorcKg;
+        insertMovPayload.observaciones = body.observaciones || `Despacho a cocina: ${cantidad} porciones`;
+        movsToInsert = [insertMovPayload];
       } else {
+        const cantidad = parseFloat(body.cantidad) || 0;
         const newBSinPorc = Math.max(0, prevBSinPorc - cantidad);
         const newCSinPorc = prevCSinPorc + cantidad;
         updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
@@ -211,12 +294,16 @@ export async function POST(request: Request) {
         insertMovPayload.origen = 'BODEGA_ENTERO';
         insertMovPayload.destino = 'COCINA_ENTERO';
         insertMovPayload.cant_sin_porcionar_kg = cantidad;
+        insertMovPayload.porciones_und = 0;
+        insertMovPayload.peso_porciones_kg = 0;
+        insertMovPayload.valor_total_movimiento = cantidad * costoUnitarioKg;
         insertMovPayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
         insertMovPayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
         insertMovPayload.cocina_sin_porc_anterior_kg = prevCSinPorc;
         insertMovPayload.cocina_sin_porc_nuevo_kg = newCSinPorc;
+        insertMovPayload.observaciones = body.observaciones || `Despacho a cocina: ${cantidad} Kg`;
+        movsToInsert = [insertMovPayload];
       }
-      insertMovPayload.observaciones = body.observaciones || `Despacho a cocina: ${cantidad} ${!isEntero ? 'porciones' : 'Kg'}`;
     } else if (tipo === 'DEVOLUCION_COCINA') {
       const isEntero = body.tipoDevolucion === 'ENTERO';
       const cantidad = isEntero ? (parseFloat(body.cantidad) || 0) : (parseInt(body.cantidad) || 0);
@@ -235,8 +322,10 @@ export async function POST(request: Request) {
 
         insertMovPayload.origen = 'COCINA_PORCIONADO';
         insertMovPayload.destino = 'BODEGA_PORCIONADO';
+        insertMovPayload.cant_sin_porcionar_kg = 0;
         insertMovPayload.porciones_und = cantidad;
         insertMovPayload.peso_porciones_kg = pesoKg;
+        insertMovPayload.valor_total_movimiento = pesoKg * costoUnitarioKg;
         insertMovPayload.bodega_porc_und_anterior = prevBPorcUnd;
         insertMovPayload.bodega_porc_und_nuevo = newBPorcUnd;
         insertMovPayload.bodega_porc_kg_anterior = prevBPorcKg;
@@ -253,12 +342,16 @@ export async function POST(request: Request) {
         insertMovPayload.origen = 'COCINA_ENTERO';
         insertMovPayload.destino = 'BODEGA_ENTERO';
         insertMovPayload.cant_sin_porcionar_kg = cantidad;
-        insertMovPayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
-        insertMovPayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
+        insertMovPayload.porciones_und = 0;
+        insertMovPayload.peso_porciones_kg = 0;
+        insertMovPayload.valor_total_movimiento = cantidad * costoUnitarioKg;
         insertMovPayload.cocina_sin_porc_anterior_kg = prevCSinPorc;
         insertMovPayload.cocina_sin_porc_nuevo_kg = newCSinPorc;
+        insertMovPayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
+        insertMovPayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
       }
-      insertMovPayload.observaciones = body.observaciones || `Devolución de cocina a bodega: ${cantidad} ${!isEntero ? 'porciones' : 'Kg'}`;
+      insertMovPayload.observaciones = body.observaciones || `Devolución a bodega: ${cantidad} ${!isEntero ? 'porciones' : 'Kg'}`;
+      movsToInsert = [insertMovPayload];
     }
 
     // Actualización de stock_actual mediante upsert
@@ -272,10 +365,7 @@ export async function POST(request: Request) {
 
     const { data: movData, error: movInsertErr } = await supabase
       .from('movimientos_inventario')
-      .insert([insertMovPayload])
-      .select()
-      .single();
-
+      .insert(movsToInsert)
     if (movInsertErr) {
       console.error('Error insertando movimiento:', movInsertErr);
       return NextResponse.json({ error: movInsertErr.message }, { status: 500 });

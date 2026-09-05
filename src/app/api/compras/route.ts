@@ -1,16 +1,42 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { getPeriodoById } from '@/lib/periodos';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const fechaInicio = searchParams.get('fecha_inicio');
+    const fechaFin = searchParams.get('fecha_fin');
+    const periodoId = searchParams.get('periodo_id');
+
+    let start = fechaInicio;
+    let end = fechaFin;
+
+    if (periodoId && (!start || !end)) {
+      const p = getPeriodoById(periodoId);
+      if (p) {
+        start = start || p.fecha_inicio;
+        end = end || p.fecha_fin;
+      }
+    }
+
     // 1. Consultar compras con sus detalles
-    const { data, error } = await supabase
+    let query = supabase
       .from('compras')
       .select('*, compras_detalle(*, catalogo_insumos(nombre, categoria))')
-      .order('fecha', { ascending: false })
-      .order('id', { ascending: false });
+      .order('fecha', { ascending: false });
+
+    if (start) {
+      query = query.gte('fecha', start);
+    }
+    if (end) {
+      query = query.lte('fecha', end);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.warn('Error fetching from compras table:', error);
@@ -64,13 +90,18 @@ export async function GET() {
       });
     }
 
-    // 2. Fallback con movimientos ENTRADA_COMPRA si compras está vacío
+    // 2. Fallback con movimientos ENTRADA_COMPRA si compras estuviese vacío
     if (flattened.length === 0) {
-      const { data: movs } = await supabase
+      let movQuery = supabase
         .from('movimientos_inventario')
         .select('*, catalogo_insumos(nombre, categoria)')
         .eq('tipo_movimiento', 'ENTRADA_COMPRA')
         .order('fecha_hora', { ascending: false });
+
+      if (start) movQuery = movQuery.gte('fecha', start);
+      if (end) movQuery = movQuery.lte('fecha', end);
+
+      const { data: movs } = await movQuery;
 
       if (movs && movs.length > 0) {
         movs.forEach((m: any) => {
@@ -92,7 +123,16 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ success: true, data: flattened });
+    return NextResponse.json(
+      { success: true, data: flattened },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -104,23 +144,21 @@ export async function PUT(request: Request) {
     const { compraId, numeroFactura, proveedor, observaciones } = body;
 
     if (!compraId) {
-      return NextResponse.json({ error: 'Falta el ID de la compra' }, { status: 400 });
+      return NextResponse.json({ error: 'Falta compraId' }, { status: 400 });
     }
 
     const { data, error } = await supabase
       .from('compras')
       .update({
-        numero_factura: numeroFactura,
-        proveedor: proveedor,
-        observaciones: observaciones,
+        numero_factura: numeroFactura || 'PENDIENTE',
+        proveedor: proveedor || 'Proveedor Local',
+        observaciones: observaciones || '',
       })
       .eq('id', compraId)
       .select()
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({ success: true, data });
   } catch (err: any) {

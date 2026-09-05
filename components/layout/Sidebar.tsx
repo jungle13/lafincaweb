@@ -10,13 +10,15 @@ import {
   ShoppingCart, 
   DollarSign,
   Beef,
-  CalendarRange
+  CalendarRange,
+  Wrench
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
 const NAV_ITEMS = [
   { label: 'Terminal Bodeguero', href: '/bodeguero', icon: Truck },
   { label: 'Inventario de Carnes', href: '/inventario', icon: Boxes },
+  { label: 'Ajustes e Inconsistencias', href: '/ajustes', icon: Wrench },
   { label: 'Catálogo de Carnes', href: '/catalogo', icon: Beef },
   { label: 'Control de Periodos', href: '/periodos', icon: CalendarRange },
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },

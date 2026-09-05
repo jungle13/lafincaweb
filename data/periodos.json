@@ -1,11 +1,1006 @@
 [
   {
+    "id": "per-2026-09",
+    "codigo": "2026-09",
+    "nombre": "Septiembre 2026",
+    "fecha_inicio": "2026-09-01",
+    "fecha_fin": "2026-09-30",
+    "estado": "ABIERTO",
+    "inicial_registrado": true,
+    "inventario_inicial": {
+      "b503d196-829e-4d87-a5f4-ca1dfe91c5f3": {
+        "insumo_id": "b503d196-829e-4d87-a5f4-ca1dfe91c5f3",
+        "nombre": "Alas de pollo",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 15750
+      },
+      "175fdf5e-93f0-4908-96e4-970049a9a241": {
+        "insumo_id": "175fdf5e-93f0-4908-96e4-970049a9a241",
+        "nombre": "Atunes",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 25000
+      },
+      "50119198-acbb-4d51-b3ab-ea282ea9cbdf": {
+        "insumo_id": "50119198-acbb-4d51-b3ab-ea282ea9cbdf",
+        "nombre": "Baby beef",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 53000
+      },
+      "4a4df928-a0fd-46da-b4fe-485e54232c5e": {
+        "insumo_id": "4a4df928-a0fd-46da-b4fe-485e54232c5e",
+        "nombre": "Bagre de mar",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 16500
+      },
+      "987f040b-74b0-4a86-80d7-bdad4c1a7b29": {
+        "insumo_id": "987f040b-74b0-4a86-80d7-bdad4c1a7b29",
+        "nombre": "Barcino de res",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 23000
+      },
+      "a454dac6-462b-4bfb-8a11-6c26476754c6": {
+        "insumo_id": "a454dac6-462b-4bfb-8a11-6c26476754c6",
+        "nombre": "Bola negra",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10000
+      },
+      "151c9ac4-b2d8-47cd-a647-791715e97d81": {
+        "insumo_id": "151c9ac4-b2d8-47cd-a647-791715e97d81",
+        "nombre": "Bondiola importada",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 20000
+      },
+      "d41426b2-efff-4b34-8a9f-edec43a2e159": {
+        "insumo_id": "d41426b2-efff-4b34-8a9f-edec43a2e159",
+        "nombre": "Cabeza de lomo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 4000
+      },
+      "7c487504-6210-40ca-a23a-36747dcb2d32": {
+        "insumo_id": "7c487504-6210-40ca-a23a-36747dcb2d32",
+        "nombre": "Caderita",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 29800
+      },
+      "cd408741-0087-4624-9b72-2b860ec0b92e": {
+        "insumo_id": "cd408741-0087-4624-9b72-2b860ec0b92e",
+        "nombre": "Callo",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 20000
+      },
+      "19791a67-5f0c-4ddc-b334-d27c6b331797": {
+        "insumo_id": "19791a67-5f0c-4ddc-b334-d27c6b331797",
+        "nombre": "Callo distribuidora myc sas",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 20000
+      },
+      "f6fc29f6-e8dc-4c06-be4c-6b5d8dc02d4e": {
+        "insumo_id": "f6fc29f6-e8dc-4c06-be4c-6b5d8dc02d4e",
+        "nombre": "Camaron precocido",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 14,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 22900
+      },
+      "b6aa4441-808a-4a9b-b4ab-361a280f6b08": {
+        "insumo_id": "b6aa4441-808a-4a9b-b4ab-361a280f6b08",
+        "nombre": "Carne asada",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 40,
+        "bodega_porc_kg": 4.1,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 25900
+      },
+      "3b077975-b2f8-401f-a6e3-b65c19c1ad24": {
+        "insumo_id": "3b077975-b2f8-401f-a6e3-b65c19c1ad24",
+        "nombre": "Carne de hamburguesa",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 8,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 16269
+      },
+      "165e62a4-5c6a-4066-bc31-82cb36fd92be": {
+        "insumo_id": "165e62a4-5c6a-4066-bc31-82cb36fd92be",
+        "nombre": "Carne molida",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10900
+      },
+      "305ff063-7f06-4a1b-b7cb-d73552c1631f": {
+        "insumo_id": "305ff063-7f06-4a1b-b7cb-d73552c1631f",
+        "nombre": "Chorizo coctelero x 40",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 48000
+      },
+      "36a78302-5d60-43f8-ae6b-b5278c0cee3d": {
+        "insumo_id": "36a78302-5d60-43f8-ae6b-b5278c0cee3d",
+        "nombre": "Chorizo de pollo",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 17500
+      },
+      "a7ef407d-de3d-43c0-835e-51f79d975b93": {
+        "insumo_id": "a7ef407d-de3d-43c0-835e-51f79d975b93",
+        "nombre": "Chorizo grande",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 17500
+      },
+      "a9cedfac-1ed5-43e2-8b31-964b940caf26": {
+        "insumo_id": "a9cedfac-1ed5-43e2-8b31-964b940caf26",
+        "nombre": "Chorizo mediano",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 17500
+      },
+      "01795478-0115-40a6-bb72-b80913443a98": {
+        "insumo_id": "01795478-0115-40a6-bb72-b80913443a98",
+        "nombre": "Chorizo paisa",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 40,
+        "bodega_porc_kg": 11.4,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 17500
+      },
+      "aa7a60e3-b6b0-4e80-81ad-12e1287f5112": {
+        "insumo_id": "aa7a60e3-b6b0-4e80-81ad-12e1287f5112",
+        "nombre": "Chorizo Premium",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 17450
+      },
+      "12f37831-375d-4f23-a184-93d2ea0f5455": {
+        "insumo_id": "12f37831-375d-4f23-a184-93d2ea0f5455",
+        "nombre": "Churrasco",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 35,
+        "bodega_porc_kg": 13.1,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 44000
+      },
+      "a777a06b-6347-4675-abd3-f9223aa9f7bd": {
+        "insumo_id": "a777a06b-6347-4675-abd3-f9223aa9f7bd",
+        "nombre": "Costilla ahumada",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 12,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 24000
+      },
+      "c5f0d2af-fcb2-4db9-a990-d40b9d07dfb8": {
+        "insumo_id": "c5f0d2af-fcb2-4db9-a990-d40b9d07dfb8",
+        "nombre": "Costilla corte americano",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 14000
+      },
+      "59497bdb-8571-4cf9-a599-7f9ea596a37e": {
+        "insumo_id": "59497bdb-8571-4cf9-a599-7f9ea596a37e",
+        "nombre": "Costilla de cerdo especial",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 14900
+      },
+      "f394520a-c0bc-47fb-a822-057adb6aeef9": {
+        "insumo_id": "f394520a-c0bc-47fb-a822-057adb6aeef9",
+        "nombre": "Costilla de res",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 20.9,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 18500
+      },
+      "19ae0595-eae9-43d5-bbd4-5a62811db175": {
+        "insumo_id": "19ae0595-eae9-43d5-bbd4-5a62811db175",
+        "nombre": "Costilla Especial",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 22000
+      },
+      "b952ac21-1bf8-45cf-8368-936ab866f7f4": {
+        "insumo_id": "b952ac21-1bf8-45cf-8368-936ab866f7f4",
+        "nombre": "Costilla san luis",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 22,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21900
+      },
+      "5e00e9bc-16a1-453e-b58c-25b03f113599": {
+        "insumo_id": "5e00e9bc-16a1-453e-b58c-25b03f113599",
+        "nombre": "Costilla san luis jr",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21900
+      },
+      "97d8a8a0-95cd-431c-b08f-330f89d4164f": {
+        "insumo_id": "97d8a8a0-95cd-431c-b08f-330f89d4164f",
+        "nombre": "Empanada",
+        "categoria": "MIXTO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 12000
+      },
+      "23ccfad4-5e98-44c5-9ad7-151863d33725": {
+        "insumo_id": "23ccfad4-5e98-44c5-9ad7-151863d33725",
+        "nombre": "Empella",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 18000
+      },
+      "6867471b-1968-4907-9140-a2bc394402ba": {
+        "insumo_id": "6867471b-1968-4907-9140-a2bc394402ba",
+        "nombre": "Espinazo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 2.6,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 8984
+      },
+      "040bf581-e6cc-4874-b60a-fd377c79c9ba": {
+        "insumo_id": "040bf581-e6cc-4874-b60a-fd377c79c9ba",
+        "nombre": "Espinazo de cerdo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 8984
+      },
+      "25660599-44f7-44d5-92e8-a46c322a6934": {
+        "insumo_id": "25660599-44f7-44d5-92e8-a46c322a6934",
+        "nombre": "Filete de pollo x 120",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 18500
+      },
+      "3a479d14-161b-4618-b57c-81c4da21bc0d": {
+        "insumo_id": "3a479d14-161b-4618-b57c-81c4da21bc0d",
+        "nombre": "Filete de pollo x 350",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 10,
+        "bodega_porc_kg": 3.5,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 18500
+      },
+      "9b51f7e4-4310-499e-aa4b-af21dded53a4": {
+        "insumo_id": "9b51f7e4-4310-499e-aa4b-af21dded53a4",
+        "nombre": "Filete de pollo x 400",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 18500
+      },
+      "6c78cc52-eacf-45cf-9e55-ed9a7ac9770f": {
+        "insumo_id": "6c78cc52-eacf-45cf-9e55-ed9a7ac9770f",
+        "nombre": "Filete de pollox 320 gr",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 18500
+      },
+      "1f9b39b5-5582-4ba2-9e85-9cfec86e3c9c": {
+        "insumo_id": "1f9b39b5-5582-4ba2-9e85-9cfec86e3c9c",
+        "nombre": "Gallina",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 51933
+      },
+      "b4161eeb-ba8a-4814-b779-4dbeb53c63bd": {
+        "insumo_id": "b4161eeb-ba8a-4814-b779-4dbeb53c63bd",
+        "nombre": "Gallina gigante",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 50556
+      },
+      "3444c0c0-5935-49c0-b3de-2ab32aff84a1": {
+        "insumo_id": "3444c0c0-5935-49c0-b3de-2ab32aff84a1",
+        "nombre": "Higado",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21500
+      },
+      "569aac75-4a2d-407e-9132-f96b0d31e225": {
+        "insumo_id": "569aac75-4a2d-407e-9132-f96b0d31e225",
+        "nombre": "Huevo",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 120,
+        "bodega_porc_kg": 120,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 600
+      },
+      "81a8aae8-d85d-4ad4-902c-d76f439e69d1": {
+        "insumo_id": "81a8aae8-d85d-4ad4-902c-d76f439e69d1",
+        "nombre": "Lengua de res",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 12.9,
+        "bodega_porc_und": 19,
+        "bodega_porc_kg": 4.6,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 23900
+      },
+      "c7270ba2-9386-4b6a-8617-5726c0965d2b": {
+        "insumo_id": "c7270ba2-9386-4b6a-8617-5726c0965d2b",
+        "nombre": "Lomo de caracho",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 44000
+      },
+      "262cee15-71a8-45c4-8dd4-c996bf87220c": {
+        "insumo_id": "262cee15-71a8-45c4-8dd4-c996bf87220c",
+        "nombre": "Lomo de cerdo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 36,
+        "bodega_porc_kg": 13.4,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 19500
+      },
+      "4e2e81ad-9b96-410c-93f6-d63c88b4ba83": {
+        "insumo_id": "4e2e81ad-9b96-410c-93f6-d63c88b4ba83",
+        "nombre": "Lomo viche",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 53000
+      },
+      "a6aa3a1b-4203-427d-8343-bd615a6c982a": {
+        "insumo_id": "a6aa3a1b-4203-427d-8343-bd615a6c982a",
+        "nombre": "Marisco",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 24000
+      },
+      "e74afdce-9a88-4a7b-a4c4-6ad53738f175": {
+        "insumo_id": "e74afdce-9a88-4a7b-a4c4-6ad53738f175",
+        "nombre": "Mega Tocino",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21900
+      },
+      "b5a31072-46cc-4f18-a68b-6bdee9bcd2bb": {
+        "insumo_id": "b5a31072-46cc-4f18-a68b-6bdee9bcd2bb",
+        "nombre": "Molida Sobaco",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 25900
+      },
+      "ce314187-4e9f-4da5-b633-d21babb59c8d": {
+        "insumo_id": "ce314187-4e9f-4da5-b633-d21babb59c8d",
+        "nombre": "Morcilla",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10000
+      },
+      "fc8a2e1c-1a2f-487b-b14a-9816c412b7de": {
+        "insumo_id": "fc8a2e1c-1a2f-487b-b14a-9816c412b7de",
+        "nombre": "Morrillo",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 19,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 28000
+      },
+      "aac21f49-9a17-4995-9e7f-a8d10b077fbd": {
+        "insumo_id": "aac21f49-9a17-4995-9e7f-a8d10b077fbd",
+        "nombre": "Mortadela especial",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10600
+      },
+      "9908eeb6-2b44-4b54-8a86-c8fa310dbae3": {
+        "insumo_id": "9908eeb6-2b44-4b54-8a86-c8fa310dbae3",
+        "nombre": "Mortadela tradicional",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10600
+      },
+      "a1c12734-2d59-45b3-a068-4ca179b7a9c1": {
+        "insumo_id": "a1c12734-2d59-45b3-a068-4ca179b7a9c1",
+        "nombre": "Muchacho res",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 29500
+      },
+      "6b39b570-d5bf-4fc9-a25e-5640feee455e": {
+        "insumo_id": "6b39b570-d5bf-4fc9-a25e-5640feee455e",
+        "nombre": "Muslos",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 15000
+      },
+      "7c1b4b3b-ae93-49f5-8354-072ec17a18ba": {
+        "insumo_id": "7c1b4b3b-ae93-49f5-8354-072ec17a18ba",
+        "nombre": "Panceta de cerdo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 32,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21900
+      },
+      "e4d39494-759c-4b4c-84fb-b6a2e54cd767": {
+        "insumo_id": "e4d39494-759c-4b4c-84fb-b6a2e54cd767",
+        "nombre": "Papas a la francesa",
+        "categoria": "VERDURAS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 10,
+        "bodega_porc_kg": 10,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 6269
+      },
+      "098bbab1-e544-40f8-8ed2-059544e92407": {
+        "insumo_id": "098bbab1-e544-40f8-8ed2-059544e92407",
+        "nombre": "Pata de res",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21000
+      },
+      "3ad1cf91-697a-40da-b95f-f1ad07119393": {
+        "insumo_id": "3ad1cf91-697a-40da-b95f-f1ad07119393",
+        "nombre": "Pecho",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 24000
+      },
+      "c0b241a9-4d95-4331-b84a-22ccdce07905": {
+        "insumo_id": "c0b241a9-4d95-4331-b84a-22ccdce07905",
+        "nombre": "Pechuga mcpollo",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 13475
+      },
+      "3b06aaf9-a60b-43ec-a81e-8fa260b4fbd6": {
+        "insumo_id": "3b06aaf9-a60b-43ec-a81e-8fa260b4fbd6",
+        "nombre": "Pernil de cerdo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10000
+      },
+      "7534bc4c-06c6-48d3-bec0-cd79cb6c32e4": {
+        "insumo_id": "7534bc4c-06c6-48d3-bec0-cd79cb6c32e4",
+        "nombre": "Pernil de pollo",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 7700
+      },
+      "475350be-f297-4f36-aae6-696ec94d8863": {
+        "insumo_id": "475350be-f297-4f36-aae6-696ec94d8863",
+        "nombre": "Pescado bagre",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10000
+      },
+      "85f177e2-c0f1-4142-ba7e-b0bcb62de283": {
+        "insumo_id": "85f177e2-c0f1-4142-ba7e-b0bcb62de283",
+        "nombre": "Pezuña",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 9000
+      },
+      "a672dcc9-d550-427c-ad6b-62a9347190cc": {
+        "insumo_id": "a672dcc9-d550-427c-ad6b-62a9347190cc",
+        "nombre": "Pezuña de cerdo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 8000
+      },
+      "ac7563b4-8048-4763-af21-22ffd6c49374": {
+        "insumo_id": "ac7563b4-8048-4763-af21-22ffd6c49374",
+        "nombre": "Picadillo de res",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 14000
+      },
+      "e2ec4224-f2ab-4dcd-a471-c2e6ae0131e8": {
+        "insumo_id": "e2ec4224-f2ab-4dcd-a471-c2e6ae0131e8",
+        "nombre": "Punta de anca",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 20,
+        "bodega_porc_kg": 8.3,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 44000
+      },
+      "c78e7625-4d65-49c5-a75e-0acfd5f7ec5e": {
+        "insumo_id": "c78e7625-4d65-49c5-a75e-0acfd5f7ec5e",
+        "nombre": "Recorte de pollo",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10900
+      },
+      "eade57f7-d884-41bb-963e-ebde5c43571f": {
+        "insumo_id": "eade57f7-d884-41bb-963e-ebde5c43571f",
+        "nombre": "Rellena",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 5,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 19500
+      },
+      "91c76670-3c14-47a1-90b8-1900cb85ed5b": {
+        "insumo_id": "91c76670-3c14-47a1-90b8-1900cb85ed5b",
+        "nombre": "Salchicha",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 15500
+      },
+      "a93f4014-a03d-4981-9142-15d99cc5a532": {
+        "insumo_id": "a93f4014-a03d-4981-9142-15d99cc5a532",
+        "nombre": "Salchicha ranchera",
+        "categoria": "EMBUTIDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 29500
+      },
+      "ef8920a7-00e8-42e8-b398-f4647b1e41ee": {
+        "insumo_id": "ef8920a7-00e8-42e8-b398-f4647b1e41ee",
+        "nombre": "Salmon",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 17,
+        "bodega_porc_kg": 5.3,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 55000
+      },
+      "1397498f-5fc6-4aab-8893-d19d238b930c": {
+        "insumo_id": "1397498f-5fc6-4aab-8893-d19d238b930c",
+        "nombre": "Sobaco",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 12,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 25900
+      },
+      "e2e816e5-3990-418c-af6d-a73370ced6d1": {
+        "insumo_id": "e2e816e5-3990-418c-af6d-a73370ced6d1",
+        "nombre": "Sobrebarriga delgada",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 6,
+        "bodega_porc_und": 6,
+        "bodega_porc_kg": 2.4,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 30000
+      },
+      "72530a8a-15b0-4836-a4c9-f0f8162d4ceb": {
+        "insumo_id": "72530a8a-15b0-4836-a4c9-f0f8162d4ceb",
+        "nombre": "Tamal",
+        "categoria": "ELABORADOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 25000
+      },
+      "22e60127-07ac-48a3-b52f-180c8ca26463": {
+        "insumo_id": "22e60127-07ac-48a3-b52f-180c8ca26463",
+        "nombre": "Tilapia 350/450",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 18,
+        "bodega_porc_kg": 9,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 17808
+      },
+      "9c715026-7b36-42f4-b9a7-de155e07fc98": {
+        "insumo_id": "9c715026-7b36-42f4-b9a7-de155e07fc98",
+        "nombre": "Tilapia x 300",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 17808
+      },
+      "9e703bdc-2e8c-4ff4-b171-659359a974b6": {
+        "insumo_id": "9e703bdc-2e8c-4ff4-b171-659359a974b6",
+        "nombre": "Tocineta barril",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 30,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21900
+      },
+      "4d02ebd1-db65-45f3-a4af-949a01660773": {
+        "insumo_id": "4d02ebd1-db65-45f3-a4af-949a01660773",
+        "nombre": "Tocineta premium",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21900
+      },
+      "661f0602-001f-46e7-a1d2-5e57dc36207c": {
+        "insumo_id": "661f0602-001f-46e7-a1d2-5e57dc36207c",
+        "nombre": "Tocino",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 52,
+        "bodega_porc_kg": 20.8,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 21900
+      },
+      "3c2f51c5-d048-42e0-884b-002446487e31": {
+        "insumo_id": "3c2f51c5-d048-42e0-884b-002446487e31",
+        "nombre": "Trozos de pechuga",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10900
+      },
+      "165ba59c-0c78-4c85-9444-9714fb3e46e8": {
+        "insumo_id": "165ba59c-0c78-4c85-9444-9714fb3e46e8",
+        "nombre": "Trucha",
+        "categoria": "PESCADOS Y MARISCOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 6,
+        "bodega_porc_kg": 2.4,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 22000
+      },
+      "52057bed-69b8-45f0-8cf6-0b3e69e07eb7": {
+        "insumo_id": "52057bed-69b8-45f0-8cf6-0b3e69e07eb7",
+        "nombre": "Visceras",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 20000
+      }
+    }
+  },
+  {
     "id": "per-2026-08",
     "codigo": "2026-08",
     "nombre": "Agosto 2026",
     "fecha_inicio": "2026-08-01",
     "fecha_fin": "2026-08-31",
-    "estado": "ABIERTO",
+    "estado": "CERRADO",
     "inicial_registrado": true,
     "inventario_inicial": {
       "151c9ac4-b2d8-47cd-a647-791715e97d81": {
@@ -66,7 +1061,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 16000
+        "costo_unitario_kg": 14900
       },
       "19ae0595-eae9-43d5-bbd4-5a62811db175": {
         "insumo_id": "19ae0595-eae9-43d5-bbd4-5a62811db175",
@@ -78,7 +1073,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 24000
+        "costo_unitario_kg": 22000
       },
       "b952ac21-1bf8-45cf-8368-936ab866f7f4": {
         "insumo_id": "b952ac21-1bf8-45cf-8368-936ab866f7f4",
@@ -90,7 +1085,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 7000
+        "costo_unitario_kg": 21900
       },
       "5e00e9bc-16a1-453e-b58c-25b03f113599": {
         "insumo_id": "5e00e9bc-16a1-453e-b58c-25b03f113599",
@@ -102,7 +1097,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 18000
+        "costo_unitario_kg": 21900
       },
       "23ccfad4-5e98-44c5-9ad7-151863d33725": {
         "insumo_id": "23ccfad4-5e98-44c5-9ad7-151863d33725",
@@ -126,7 +1121,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 22000
+        "costo_unitario_kg": 8984
       },
       "040bf581-e6cc-4874-b60a-fd377c79c9ba": {
         "insumo_id": "040bf581-e6cc-4874-b60a-fd377c79c9ba",
@@ -138,7 +1133,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 15000
+        "costo_unitario_kg": 8984
       },
       "262cee15-71a8-45c4-8dd4-c996bf87220c": {
         "insumo_id": "262cee15-71a8-45c4-8dd4-c996bf87220c",
@@ -150,7 +1145,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 23000
+        "costo_unitario_kg": 19500
       },
       "e74afdce-9a88-4a7b-a4c4-6ad53738f175": {
         "insumo_id": "e74afdce-9a88-4a7b-a4c4-6ad53738f175",
@@ -162,7 +1157,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 24000
+        "costo_unitario_kg": 21900
       },
       "7c1b4b3b-ae93-49f5-8354-072ec17a18ba": {
         "insumo_id": "7c1b4b3b-ae93-49f5-8354-072ec17a18ba",
@@ -174,7 +1169,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 14000
+        "costo_unitario_kg": 21900
       },
       "3b06aaf9-a60b-43ec-a81e-8fa260b4fbd6": {
         "insumo_id": "3b06aaf9-a60b-43ec-a81e-8fa260b4fbd6",
@@ -200,6 +1195,18 @@
         "cocina_porc_kg": 0,
         "costo_unitario_kg": 9000
       },
+      "a672dcc9-d550-427c-ad6b-62a9347190cc": {
+        "insumo_id": "a672dcc9-d550-427c-ad6b-62a9347190cc",
+        "nombre": "Pezuña de cerdo",
+        "categoria": "CARNE DE CERDO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 8000
+      },
       "9e703bdc-2e8c-4ff4-b171-659359a974b6": {
         "insumo_id": "9e703bdc-2e8c-4ff4-b171-659359a974b6",
         "nombre": "Tocineta barril",
@@ -210,7 +1217,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 17000
+        "costo_unitario_kg": 21900
       },
       "4d02ebd1-db65-45f3-a4af-949a01660773": {
         "insumo_id": "4d02ebd1-db65-45f3-a4af-949a01660773",
@@ -222,7 +1229,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 24000
+        "costo_unitario_kg": 21900
       },
       "661f0602-001f-46e7-a1d2-5e57dc36207c": {
         "insumo_id": "661f0602-001f-46e7-a1d2-5e57dc36207c",
@@ -234,7 +1241,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 17000
+        "costo_unitario_kg": 21900
       },
       "50119198-acbb-4d51-b3ab-ea282ea9cbdf": {
         "insumo_id": "50119198-acbb-4d51-b3ab-ea282ea9cbdf",
@@ -282,7 +1289,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 13000
+        "costo_unitario_kg": 29800
       },
       "cd408741-0087-4624-9b72-2b860ec0b92e": {
         "insumo_id": "cd408741-0087-4624-9b72-2b860ec0b92e",
@@ -294,7 +1301,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 21000
+        "costo_unitario_kg": 20000
       },
       "19791a67-5f0c-4ddc-b334-d27c6b331797": {
         "insumo_id": "19791a67-5f0c-4ddc-b334-d27c6b331797",
@@ -306,7 +1313,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 9000
+        "costo_unitario_kg": 20000
       },
       "b6aa4441-808a-4a9b-b4ab-361a280f6b08": {
         "insumo_id": "b6aa4441-808a-4a9b-b4ab-361a280f6b08",
@@ -318,7 +1325,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 20000
+        "costo_unitario_kg": 25900
       },
       "3b077975-b2f8-401f-a6e3-b65c19c1ad24": {
         "insumo_id": "3b077975-b2f8-401f-a6e3-b65c19c1ad24",
@@ -342,7 +1349,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 10000
+        "costo_unitario_kg": 10900
       },
       "12f37831-375d-4f23-a184-93d2ea0f5455": {
         "insumo_id": "12f37831-375d-4f23-a184-93d2ea0f5455",
@@ -354,7 +1361,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 11000
+        "costo_unitario_kg": 44000
       },
       "f394520a-c0bc-47fb-a822-057adb6aeef9": {
         "insumo_id": "f394520a-c0bc-47fb-a822-057adb6aeef9",
@@ -366,7 +1373,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 8000
+        "costo_unitario_kg": 18500
       },
       "3444c0c0-5935-49c0-b3de-2ab32aff84a1": {
         "insumo_id": "3444c0c0-5935-49c0-b3de-2ab32aff84a1",
@@ -378,7 +1385,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 18000
+        "costo_unitario_kg": 21500
       },
       "81a8aae8-d85d-4ad4-902c-d76f439e69d1": {
         "insumo_id": "81a8aae8-d85d-4ad4-902c-d76f439e69d1",
@@ -390,7 +1397,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 12000
+        "costo_unitario_kg": 23900
       },
       "4e2e81ad-9b96-410c-93f6-d63c88b4ba83": {
         "insumo_id": "4e2e81ad-9b96-410c-93f6-d63c88b4ba83",
@@ -402,7 +1409,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 23000
+        "costo_unitario_kg": 53000
       },
       "b5a31072-46cc-4f18-a68b-6bdee9bcd2bb": {
         "insumo_id": "b5a31072-46cc-4f18-a68b-6bdee9bcd2bb",
@@ -414,7 +1421,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 16000
+        "costo_unitario_kg": 25900
       },
       "fc8a2e1c-1a2f-487b-b14a-9816c412b7de": {
         "insumo_id": "fc8a2e1c-1a2f-487b-b14a-9816c412b7de",
@@ -426,7 +1433,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 25000
+        "costo_unitario_kg": 28000
       },
       "a1c12734-2d59-45b3-a068-4ca179b7a9c1": {
         "insumo_id": "a1c12734-2d59-45b3-a068-4ca179b7a9c1",
@@ -438,7 +1445,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 18000
+        "costo_unitario_kg": 29500
       },
       "098bbab1-e544-40f8-8ed2-059544e92407": {
         "insumo_id": "098bbab1-e544-40f8-8ed2-059544e92407",
@@ -464,6 +1471,18 @@
         "cocina_porc_kg": 0,
         "costo_unitario_kg": 24000
       },
+      "ac7563b4-8048-4763-af21-22ffd6c49374": {
+        "insumo_id": "ac7563b4-8048-4763-af21-22ffd6c49374",
+        "nombre": "Picadillo de res",
+        "categoria": "CARNE DE RES",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 14000
+      },
       "e2ec4224-f2ab-4dcd-a471-c2e6ae0131e8": {
         "insumo_id": "e2ec4224-f2ab-4dcd-a471-c2e6ae0131e8",
         "nombre": "Punta de anca",
@@ -474,7 +1493,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 19000
+        "costo_unitario_kg": 44000
       },
       "1397498f-5fc6-4aab-8893-d19d238b930c": {
         "insumo_id": "1397498f-5fc6-4aab-8893-d19d238b930c",
@@ -486,7 +1505,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 16000
+        "costo_unitario_kg": 25900
       },
       "e2e816e5-3990-418c-af6d-a73370ced6d1": {
         "insumo_id": "e2e816e5-3990-418c-af6d-a73370ced6d1",
@@ -498,7 +1517,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 14000
+        "costo_unitario_kg": 30000
       },
       "52057bed-69b8-45f0-8cf6-0b3e69e07eb7": {
         "insumo_id": "52057bed-69b8-45f0-8cf6-0b3e69e07eb7",
@@ -522,7 +1541,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 5000
+        "costo_unitario_kg": 15750
       },
       "25660599-44f7-44d5-92e8-a46c322a6934": {
         "insumo_id": "25660599-44f7-44d5-92e8-a46c322a6934",
@@ -534,7 +1553,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 25000
+        "costo_unitario_kg": 18500
       },
       "3a479d14-161b-4618-b57c-81c4da21bc0d": {
         "insumo_id": "3a479d14-161b-4618-b57c-81c4da21bc0d",
@@ -546,7 +1565,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 15000
+        "costo_unitario_kg": 18500
       },
       "9b51f7e4-4310-499e-aa4b-af21dded53a4": {
         "insumo_id": "9b51f7e4-4310-499e-aa4b-af21dded53a4",
@@ -558,7 +1577,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 16000
+        "costo_unitario_kg": 18500
       },
       "6c78cc52-eacf-45cf-9e55-ed9a7ac9770f": {
         "insumo_id": "6c78cc52-eacf-45cf-9e55-ed9a7ac9770f",
@@ -570,7 +1589,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 10000
+        "costo_unitario_kg": 18500
       },
       "1f9b39b5-5582-4ba2-9e85-9cfec86e3c9c": {
         "insumo_id": "1f9b39b5-5582-4ba2-9e85-9cfec86e3c9c",
@@ -582,7 +1601,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 19000
+        "costo_unitario_kg": 51933
       },
       "b4161eeb-ba8a-4814-b779-4dbeb53c63bd": {
         "insumo_id": "b4161eeb-ba8a-4814-b779-4dbeb53c63bd",
@@ -594,7 +1613,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 13000
+        "costo_unitario_kg": 50556
       },
       "569aac75-4a2d-407e-9132-f96b0d31e225": {
         "insumo_id": "569aac75-4a2d-407e-9132-f96b0d31e225",
@@ -624,13 +1643,13 @@
         "insumo_id": "c0b241a9-4d95-4331-b84a-22ccdce07905",
         "nombre": "Pechuga mcpollo",
         "categoria": "CARNE POLLO",
-        "bodega_sin_porc_kg": 0,
+        "bodega_sin_porc_kg": 18.8,
         "bodega_porc_und": 0,
         "bodega_porc_kg": 0,
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 18000
+        "costo_unitario_kg": 13475
       },
       "7534bc4c-06c6-48d3-bec0-cd79cb6c32e4": {
         "insumo_id": "7534bc4c-06c6-48d3-bec0-cd79cb6c32e4",
@@ -642,11 +1661,23 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 15000
+        "costo_unitario_kg": 7700
+      },
+      "c78e7625-4d65-49c5-a75e-0acfd5f7ec5e": {
+        "insumo_id": "c78e7625-4d65-49c5-a75e-0acfd5f7ec5e",
+        "nombre": "Recorte de pollo",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 10900
       },
       "3c2f51c5-d048-42e0-884b-002446487e31": {
         "insumo_id": "3c2f51c5-d048-42e0-884b-002446487e31",
-        "nombre": "Trozos e pechuga",
+        "nombre": "Trozos de pechuga",
         "categoria": "CARNE POLLO",
         "bodega_sin_porc_kg": 18.8,
         "bodega_porc_und": 0,
@@ -654,7 +1685,19 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 13000
+        "costo_unitario_kg": 10900
+      },
+      "72530a8a-15b0-4836-a4c9-f0f8162d4ceb": {
+        "insumo_id": "72530a8a-15b0-4836-a4c9-f0f8162d4ceb",
+        "nombre": "Tamal",
+        "categoria": "ELABORADOS",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 70,
+        "bodega_porc_kg": 17.5,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 25000
       },
       "305ff063-7f06-4a1b-b7cb-d73552c1631f": {
         "insumo_id": "305ff063-7f06-4a1b-b7cb-d73552c1631f",
@@ -666,7 +1709,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 22000
+        "costo_unitario_kg": 48000
       },
       "36a78302-5d60-43f8-ae6b-b5278c0cee3d": {
         "insumo_id": "36a78302-5d60-43f8-ae6b-b5278c0cee3d",
@@ -726,7 +1769,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 12000
+        "costo_unitario_kg": 17450
       },
       "ce314187-4e9f-4da5-b633-d21babb59c8d": {
         "insumo_id": "ce314187-4e9f-4da5-b633-d21babb59c8d",
@@ -738,7 +1781,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 25000
+        "costo_unitario_kg": 10000
       },
       "aac21f49-9a17-4995-9e7f-a8d10b077fbd": {
         "insumo_id": "aac21f49-9a17-4995-9e7f-a8d10b077fbd",
@@ -750,7 +1793,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 23000
+        "costo_unitario_kg": 10600
       },
       "9908eeb6-2b44-4b54-8a86-c8fa310dbae3": {
         "insumo_id": "9908eeb6-2b44-4b54-8a86-c8fa310dbae3",
@@ -762,7 +1805,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 12000
+        "costo_unitario_kg": 10600
       },
       "eade57f7-d884-41bb-963e-ebde5c43571f": {
         "insumo_id": "eade57f7-d884-41bb-963e-ebde5c43571f",
@@ -774,7 +1817,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 21000
+        "costo_unitario_kg": 19500
       },
       "91c76670-3c14-47a1-90b8-1900cb85ed5b": {
         "insumo_id": "91c76670-3c14-47a1-90b8-1900cb85ed5b",
@@ -786,7 +1829,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 23000
+        "costo_unitario_kg": 15500
       },
       "a93f4014-a03d-4981-9142-15d99cc5a532": {
         "insumo_id": "a93f4014-a03d-4981-9142-15d99cc5a532",
@@ -798,19 +1841,19 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 23000
+        "costo_unitario_kg": 29500
       },
-      "72530a8a-15b0-4836-a4c9-f0f8162d4ceb": {
-        "insumo_id": "72530a8a-15b0-4836-a4c9-f0f8162d4ceb",
-        "nombre": "Tamal",
+      "97d8a8a0-95cd-431c-b08f-330f89d4164f": {
+        "insumo_id": "97d8a8a0-95cd-431c-b08f-330f89d4164f",
+        "nombre": "Empanada",
         "categoria": "MIXTO",
         "bodega_sin_porc_kg": 0,
-        "bodega_porc_und": 70,
-        "bodega_porc_kg": 17.5,
+        "bodega_porc_und": 1,
+        "bodega_porc_kg": 0.1,
         "cocina_sin_porc_kg": 0,
-        "cocina_porc_und": 0,
-        "cocina_porc_kg": 0,
-        "costo_unitario_kg": 25000
+        "cocina_porc_und": 19,
+        "cocina_porc_kg": 1.9,
+        "costo_unitario_kg": 12000
       },
       "175fdf5e-93f0-4908-96e4-970049a9a241": {
         "insumo_id": "175fdf5e-93f0-4908-96e4-970049a9a241",
@@ -834,7 +1877,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 12000
+        "costo_unitario_kg": 16500
       },
       "f6fc29f6-e8dc-4c06-be4c-6b5d8dc02d4e": {
         "insumo_id": "f6fc29f6-e8dc-4c06-be4c-6b5d8dc02d4e",
@@ -846,7 +1889,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 24000
+        "costo_unitario_kg": 22900
       },
       "c7270ba2-9386-4b6a-8617-5726c0965d2b": {
         "insumo_id": "c7270ba2-9386-4b6a-8617-5726c0965d2b",
@@ -858,7 +1901,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 9000
+        "costo_unitario_kg": 44000
       },
       "a6aa3a1b-4203-427d-8343-bd615a6c982a": {
         "insumo_id": "a6aa3a1b-4203-427d-8343-bd615a6c982a",
@@ -870,7 +1913,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 19000
+        "costo_unitario_kg": 24000
       },
       "475350be-f297-4f36-aae6-696ec94d8863": {
         "insumo_id": "475350be-f297-4f36-aae6-696ec94d8863",
@@ -894,7 +1937,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 23000
+        "costo_unitario_kg": 55000
       },
       "22e60127-07ac-48a3-b52f-180c8ca26463": {
         "insumo_id": "22e60127-07ac-48a3-b52f-180c8ca26463",
@@ -918,7 +1961,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 10000
+        "costo_unitario_kg": 17808
       },
       "165ba59c-0c78-4c85-9444-9714fb3e46e8": {
         "insumo_id": "165ba59c-0c78-4c85-9444-9714fb3e46e8",
@@ -930,7 +1973,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 10000
+        "costo_unitario_kg": 22000
       },
       "e4d39494-759c-4b4c-84fb-b6a2e54cd767": {
         "insumo_id": "e4d39494-759c-4b4c-84fb-b6a2e54cd767",
@@ -942,7 +1985,1303 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 9000
+        "costo_unitario_kg": 6269
+      }
+    },
+    "conteo_cierre_fisico": {
+      "b503d196-829e-4d87-a5f4-ca1dfe91c5f3": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "175fdf5e-93f0-4908-96e4-970049a9a241": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "50119198-acbb-4d51-b3ab-ea282ea9cbdf": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "4a4df928-a0fd-46da-b4fe-485e54232c5e": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "987f040b-74b0-4a86-80d7-bdad4c1a7b29": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a454dac6-462b-4bfb-8a11-6c26476754c6": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "151c9ac4-b2d8-47cd-a647-791715e97d81": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "d41426b2-efff-4b34-8a9f-edec43a2e159": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "7c487504-6210-40ca-a23a-36747dcb2d32": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "cd408741-0087-4624-9b72-2b860ec0b92e": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "19791a67-5f0c-4ddc-b334-d27c6b331797": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "f6fc29f6-e8dc-4c06-be4c-6b5d8dc02d4e": {
+        "bodega_kg": 14,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "b6aa4441-808a-4a9b-b4ab-361a280f6b08": {
+        "bodega_kg": 0,
+        "bodega_und": 40,
+        "bodega_porc_kg": 4.1,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "3b077975-b2f8-401f-a6e3-b65c19c1ad24": {
+        "bodega_kg": 8,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "165e62a4-5c6a-4066-bc31-82cb36fd92be": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "305ff063-7f06-4a1b-b7cb-d73552c1631f": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "36a78302-5d60-43f8-ae6b-b5278c0cee3d": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a7ef407d-de3d-43c0-835e-51f79d975b93": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a9cedfac-1ed5-43e2-8b31-964b940caf26": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "01795478-0115-40a6-bb72-b80913443a98": {
+        "bodega_kg": 0,
+        "bodega_und": 40,
+        "bodega_porc_kg": 11.4,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "aa7a60e3-b6b0-4e80-81ad-12e1287f5112": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "12f37831-375d-4f23-a184-93d2ea0f5455": {
+        "bodega_kg": 0,
+        "bodega_und": 35,
+        "bodega_porc_kg": 13.1,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a777a06b-6347-4675-abd3-f9223aa9f7bd": {
+        "bodega_kg": 12,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "c5f0d2af-fcb2-4db9-a990-d40b9d07dfb8": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "59497bdb-8571-4cf9-a599-7f9ea596a37e": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "f394520a-c0bc-47fb-a822-057adb6aeef9": {
+        "bodega_kg": 20.9,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "19ae0595-eae9-43d5-bbd4-5a62811db175": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "b952ac21-1bf8-45cf-8368-936ab866f7f4": {
+        "bodega_kg": 22,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "5e00e9bc-16a1-453e-b58c-25b03f113599": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "97d8a8a0-95cd-431c-b08f-330f89d4164f": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "23ccfad4-5e98-44c5-9ad7-151863d33725": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "6867471b-1968-4907-9140-a2bc394402ba": {
+        "bodega_kg": 2.6,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "040bf581-e6cc-4874-b60a-fd377c79c9ba": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "25660599-44f7-44d5-92e8-a46c322a6934": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "3a479d14-161b-4618-b57c-81c4da21bc0d": {
+        "bodega_kg": 0,
+        "bodega_und": 10,
+        "bodega_porc_kg": 3.5,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "9b51f7e4-4310-499e-aa4b-af21dded53a4": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "6c78cc52-eacf-45cf-9e55-ed9a7ac9770f": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "1f9b39b5-5582-4ba2-9e85-9cfec86e3c9c": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "b4161eeb-ba8a-4814-b779-4dbeb53c63bd": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "3444c0c0-5935-49c0-b3de-2ab32aff84a1": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "569aac75-4a2d-407e-9132-f96b0d31e225": {
+        "bodega_kg": 0,
+        "bodega_und": 120,
+        "bodega_porc_kg": 120,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "81a8aae8-d85d-4ad4-902c-d76f439e69d1": {
+        "bodega_kg": 12.9,
+        "bodega_und": 19,
+        "bodega_porc_kg": 4.6,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "c7270ba2-9386-4b6a-8617-5726c0965d2b": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "262cee15-71a8-45c4-8dd4-c996bf87220c": {
+        "bodega_kg": 0,
+        "bodega_und": 36,
+        "bodega_porc_kg": 13.4,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "4e2e81ad-9b96-410c-93f6-d63c88b4ba83": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a6aa3a1b-4203-427d-8343-bd615a6c982a": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "e74afdce-9a88-4a7b-a4c4-6ad53738f175": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "b5a31072-46cc-4f18-a68b-6bdee9bcd2bb": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "ce314187-4e9f-4da5-b633-d21babb59c8d": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "fc8a2e1c-1a2f-487b-b14a-9816c412b7de": {
+        "bodega_kg": 19,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "aac21f49-9a17-4995-9e7f-a8d10b077fbd": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "9908eeb6-2b44-4b54-8a86-c8fa310dbae3": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a1c12734-2d59-45b3-a068-4ca179b7a9c1": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "6b39b570-d5bf-4fc9-a25e-5640feee455e": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "7c1b4b3b-ae93-49f5-8354-072ec17a18ba": {
+        "bodega_kg": 32,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "e4d39494-759c-4b4c-84fb-b6a2e54cd767": {
+        "bodega_kg": 0,
+        "bodega_und": 10,
+        "bodega_porc_kg": 10,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "098bbab1-e544-40f8-8ed2-059544e92407": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "3ad1cf91-697a-40da-b95f-f1ad07119393": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "c0b241a9-4d95-4331-b84a-22ccdce07905": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "3b06aaf9-a60b-43ec-a81e-8fa260b4fbd6": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "7534bc4c-06c6-48d3-bec0-cd79cb6c32e4": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "475350be-f297-4f36-aae6-696ec94d8863": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "85f177e2-c0f1-4142-ba7e-b0bcb62de283": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a672dcc9-d550-427c-ad6b-62a9347190cc": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "ac7563b4-8048-4763-af21-22ffd6c49374": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "e2ec4224-f2ab-4dcd-a471-c2e6ae0131e8": {
+        "bodega_kg": 0,
+        "bodega_und": 20,
+        "bodega_porc_kg": 8.3,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "c78e7625-4d65-49c5-a75e-0acfd5f7ec5e": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "eade57f7-d884-41bb-963e-ebde5c43571f": {
+        "bodega_kg": 5,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "91c76670-3c14-47a1-90b8-1900cb85ed5b": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "a93f4014-a03d-4981-9142-15d99cc5a532": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "ef8920a7-00e8-42e8-b398-f4647b1e41ee": {
+        "bodega_kg": 0,
+        "bodega_und": 17,
+        "bodega_porc_kg": 5.3,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "1397498f-5fc6-4aab-8893-d19d238b930c": {
+        "bodega_kg": 12,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "e2e816e5-3990-418c-af6d-a73370ced6d1": {
+        "bodega_kg": 6,
+        "bodega_und": 6,
+        "bodega_porc_kg": 2.4,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "72530a8a-15b0-4836-a4c9-f0f8162d4ceb": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "22e60127-07ac-48a3-b52f-180c8ca26463": {
+        "bodega_kg": 0,
+        "bodega_und": 18,
+        "bodega_porc_kg": 9,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "9c715026-7b36-42f4-b9a7-de155e07fc98": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "9e703bdc-2e8c-4ff4-b171-659359a974b6": {
+        "bodega_kg": 30,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "4d02ebd1-db65-45f3-a4af-949a01660773": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "661f0602-001f-46e7-a1d2-5e57dc36207c": {
+        "bodega_kg": 0,
+        "bodega_und": 52,
+        "bodega_porc_kg": 20.8,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "3c2f51c5-d048-42e0-884b-002446487e31": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "165ba59c-0c78-4c85-9444-9714fb3e46e8": {
+        "bodega_kg": 0,
+        "bodega_und": 6,
+        "bodega_porc_kg": 2.4,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      },
+      "52057bed-69b8-45f0-8cf6-0b3e69e07eb7": {
+        "bodega_kg": 0,
+        "bodega_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_und": 0,
+        "cocina_porc_kg": 0
+      }
+    },
+    "fecha_cierre": "2026-08-31T23:59:59.000Z",
+    "usuario_cierre": "Administrador (Cierre Físico Conciliado)",
+    "observaciones_cierre": "Cierre formal de Agosto 2026 conciliado con el conteo físico del 31 de agosto. Todo lo no contado en físico queda en cero (cocina asumida 100% consumida).",
+    "ajustes_aprobados": {
+      "b503d196-829e-4d87-a5f4-ca1dfe91c5f3": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -120,
+        "dif_total_kg": -30,
+        "valor_impacto": 472500,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "50119198-acbb-4d51-b3ab-ea282ea9cbdf": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -25,
+        "dif_total_kg": -10.000000000000002,
+        "valor_impacto": 530000,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "4a4df928-a0fd-46da-b4fe-485e54232c5e": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -37,
+        "dif_total_kg": -7.4,
+        "valor_impacto": 122100,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "987f040b-74b0-4a86-80d7-bdad4c1a7b29": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -60,
+        "dif_total_kg": -12,
+        "valor_impacto": 276000,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "151c9ac4-b2d8-47cd-a647-791715e97d81": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -39.8,
+        "dif_porc_und": -49,
+        "dif_total_kg": -56.12,
+        "valor_impacto": 1122400,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "7c487504-6210-40ca-a23a-36747dcb2d32": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -5.3,
+        "dif_porc_und": 0,
+        "dif_total_kg": -5.300000000000001,
+        "valor_impacto": 175027,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "cd408741-0087-4624-9b72-2b860ec0b92e": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -7.2,
+        "dif_porc_und": 0,
+        "dif_total_kg": -7.2,
+        "valor_impacto": 141199,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "f6fc29f6-e8dc-4c06-be4c-6b5d8dc02d4e": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 15.600000000000001,
+        "dif_porc_und": -61,
+        "dif_total_kg": 0.3500000000000014,
+        "valor_impacto": 8015,
+        "final_aprobado_kg": 14,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 320600
+      },
+      "b6aa4441-808a-4a9b-b4ab-361a280f6b08": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -14.55,
+        "dif_porc_und": -90,
+        "dif_total_kg": -24.1,
+        "valor_impacto": 624190,
+        "final_aprobado_kg": 4.1,
+        "final_aprobado_und": 40,
+        "final_aprobado_costo": 106190
+      },
+      "3b077975-b2f8-401f-a6e3-b65c19c1ad24": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -4,
+        "dif_porc_und": 0,
+        "dif_total_kg": -4,
+        "valor_impacto": 65076,
+        "final_aprobado_kg": 8,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 130152
+      },
+      "165e62a4-5c6a-4066-bc31-82cb36fd92be": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -33,
+        "dif_total_kg": -8.25,
+        "valor_impacto": 134219,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "a7ef407d-de3d-43c0-835e-51f79d975b93": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -48,
+        "dif_total_kg": -9.600000000000003,
+        "valor_impacto": 168000,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "01795478-0115-40a6-bb72-b80913443a98": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -255,
+        "dif_total_kg": -72.97,
+        "valor_impacto": 1276975,
+        "final_aprobado_kg": 11.4,
+        "final_aprobado_und": 40,
+        "final_aprobado_costo": 199500
+      },
+      "12f37831-375d-4f23-a184-93d2ea0f5455": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -9.25,
+        "dif_porc_und": -32,
+        "dif_total_kg": -12.9,
+        "valor_impacto": 567794,
+        "final_aprobado_kg": 13.1,
+        "final_aprobado_und": 35,
+        "final_aprobado_costo": 576597
+      },
+      "a777a06b-6347-4675-abd3-f9223aa9f7bd": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -19.820000000000014,
+        "dif_porc_und": -80,
+        "dif_total_kg": -37.58000000000001,
+        "valor_impacto": 901920,
+        "final_aprobado_kg": 12,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 288000
+      },
+      "f394520a-c0bc-47fb-a822-057adb6aeef9": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 20.3,
+        "dif_porc_und": -176,
+        "dif_total_kg": -14.900000000000006,
+        "valor_impacto": 299177,
+        "final_aprobado_kg": 20.9,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 419651
+      },
+      "b952ac21-1bf8-45cf-8368-936ab866f7f4": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 37.2,
+        "dif_porc_und": -183,
+        "dif_total_kg": -54.3,
+        "valor_impacto": 1170328,
+        "final_aprobado_kg": 22,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 474166
+      },
+      "97d8a8a0-95cd-431c-b08f-330f89d4164f": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -33,
+        "dif_total_kg": -3.3000000000000003,
+        "valor_impacto": 39600,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "6867471b-1968-4907-9140-a2bc394402ba": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 2.6,
+        "dif_porc_und": 0,
+        "dif_total_kg": 2.6,
+        "valor_impacto": 24916,
+        "final_aprobado_kg": 2.6,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 24916
+      },
+      "25660599-44f7-44d5-92e8-a46c322a6934": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -135.5,
+        "dif_porc_und": -52,
+        "dif_total_kg": -145.9,
+        "valor_impacto": 2699150,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "3a479d14-161b-4618-b57c-81c4da21bc0d": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -35,
+        "dif_total_kg": -12.032,
+        "valor_impacto": 222592,
+        "final_aprobado_kg": 3.5,
+        "final_aprobado_und": 10,
+        "final_aprobado_costo": 64750
+      },
+      "1f9b39b5-5582-4ba2-9e85-9cfec86e3c9c": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -78.80000000000001,
+        "dif_porc_und": -19,
+        "dif_total_kg": -84.30000000000001,
+        "valor_impacto": 4377952,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "b4161eeb-ba8a-4814-b779-4dbeb53c63bd": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -53.419999999999995,
+        "dif_porc_und": -326,
+        "dif_total_kg": -146.636,
+        "valor_impacto": 7413330,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "3444c0c0-5935-49c0-b3de-2ab32aff84a1": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -5.3,
+        "dif_porc_und": 0,
+        "dif_total_kg": -5.300000000000001,
+        "valor_impacto": 113950,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "569aac75-4a2d-407e-9132-f96b0d31e225": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -240,
+        "dif_total_kg": -240,
+        "valor_impacto": 144000,
+        "final_aprobado_kg": 120,
+        "final_aprobado_und": 120,
+        "final_aprobado_costo": 72000
+      },
+      "81a8aae8-d85d-4ad4-902c-d76f439e69d1": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -67.39999999999999,
+        "dif_porc_und": -104,
+        "dif_total_kg": -87.9,
+        "valor_impacto": 2104941,
+        "final_aprobado_kg": 17.5,
+        "final_aprobado_und": 19,
+        "final_aprobado_costo": 419073
+      },
+      "262cee15-71a8-45c4-8dd4-c996bf87220c": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -200.67000000000002,
+        "dif_porc_und": -149,
+        "dif_total_kg": -235.8,
+        "valor_impacto": 4598100,
+        "final_aprobado_kg": 13.4,
+        "final_aprobado_und": 36,
+        "final_aprobado_costo": 261300
+      },
+      "4e2e81ad-9b96-410c-93f6-d63c88b4ba83": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -31.799999999999997,
+        "dif_porc_und": -44,
+        "dif_total_kg": -40.599999999999994,
+        "valor_impacto": 2151800,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "a6aa3a1b-4203-427d-8343-bd615a6c982a": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -15,
+        "dif_porc_und": 0,
+        "dif_total_kg": -15,
+        "valor_impacto": 360000,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "e74afdce-9a88-4a7b-a4c4-6ad53738f175": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -6,
+        "dif_total_kg": -4.6,
+        "valor_impacto": 100740,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "b5a31072-46cc-4f18-a68b-6bdee9bcd2bb": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -1.5,
+        "dif_porc_und": 0,
+        "dif_total_kg": -1.5,
+        "valor_impacto": 38850,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "fc8a2e1c-1a2f-487b-b14a-9816c412b7de": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -3,
+        "dif_porc_und": 0,
+        "dif_total_kg": -3,
+        "valor_impacto": 84000,
+        "final_aprobado_kg": 19,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 532000
+      },
+      "a1c12734-2d59-45b3-a068-4ca179b7a9c1": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -7.4,
+        "dif_porc_und": -100,
+        "dif_total_kg": -29.599999999999998,
+        "valor_impacto": 873200,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "6b39b570-d5bf-4fc9-a25e-5640feee455e": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -139,
+        "dif_total_kg": -38.64,
+        "valor_impacto": 579600,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "e4d39494-759c-4b4c-84fb-b6a2e54cd767": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -19.1,
+        "dif_porc_und": -70,
+        "dif_total_kg": -89.1,
+        "valor_impacto": 554024,
+        "final_aprobado_kg": 10,
+        "final_aprobado_und": 10,
+        "final_aprobado_costo": 62180
+      },
+      "c0b241a9-4d95-4331-b84a-22ccdce07905": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -27.3,
+        "dif_porc_und": 0,
+        "dif_total_kg": -27.3,
+        "valor_impacto": 397488,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "7534bc4c-06c6-48d3-bec0-cd79cb6c32e4": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -129.12,
+        "dif_porc_und": -80,
+        "dif_total_kg": -146.88000000000002,
+        "valor_impacto": 1130976,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "475350be-f297-4f36-aae6-696ec94d8863": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -20,
+        "dif_porc_und": -40,
+        "dif_total_kg": -28.880000000000003,
+        "valor_impacto": 288800,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "e2ec4224-f2ab-4dcd-a471-c2e6ae0131e8": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -43.870000000000005,
+        "dif_porc_und": -70,
+        "dif_total_kg": -63.757999999999996,
+        "valor_impacto": 2805352,
+        "final_aprobado_kg": 8.3,
+        "final_aprobado_und": 20,
+        "final_aprobado_costo": 365200
+      },
+      "eade57f7-d884-41bb-963e-ebde5c43571f": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -14.5,
+        "dif_porc_und": 0,
+        "dif_total_kg": -14.5,
+        "valor_impacto": 282750,
+        "final_aprobado_kg": 5,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 97500
+      },
+      "ef8920a7-00e8-42e8-b398-f4647b1e41ee": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -23.3,
+        "dif_porc_und": 7,
+        "dif_total_kg": -20.9,
+        "valor_impacto": 1149500,
+        "final_aprobado_kg": 5.3,
+        "final_aprobado_und": 17,
+        "final_aprobado_costo": 291500
+      },
+      "1397498f-5fc6-4aab-8893-d19d238b930c": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -105.69999999999997,
+        "dif_porc_und": 0,
+        "dif_total_kg": -105.69999999999997,
+        "valor_impacto": 2737630,
+        "final_aprobado_kg": 12,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 310800
+      },
+      "e2e816e5-3990-418c-af6d-a73370ced6d1": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 45.60000000000001,
+        "dif_porc_und": -221,
+        "dif_total_kg": -26.82499999999998,
+        "valor_impacto": 876239,
+        "final_aprobado_kg": 8.4,
+        "final_aprobado_und": 6,
+        "final_aprobado_costo": 274386
+      },
+      "72530a8a-15b0-4836-a4c9-f0f8162d4ceb": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -140,
+        "dif_total_kg": -35,
+        "valor_impacto": 875000,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "22e60127-07ac-48a3-b52f-180c8ca26463": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -33.1,
+        "dif_porc_und": 8,
+        "dif_total_kg": -29.6,
+        "valor_impacto": 527117,
+        "final_aprobado_kg": 9,
+        "final_aprobado_und": 18,
+        "final_aprobado_costo": 160272
+      },
+      "9c715026-7b36-42f4-b9a7-de155e07fc98": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 0,
+        "dif_porc_und": -30,
+        "dif_total_kg": -9.989999999999995,
+        "valor_impacto": 177902,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "9e703bdc-2e8c-4ff4-b171-659359a974b6": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -42.900000000000006,
+        "dif_porc_und": -20,
+        "dif_total_kg": -49.56000000000002,
+        "valor_impacto": 1085364,
+        "final_aprobado_kg": 30,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 657000
+      },
+      "661f0602-001f-46e7-a1d2-5e57dc36207c": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": 1.2799999999999994,
+        "dif_porc_und": -803,
+        "dif_total_kg": -317.766,
+        "valor_impacto": 6959075,
+        "final_aprobado_kg": 20.8,
+        "final_aprobado_und": 52,
+        "final_aprobado_costo": 455520
+      },
+      "3c2f51c5-d048-42e0-884b-002446487e31": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -15.800000000000002,
+        "dif_porc_und": 0,
+        "dif_total_kg": -15.800000000000002,
+        "valor_impacto": 172220,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "165ba59c-0c78-4c85-9444-9714fb3e46e8": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-08-31T23:59:59.000Z",
+        "dif_entero_kg": -20.2,
+        "dif_porc_und": -4,
+        "dif_total_kg": -21.700000000000003,
+        "valor_impacto": 477400,
+        "final_aprobado_kg": 2.4,
+        "final_aprobado_und": 6,
+        "final_aprobado_costo": 52800
+      },
+      "52057bed-69b8-45f0-8cf6-0b3e69e07eb7": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-09-04T20:47:06.497Z",
+        "dif_entero_kg": -7,
+        "dif_porc_und": 0,
+        "dif_total_kg": -7,
+        "valor_impacto": 140000,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "c78e7625-4d65-49c5-a75e-0acfd5f7ec5e": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-09-04T20:55:37.083Z",
+        "dif_entero_kg": -2.2,
+        "dif_porc_und": 0,
+        "dif_total_kg": -2.2,
+        "valor_impacto": 23980,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "098bbab1-e544-40f8-8ed2-059544e92407": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-09-04T20:55:51.492Z",
+        "dif_entero_kg": -19.5,
+        "dif_porc_und": 0,
+        "dif_total_kg": -19.5,
+        "valor_impacto": 409500,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "a672dcc9-d550-427c-ad6b-62a9347190cc": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-09-04T20:56:05.720Z",
+        "dif_entero_kg": -9.5,
+        "dif_porc_und": 0,
+        "dif_total_kg": -9.5,
+        "valor_impacto": 76000,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
+      },
+      "ac7563b4-8048-4763-af21-22ffd6c49374": {
+        "tipo_ajuste": "ERROR_CONTEO_PREVIO",
+        "justificacion": "Corrección por conteo",
+        "usuario": "Administrador (Auditoría)",
+        "fecha_ajuste": "2026-09-04T20:56:18.400Z",
+        "dif_entero_kg": -7.2,
+        "dif_porc_und": 0,
+        "dif_total_kg": -7.2,
+        "valor_impacto": 100800,
+        "final_aprobado_kg": 0,
+        "final_aprobado_und": 0,
+        "final_aprobado_costo": 0
       }
     }
   }
