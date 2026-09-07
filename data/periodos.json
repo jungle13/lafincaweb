@@ -991,6 +991,30 @@
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
         "costo_unitario_kg": 20000
+      },
+      "1b0b5d1c-33b4-4876-90a9-0560ea1153d4": {
+        "insumo_id": "1b0b5d1c-33b4-4876-90a9-0560ea1153d4",
+        "nombre": "Mix de verduras",
+        "categoria": "VERDURAS",
+        "bodega_sin_porc_kg": 8,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 8487
+      },
+      "e4ee17d3-6c15-4513-a04d-67fe8527ee56": {
+        "insumo_id": "e4ee17d3-6c15-4513-a04d-67fe8527ee56",
+        "nombre": "Cordon Blue",
+        "categoria": "CARNE POLLO",
+        "bodega_sin_porc_kg": 0,
+        "bodega_porc_und": 0,
+        "bodega_porc_kg": 0,
+        "cocina_sin_porc_kg": 0,
+        "cocina_porc_und": 0,
+        "cocina_porc_kg": 0,
+        "costo_unitario_kg": 18500
       }
     }
   },
