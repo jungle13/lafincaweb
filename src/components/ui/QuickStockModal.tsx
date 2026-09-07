@@ -211,13 +211,9 @@ export default function QuickStockModal({ isOpen, onClose }: Props) {
     });
   }, [computedList, searchQuery, onlyWithStock, selectedCategory]);
 
-  // Totales de KPI de la lista filtrada
+  // Total de valorización en bodega de la lista filtrada (excluye cocina)
   const kpis = useMemo(() => {
-    let tBodegaKg = 0;
-    let tBodegaUnd = 0;
-    let tCocinaKg = 0;
-    let tCocinaUnd = 0;
-    let tValorCOP = 0;
+    let tValorBodegaCOP = 0;
 
     filteredItems.forEach((item) => {
       const isUnd = item.unidad_medida?.toLowerCase() === 'und' || 
@@ -226,27 +222,17 @@ export default function QuickStockModal({ isOpen, onClose }: Props) {
                     item.insumo?.toLowerCase().includes('chorizo') || 
                     item.insumo?.toLowerCase().includes('tamal');
       const totalUnitsBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
-      const totalUnitsCocina = (item.cocina_sin_porc_kg || 0) + (item.cocina_porc_und || 0);
+      const pesoBodegaKg = item.peso_total_bodega_kg || ((item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0));
 
       if (isUnd) {
-        tBodegaUnd += totalUnitsBodega;
-        tCocinaUnd += totalUnitsCocina;
-        tValorCOP += totalUnitsBodega * (item.costo_unitario_kg || 0);
+        tValorBodegaCOP += totalUnitsBodega * (item.costo_unitario_kg || 0);
       } else {
-        tBodegaKg += (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
-        tBodegaUnd += item.bodega_porc_und || 0;
-        tCocinaKg += (item.cocina_sin_porc_kg || 0) + (item.cocina_porc_kg || 0);
-        tCocinaUnd += item.cocina_porc_und || 0;
-        tValorCOP += (item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0);
+        tValorBodegaCOP += Math.round(pesoBodegaKg * (item.costo_unitario_kg || 0));
       }
     });
 
     return {
-      tBodegaKg,
-      tBodegaUnd,
-      tCocinaKg,
-      tCocinaUnd,
-      tValorCOP,
+      tValorBodegaCOP,
       totalItems: filteredItems.length
     };
   }, [filteredItems]);
@@ -330,39 +316,25 @@ export default function QuickStockModal({ isOpen, onClose }: Props) {
           </button>
         </div>
 
-        {/* Resumen KPI Compacto */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-          <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-2.5 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] text-blue-900/70 font-semibold block uppercase">Bodega Entero</span>
-              <span className="text-base font-extrabold text-blue-800">{kpis.tBodegaKg.toFixed(2)} Kg</span>
+        {/* Resumen Único: Valor en Pesos de Bodega (Sin incluir cocina) */}
+        <div className="bg-emerald-50/80 border border-emerald-200/90 rounded-2xl p-3.5 flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <TrendingUp className="w-5 h-5" />
             </div>
-            <Package className="w-5 h-5 text-blue-500/70" />
+            <div>
+              <span className="text-[11px] text-emerald-900/70 font-semibold block uppercase tracking-wider">
+                Valor Total del Inventario en Bodega
+              </span>
+              <span className="text-xl md:text-2xl font-black text-emerald-900">
+                ${formatMoney(kpis.tValorBodegaCOP)} <span className="text-xs font-semibold text-emerald-700/80">COP</span>
+              </span>
+            </div>
           </div>
-
-          <div className="bg-purple-50/70 border border-purple-200/80 rounded-xl p-2.5 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] text-purple-900/70 font-semibold block uppercase">Bodega Porciones</span>
-              <span className="text-base font-extrabold text-purple-800">{kpis.tBodegaUnd} und</span>
-            </div>
-            <Scissors className="w-5 h-5 text-purple-500/70" />
-          </div>
-
-          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-2.5 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] text-amber-900/70 font-semibold block uppercase">En Cocina</span>
-              <span className="text-base font-extrabold text-amber-900">{kpis.tCocinaUnd} und</span>
-              <span className="text-[9.5px] text-amber-700/80 block">({kpis.tCocinaKg.toFixed(1)} Kg)</span>
-            </div>
-            <CookingPot className="w-5 h-5 text-amber-600/70" />
-          </div>
-
-          <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-2.5 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] text-emerald-900/70 font-semibold block uppercase">Valor en Bodega</span>
-              <span className="text-base font-extrabold text-emerald-800">${formatMoney(kpis.tValorCOP)}</span>
-            </div>
-            <TrendingUp className="w-5 h-5 text-emerald-600/70" />
+          <div className="text-right text-[11px] text-emerald-900/70 font-medium hidden sm:block">
+            <span className="bg-white/80 px-2.5 py-1 rounded-lg border border-emerald-200 text-emerald-950 font-bold">
+              {filteredItems.length} insumos listados
+            </span>
           </div>
         </div>
 
