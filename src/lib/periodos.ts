@@ -289,6 +289,7 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
 
   const stockMap: Record<string, {
     insumo_id: string;
+    costo_unitario_kg: number;
     bodega_sin_porcionar_kg: number;
     bodega_porcionado_und: number;
     bodega_porcionado_kg: number;
@@ -316,6 +317,7 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
     stockMap[c.id] = {
       insumo_id: c.id,
       peso_std: pesoStd,
+      costo_unitario_kg: Number(c.costo_unitario_kg) || 0,
       bodega_sin_porcionar_kg: bSin,
       bodega_porcionado_und: bUnd,
       bodega_porcionado_kg: bKg,
@@ -394,8 +396,28 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
       st.bodega_sin_porcionar_kg = Math.max(0, st.bodega_sin_porcionar_kg - cantKg);
       st.bodega_porcionado_und += porcUnd;
       st.bodega_porcionado_kg += (porcKg || (porcUnd * st.peso_std));
-      st.merma_acumulada_kg += Number(m.merma_kg) || 0;
-      st.merma_acumulada_pesos += Number(m.merma_pesos) || 0;
+      const mKg = Number(m.merma_kg) || 0;
+      st.merma_acumulada_kg += mKg;
+      st.merma_acumulada_pesos += Number(m.merma_pesos) || Math.round(mKg * (st.costo_unitario_kg || Number(m.costo_unitario_kg) || 0));
+    } else if (tipo === 'BAJA_MERMA' || tipo === 'DESPERDICIO') {
+      const mKg = Number(m.merma_kg) || (porcUnd > 0 ? (porcKg || (porcUnd * st.peso_std)) : cantKg);
+      st.merma_acumulada_kg += mKg;
+      st.merma_acumulada_pesos += Math.round(mKg * (st.costo_unitario_kg || Number(m.costo_unitario_kg) || 0));
+      if (origen.includes('COCINA')) {
+        if (porcUnd > 0) {
+          st.cocina_porcionado_und = Math.max(0, st.cocina_porcionado_und - porcUnd);
+          st.cocina_porcionado_kg = Math.max(0, st.cocina_porcionado_kg - (porcKg || (porcUnd * st.peso_std)));
+        } else if (cantKg > 0) {
+          st.cocina_sin_porcionar_kg = Math.max(0, st.cocina_sin_porcionar_kg - cantKg);
+        }
+      } else {
+        if (porcUnd > 0) {
+          st.bodega_porcionado_und = Math.max(0, st.bodega_porcionado_und - porcUnd);
+          st.bodega_porcionado_kg = Math.max(0, st.bodega_porcionado_kg - (porcKg || (porcUnd * st.peso_std)));
+        } else if (cantKg > 0) {
+          st.bodega_sin_porcionar_kg = Math.max(0, st.bodega_sin_porcionar_kg - cantKg);
+        }
+      }
     } else if (tipo === 'TRASLADO_COCINA' || tipo === 'TRASLADO_A_COCINA' || tipo === 'TRASLADO') {
       if (porcUnd > 0) {
         const u = porcUnd;

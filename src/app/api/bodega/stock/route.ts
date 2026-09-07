@@ -20,15 +20,17 @@ export async function GET() {
     // 2. Obtener mermas acumuladas de movimientos
     const { data: mermasData } = await supabase
       .from('movimientos_inventario')
-      .select('insumo_id, merma_kg, merma_pesos')
+      .select('insumo_id, merma_kg, costo_unitario_kg')
       .gt('merma_kg', 0);
 
     const mermasMap = new Map<string, { mermaKg: number; mermaPesos: number }>();
     (mermasData || []).forEach((m: any) => {
       const id = String(m.insumo_id);
       const cur = mermasMap.get(id) || { mermaKg: 0, mermaPesos: 0 };
-      cur.mermaKg += parseFloat(m.merma_kg) || 0;
-      cur.mermaPesos += parseFloat(m.merma_pesos) || 0;
+      const mKg = parseFloat(m.merma_kg) || 0;
+      const cKg = parseFloat(m.costo_unitario_kg) || 0;
+      cur.mermaKg += mKg;
+      cur.mermaPesos += Math.round(mKg * cKg);
       mermasMap.set(id, cur);
     });
 

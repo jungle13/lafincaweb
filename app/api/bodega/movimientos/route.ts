@@ -172,7 +172,6 @@ export async function POST(request: Request) {
       insertMovPayload.porciones_und = porciones;
       insertMovPayload.peso_porciones_kg = pesoPorcionesKg;
       insertMovPayload.merma_kg = mermaKg;
-      insertMovPayload.merma_pesos = mermaPesos;
       insertMovPayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
       insertMovPayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
       insertMovPayload.bodega_porc_und_anterior = prevBPorcUnd;
@@ -221,7 +220,6 @@ export async function POST(request: Request) {
           porciones_und: porcionesAuto,
           peso_porciones_kg: pesoPorcionesAutoKg,
           merma_kg: mermaAutoKg,
-          merma_pesos: mermaAutoKg * costoUnitarioKg,
           bodega_sin_porc_anterior_kg: prevBSinPorc,
           bodega_sin_porc_nuevo_kg: bSinPorcAfterPorc,
           bodega_porc_und_anterior: prevBPorcUnd,
@@ -410,7 +408,6 @@ export async function POST(request: Request) {
       }
 
       insertMovPayload.merma_kg = mermaKg || (isEntero ? cantidad : 0);
-      insertMovPayload.merma_pesos = mermaPesos;
       insertMovPayload.valor_total_movimiento = mermaPesos;
       insertMovPayload.observaciones = body.observaciones || `Baja por ${motivo} en ${ubicacion}: ${cantidad} ${isEntero ? 'Kg' : 'porciones'}`;
       movsToInsert = [insertMovPayload];
