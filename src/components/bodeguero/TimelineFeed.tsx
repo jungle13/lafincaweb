@@ -967,6 +967,10 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                                   typeTag = 'bg-orange-100 text-orange-800 border-orange-200';
                                   typeLabel = '4. TRASLADO COCINA';
                                   qtyText = m.porciones_und ? `${m.porciones_und} und (${parseFloat(String(m.peso_porciones_kg || 0)).toFixed(2)} Kg)` : `${parseFloat(String(m.cant_sin_porcionar_kg || 0)).toFixed(2)} Kg`;
+                                } else if (tipo === 'BAJA_MERMA' || tipo === 'DESPERDICIO') {
+                                  typeTag = 'bg-rose-100 text-rose-800 border-rose-200';
+                                  typeLabel = '5. MERMA / BAJA';
+                                  qtyText = m.porciones_und ? `-${m.porciones_und} und` : `-${parseFloat(String(m.cant_sin_porcionar_kg || m.merma_kg || 0)).toFixed(2)} Kg`;
                                 }
 
                                 // VALIDACIÓN Y COHERENCIA DE STOCK SECUENCIAL
@@ -1083,6 +1087,43 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
                                               ⚠️ Stock insuficiente
                                             </span>
                                           )}
+                                        </div>
+                                      );
+                                    }
+                                  } else if (tipo === 'BAJA_MERMA' || tipo === 'DESPERDICIO') {
+                                    const origen = m.origen || 'BODEGA';
+                                    if (origen.includes('PORCIONADO') || porcUnd > 0) {
+                                      const startUnd = origen.includes('COCINA') ? runningCPorcUnd : runningBPorcUnd;
+                                      const resultUnd = startUnd - porcUnd;
+                                      isStockInsufficient = resultUnd < 0;
+                                      if (origen.includes('COCINA')) {
+                                        runningCPorcUnd = Math.max(0, resultUnd);
+                                      } else {
+                                        runningBPorcUnd = Math.max(0, resultUnd);
+                                      }
+                                      stockImpactHtml = (
+                                        <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-slate-500">Baja en {origen.includes('COCINA') ? 'Cocina' : 'Bodega'}:</span>
+                                          <span>{startUnd} und</span>
+                                          <span className="text-slate-400">➔</span>
+                                          <span className="text-rose-700 font-medium">{Math.max(0, resultUnd)} und</span>
+                                        </div>
+                                      );
+                                    } else {
+                                      const startKg = origen.includes('COCINA') ? runningCSinPorc : runningBSinPorc;
+                                      const resultKg = startKg - cantKg;
+                                      isStockInsufficient = resultKg < 0;
+                                      if (origen.includes('COCINA')) {
+                                        runningCSinPorc = Math.max(0, resultKg);
+                                      } else {
+                                        runningBSinPorc = Math.max(0, resultKg);
+                                      }
+                                      stockImpactHtml = (
+                                        <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-slate-500">Baja en {origen.includes('COCINA') ? 'Cocina' : 'Bodega'}:</span>
+                                          <span>{startKg.toFixed(2)} Kg</span>
+                                          <span className="text-slate-400">➔</span>
+                                          <span className="text-rose-700 font-medium">{Math.max(0, resultKg).toFixed(2)} Kg</span>
                                         </div>
                                       );
                                     }

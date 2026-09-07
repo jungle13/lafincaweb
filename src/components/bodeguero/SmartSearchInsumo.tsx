@@ -43,12 +43,24 @@ export default function SmartSearchInsumo({
   }, []);
 
   const cleanQuery = normalizeStr(query);
-  const filtered = insumos.filter((item) => {
-    if (!cleanQuery) return true;
-    const name = normalizeStr(item.insumo);
-    const cat = normalizeStr(item.categoria);
-    return name.includes(cleanQuery) || cat.includes(cleanQuery);
-  });
+  const filtered = insumos
+    .filter((item) => {
+      if (!cleanQuery) return true;
+      const name = normalizeStr(item.insumo);
+      const cat = normalizeStr(item.categoria);
+      return name.includes(cleanQuery) || cat.includes(cleanQuery);
+    })
+    .sort((a, b) => {
+      // Priorizar items que tienen stock en bodega
+      const isUndA = a.unidad_medida?.toLowerCase() === 'und' || a.categoria?.toLowerCase().includes('embutido') || a.insumo?.toLowerCase().includes('chorizo') || a.insumo?.toLowerCase().includes('tamal');
+      const isUndB = b.unidad_medida?.toLowerCase() === 'und' || b.categoria?.toLowerCase().includes('embutido') || b.insumo?.toLowerCase().includes('chorizo') || b.insumo?.toLowerCase().includes('tamal');
+      const stockA = isUndA ? ((a.bodega_sin_porc_kg || 0) + (a.bodega_porc_und || 0)) : ((a.bodega_sin_porc_kg || 0) + (a.bodega_porc_kg || 0));
+      const stockB = isUndB ? ((b.bodega_sin_porc_kg || 0) + (b.bodega_porc_und || 0)) : ((b.bodega_sin_porc_kg || 0) + (b.bodega_porc_kg || 0));
+      
+      if (stockA > 0 && stockB <= 0) return -1;
+      if (stockA <= 0 && stockB > 0) return 1;
+      return a.insumo.localeCompare(b.insumo);
+    });
 
   const handleClear = () => {
     setQuery('');
@@ -105,6 +117,13 @@ export default function SmartSearchInsumo({
           ) : (
             filtered.map((item) => {
               const isSelected = selectedInsumo?.insumo_id === item.insumo_id;
+              const isUnd = item.unidad_medida?.toLowerCase() === 'und' || 
+                            item.categoria?.toLowerCase().includes('embutido') || 
+                            item.categoria?.toLowerCase().includes('elaborado') || 
+                            item.insumo?.toLowerCase().includes('chorizo') || 
+                            item.insumo?.toLowerCase().includes('tamal');
+              const totalUnits = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
+              const hasStock = isUnd ? totalUnits > 0 : ((item.bodega_sin_porc_kg || 0) > 0 || (item.bodega_porc_und || 0) > 0);
 
               return (
                 <div
@@ -121,6 +140,7 @@ export default function SmartSearchInsumo({
                   <div>
                     <div className="font-semibold text-slate-900 flex items-center gap-1.5 text-xs md:text-sm">
                       <span>{item.insumo}</span>
+                      {isUnd && <span className="text-[9px] font-bold px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded">UND</span>}
                       {isSelected && <Check className="w-3.5 h-3.5 text-orange-600 inline" />}
                     </div>
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
@@ -129,16 +149,24 @@ export default function SmartSearchInsumo({
                   </div>
 
                   <div className="text-right">
-                    <div className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center justify-end gap-1">
-                      <span>Bodega: {item.bodega_sin_porc_kg.toFixed(1)} Kg | {item.bodega_porc_und} und</span>
+                    <div className={`text-[11px] font-semibold px-2 py-0.5 rounded border flex items-center justify-end gap-1 ${
+                      hasStock 
+                        ? 'text-blue-700 bg-blue-50 border-blue-200' 
+                        : 'text-slate-400 bg-slate-50 border-slate-200'
+                    }`}>
+                      {isUnd ? (
+                        <span>Bodega: <strong>{totalUnits} und</strong></span>
+                      ) : (
+                        <span>Bodega: <strong>{item.bodega_sin_porc_kg.toFixed(1)} Kg</strong> | <strong>{item.bodega_porc_und} und</strong></span>
+                      )}
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5 flex items-center justify-end gap-1.5">
-                      {item.peso_porc_gramos > 0 && (
+                      {!isUnd && item.peso_porc_gramos > 0 && (
                         <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/60">
                           {item.peso_porc_gramos}g/porc
                         </span>
                       )}
-                      <span>${formatMoney(item.costo_unitario_kg)}/Kg</span>
+                      <span>${formatMoney(item.costo_unitario_kg)}/{isUnd ? 'und' : 'Kg'}</span>
                     </div>
                   </div>
                 </div>

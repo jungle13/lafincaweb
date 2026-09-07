@@ -352,6 +352,68 @@ export async function POST(request: Request) {
       }
       insertMovPayload.observaciones = body.observaciones || `Devolución a bodega: ${cantidad} ${!isEntero ? 'porciones' : 'Kg'}`;
       movsToInsert = [insertMovPayload];
+    } else if (tipo === 'BAJA_MERMA' || tipo === 'DESPERDICIO') {
+      const ubicacion = body.ubicacion || 'BODEGA';
+      const isEntero = body.tipoProducto === 'ENTERO';
+      const cantidad = isEntero ? (parseFloat(body.cantidad) || 0) : (parseInt(body.cantidad) || 0);
+      const mermaKg = parseFloat(body.mermaKg) || 0;
+      const mermaPesos = parseFloat(body.mermaPesos) || Math.round((mermaKg || (isEntero ? cantidad : 0)) * costoUnitarioKg);
+      const motivo = body.motivo || 'DESPERDICIO_OPERATIVO';
+
+      if (ubicacion === 'BODEGA') {
+        if (isEntero) {
+          const newBSinPorc = Math.max(0, prevBSinPorc - cantidad);
+          updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
+          insertMovPayload.origen = 'BODEGA_ENTERO';
+          insertMovPayload.destino = 'MERMA_DESPERDICIO';
+          insertMovPayload.cant_sin_porcionar_kg = cantidad;
+          insertMovPayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
+          insertMovPayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
+        } else {
+          const newBPorcUnd = Math.max(0, prevBPorcUnd - cantidad);
+          const newBPorcKg = Math.max(0, prevBPorcKg - mermaKg);
+          updateStockPayload.bodega_porcionado_und = newBPorcUnd;
+          updateStockPayload.bodega_porcionado_kg = newBPorcKg;
+          insertMovPayload.origen = 'BODEGA_PORCIONADO';
+          insertMovPayload.destino = 'MERMA_DESPERDICIO';
+          insertMovPayload.porciones_und = cantidad;
+          insertMovPayload.peso_porciones_kg = mermaKg;
+          insertMovPayload.bodega_porc_und_anterior = prevBPorcUnd;
+          insertMovPayload.bodega_porc_und_nuevo = newBPorcUnd;
+          insertMovPayload.bodega_porc_kg_anterior = prevBPorcKg;
+          insertMovPayload.bodega_porc_kg_nuevo = newBPorcKg;
+        }
+      } else {
+        // COCINA
+        if (isEntero) {
+          const newCSinPorc = Math.max(0, prevCSinPorc - cantidad);
+          updateStockPayload.cocina_sin_porcionar_kg = newCSinPorc;
+          insertMovPayload.origen = 'COCINA_ENTERO';
+          insertMovPayload.destino = 'MERMA_DESPERDICIO';
+          insertMovPayload.cant_sin_porcionar_kg = cantidad;
+          insertMovPayload.cocina_sin_porc_anterior_kg = prevCSinPorc;
+          insertMovPayload.cocina_sin_porc_nuevo_kg = newCSinPorc;
+        } else {
+          const newCPorcUnd = Math.max(0, prevCPorcUnd - cantidad);
+          const newCPorcKg = Math.max(0, prevCPorcKg - mermaKg);
+          updateStockPayload.cocina_porcionado_und = newCPorcUnd;
+          updateStockPayload.cocina_porcionado_kg = newCPorcKg;
+          insertMovPayload.origen = 'COCINA_PORCIONADO';
+          insertMovPayload.destino = 'MERMA_DESPERDICIO';
+          insertMovPayload.porciones_und = cantidad;
+          insertMovPayload.peso_porciones_kg = mermaKg;
+          insertMovPayload.cocina_porc_und_anterior = prevCPorcUnd;
+          insertMovPayload.cocina_porc_und_nuevo = newCPorcUnd;
+          insertMovPayload.cocina_porc_kg_anterior = prevCPorcKg;
+          insertMovPayload.cocina_porc_kg_nuevo = newCPorcKg;
+        }
+      }
+
+      insertMovPayload.merma_kg = mermaKg || (isEntero ? cantidad : 0);
+      insertMovPayload.merma_pesos = mermaPesos;
+      insertMovPayload.valor_total_movimiento = mermaPesos;
+      insertMovPayload.observaciones = body.observaciones || `Baja por ${motivo} en ${ubicacion}: ${cantidad} ${isEntero ? 'Kg' : 'porciones'}`;
+      movsToInsert = [insertMovPayload];
     }
 
     // Actualización de stock_actual mediante upsert

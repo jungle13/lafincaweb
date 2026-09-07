@@ -1,8 +1,8 @@
 'use client';
 
-import { PlusCircle, Scissors, ArrowRightCircle, CornerDownLeft } from 'lucide-react';
+import { PlusCircle, Scissors, ArrowRightCircle, CornerDownLeft, Trash2 } from 'lucide-react';
 
-export type OperationType = 'ENTRADA_COMPRA' | 'PORCIONADO' | 'TRASLADO_COCINA' | 'DEVOLUCION_COCINA';
+export type OperationType = 'ENTRADA_COMPRA' | 'PORCIONADO' | 'TRASLADO_COCINA' | 'DEVOLUCION_COCINA' | 'BAJA_MERMA';
 
 interface Props {
   activeTab: OperationType;
@@ -14,11 +14,12 @@ const TABS = [
   { id: 'PORCIONADO' as OperationType, label: '2. Porcionado', icon: Scissors },
   { id: 'TRASLADO_COCINA' as OperationType, label: '3. A Cocina', icon: ArrowRightCircle },
   { id: 'DEVOLUCION_COCINA' as OperationType, label: '4. Devolución', icon: CornerDownLeft },
+  { id: 'BAJA_MERMA' as OperationType, label: '5. Merma/Baja', icon: Trash2 },
 ];
 
 export default function OperationTabs({ activeTab, onChangeTab }: Props) {
   return (
-    <div className="grid grid-cols-4 bg-slate-50/80 border-b border-slate-200">
+    <div className="grid grid-cols-2 sm:grid-cols-5 bg-slate-50/80 border-b border-slate-200">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;

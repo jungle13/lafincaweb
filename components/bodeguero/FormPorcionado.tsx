@@ -290,6 +290,23 @@ export default function FormPorcionado({ insumos, onSuccess }: Props) {
                   (Merma: {mermaFinal.toFixed(2)} Kg • ${formatMoney(valorMerma)})
                 </span>
               </div>
+              {kgProcNum > 0 && (
+                <div className="mt-1">
+                  {((mermaFinal / kgProcNum) * 100) > 18 ? (
+                    <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px] inline-flex items-center gap-1 border border-rose-200">
+                      <AlertTriangle className="w-3 h-3" /> Merma Alta ({((mermaFinal / kgProcNum) * 100).toFixed(1)}%) - Revisar corte
+                    </span>
+                  ) : ((mermaFinal / kgProcNum) * 100) > 10 ? (
+                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-medium text-[10px] inline-flex items-center gap-1 border border-amber-200">
+                      Merma Moderada ({((mermaFinal / kgProcNum) * 100).toFixed(1)}%)
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded font-medium text-[10px] inline-flex items-center gap-1 border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3" /> Merma Óptima ({((mermaFinal / kgProcNum) * 100).toFixed(1)}%)
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Gramaje Promedio */}

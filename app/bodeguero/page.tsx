@@ -6,6 +6,7 @@ import FormEntradaCompra from '@/components/bodeguero/FormEntradaCompra';
 import FormPorcionado from '@/components/bodeguero/FormPorcionado';
 import FormTrasladoCocina from '@/components/bodeguero/FormTrasladoCocina';
 import FormDevolucionCocina from '@/components/bodeguero/FormDevolucionCocina';
+import FormMermaBaja from '@/components/bodeguero/FormMermaBaja';
 import TimelineFeed from '@/components/bodeguero/TimelineFeed';
 import { InsumoItem, MovimientoItem } from '@/types';
 import { Loader2, Lock } from 'lucide-react';
@@ -171,6 +172,9 @@ export default function BodegueroPage() {
               )}
               {activeTab === 'DEVOLUCION_COCINA' && (
                 <FormDevolucionCocina insumos={insumos} onSuccess={loadData} />
+              )}
+              {activeTab === 'BAJA_MERMA' && (
+                <FormMermaBaja insumos={insumos} onSuccess={loadData} />
               )}
             </div>
           </>
