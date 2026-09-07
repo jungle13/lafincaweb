@@ -725,11 +725,11 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
   return (
     <div className="space-y-4 font-normal">
       {/* 🗂️ PESTAÑAS PRINCIPALES DEL FEED */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-1 overflow-x-auto no-scrollbar touch-pan-x">
         <button
           type="button"
           onClick={() => setActiveFeedTab('PENDIENTES')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
             activeFeedTab === 'PENDIENTES'
               ? 'border-amber-600 text-amber-900 bg-amber-50/60 rounded-t-lg'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -747,7 +747,7 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
         <button
           type="button"
           onClick={() => setActiveFeedTab('HISTORIAL')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
             activeFeedTab === 'HISTORIAL'
               ? 'border-orange-500 text-orange-600 bg-orange-50/60 rounded-t-lg'
               : 'border-transparent text-slate-500 hover:text-slate-800'
