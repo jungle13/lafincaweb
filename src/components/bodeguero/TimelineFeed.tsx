@@ -225,14 +225,15 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
     });
   }, [allPendingMovs, pendingDateFilter, todayStr]);
 
-  // 5. Agrupar pendientes por carne y ordenar alfabéticamente de manera 100% estable
+  // 5. Agrupar pendientes por carne y ordenar según secuencia de registro (orden del formato físico)
   const groupedPendingMeats = useMemo(() => {
-    const groups = new Map<string, { insumoId: string; carneName: string; insumoObj?: InsumoItem; movs: MovimientoItem[] }>();
+    const groups = new Map<string, { insumoId: string; carneName: string; insumoObj?: InsumoItem; movs: MovimientoItem[]; minTimestamp: string; firstIndex: number }>();
 
-    filteredPendingMovs.forEach((m) => {
+    filteredPendingMovs.forEach((m, idx) => {
       const idKey = String(m.insumo_id);
       const name = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
       const foundInsumo = insumos.find((i) => String(i.insumo_id) === idKey);
+      const timeVal = m.fecha_hora || m.fecha || '';
 
       if (!groups.has(idKey)) {
         groups.set(idKey, {
@@ -240,9 +241,15 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
           carneName: name,
           insumoObj: foundInsumo,
           movs: [m],
+          minTimestamp: timeVal,
+          firstIndex: idx,
         });
       } else {
-        groups.get(idKey)!.movs.push(m);
+        const g = groups.get(idKey)!;
+        g.movs.push(m);
+        if (timeVal && (!g.minTimestamp || timeVal < g.minTimestamp)) {
+          g.minTimestamp = timeVal;
+        }
       }
     });
 
@@ -265,7 +272,12 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
       });
     });
 
-    return Array.from(groups.values()).sort((a, b) => a.carneName.localeCompare(b.carneName));
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.minTimestamp && b.minTimestamp && a.minTimestamp !== b.minTimestamp) {
+        return a.minTimestamp.localeCompare(b.minTimestamp);
+      }
+      return a.firstIndex - b.firstIndex;
+    });
   }, [filteredPendingMovs, insumos]);
 
   // 6. Filtrar aprobados por fecha seleccionada en los Badges o selector
@@ -277,21 +289,30 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
     });
   }, [approvedMovs, filterDate]);
 
-  // 7. Extraer carnes únicas con movimientos aprobados en esta fecha
+  // 7. Extraer carnes únicas con movimientos aprobados en esta fecha en orden de registro
   const availableMeats = useMemo(() => {
-    const map = new Map<string, { id: string | number; name: string; count: number }>();
-    dateFilteredApproved.forEach((m) => {
+    const map = new Map<string, { id: string | number; name: string; count: number; minTimestamp: string; firstIndex: number }>();
+    dateFilteredApproved.forEach((m, idx) => {
       const name = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
       const id = m.insumo_id;
       const key = String(id);
+      const timeVal = m.fecha_hora || m.fecha || '';
       if (!map.has(key)) {
-        map.set(key, { id, name, count: 1 });
+        map.set(key, { id, name, count: 1, minTimestamp: timeVal, firstIndex: idx });
       } else {
         const item = map.get(key)!;
         item.count += 1;
+        if (timeVal && (!item.minTimestamp || timeVal < item.minTimestamp)) {
+          item.minTimestamp = timeVal;
+        }
       }
     });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.minTimestamp && b.minTimestamp && a.minTimestamp !== b.minTimestamp) {
+        return a.minTimestamp.localeCompare(b.minTimestamp);
+      }
+      return a.firstIndex - b.firstIndex;
+    });
   }, [dateFilteredApproved]);
 
   // 8. Carnes filtradas para el buscador predictivo
@@ -307,15 +328,16 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
     return dateFilteredApproved.filter((m) => String(m.insumo_id) === String(meatFilter));
   }, [dateFilteredApproved, meatFilter]);
 
-  // 10. Agrupar movimientos APROBADOS por insumo con orden lógico
+  // 10. Agrupar movimientos APROBADOS por insumo en la secuencia cronológica de registro (orden del formato físico)
   const groupedApprovedMeats = useMemo(() => {
-    const groups = new Map<string, { insumoId: string; carneName: string; categoria?: string; insumoObj?: InsumoItem; movs: MovimientoItem[] }>();
+    const groups = new Map<string, { insumoId: string; carneName: string; categoria?: string; insumoObj?: InsumoItem; movs: MovimientoItem[]; minTimestamp: string; firstIndex: number }>();
 
-    finalApprovedMovs.forEach((m) => {
+    finalApprovedMovs.forEach((m, idx) => {
       const idKey = String(m.insumo_id);
       const name = m.catalogo_insumos?.nombre || m.insumo_nombre || `Insumo #${m.insumo_id}`;
       const cat = m.catalogo_insumos?.categoria || '';
       const foundInsumo = insumos.find((i) => String(i.insumo_id) === idKey);
+      const timeVal = m.fecha_hora || m.fecha || '';
 
       if (!groups.has(idKey)) {
         groups.set(idKey, {
@@ -324,9 +346,15 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
           categoria: cat,
           insumoObj: foundInsumo,
           movs: [m],
+          minTimestamp: timeVal,
+          firstIndex: idx,
         });
       } else {
-        groups.get(idKey)!.movs.push(m);
+        const g = groups.get(idKey)!;
+        g.movs.push(m);
+        if (timeVal && (!g.minTimestamp || timeVal < g.minTimestamp)) {
+          g.minTimestamp = timeVal;
+        }
       }
     });
 
@@ -352,7 +380,12 @@ export default function TimelineFeed({ movimientos, filterDate, onDateChange, on
       });
     });
 
-    return Array.from(groups.values()).sort((a, b) => a.carneName.localeCompare(b.carneName));
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.minTimestamp && b.minTimestamp && a.minTimestamp !== b.minTimestamp) {
+        return a.minTimestamp.localeCompare(b.minTimestamp);
+      }
+      return a.firstIndex - b.firstIndex;
+    });
   }, [finalApprovedMovs, insumos]);
 
   const handleSelectMeat = (id: string, name: string) => {
