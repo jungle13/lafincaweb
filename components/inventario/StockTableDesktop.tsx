@@ -184,7 +184,15 @@ export default function StockTableDesktop({ insumos }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-normal">
             {sortedInsumos.map((item) => {
-              const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
+              const isUnd = item.unidad_medida?.toLowerCase() === 'und' || 
+                            item.categoria?.toLowerCase().includes('embutido') || 
+                            item.categoria?.toLowerCase().includes('elaborado') || 
+                            item.insumo?.toLowerCase().includes('chorizo') || 
+                            item.insumo?.toLowerCase().includes('tamal');
+              const totalUnitsBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
+              const valorBodega = isUnd 
+                ? (totalUnitsBodega * (item.costo_unitario_kg || 0))
+                : (item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0)));
               const acumUnd = item.traslado_cocina_acumulado_und || 0;
               const acumKg = item.traslado_cocina_acumulado_kg || 0;
               const cocinaUnd = item.cocina_porc_und || 0;
@@ -199,59 +207,76 @@ export default function StockTableDesktop({ insumos }: Props) {
                   <td className="py-2.5 px-3">
                     <div className="font-medium text-slate-900 text-xs md:text-sm">{item.insumo}</div>
                     <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">
-                      {item.categoria}
+                      {item.categoria} {isUnd && '• UNIDADES'}
                     </div>
                   </td>
 
                   {/* Bodega Entero */}
                   <td className="py-2.5 px-3 text-right text-blue-600 font-normal">
-                    {item.bodega_sin_porc_kg.toFixed(2)} <span className="text-[10px] text-slate-400">Kg</span>
+                    {isUnd ? (
+                      <span className="text-slate-300">-</span>
+                    ) : (
+                      <>{item.bodega_sin_porc_kg.toFixed(2)} <span className="text-[10px] text-slate-400">Kg</span></>
+                    )}
                   </td>
 
                   {/* Bodega Porciones */}
                   <td className="py-2.5 px-3 text-right font-normal">
-                    <span className="text-purple-600 font-semibold">{item.bodega_porc_und}</span>{' '}
+                    <span className="text-purple-600 font-semibold">{isUnd ? totalUnitsBodega : item.bodega_porc_und}</span>{' '}
                     <span className="text-[10px] text-slate-400">und</span>
-                    <div className="text-[10px] text-slate-400">
-                      {item.bodega_porc_kg.toFixed(2)} Kg
-                    </div>
+                    {!isUnd && (
+                      <div className="text-[10px] text-slate-400">
+                        {item.bodega_porc_kg.toFixed(2)} Kg
+                      </div>
+                    )}
                   </td>
 
                   {/* Total Bodega */}
                   <td className="py-2.5 px-3 text-right text-emerald-600 font-medium">
-                    {item.peso_total_bodega_kg.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">Kg</span>
+                    {isUnd ? (
+                      <span className="text-purple-700 font-bold">{totalUnitsBodega} <span className="text-[10px] text-slate-400 font-normal">und</span></span>
+                    ) : (
+                      <>{item.peso_total_bodega_kg.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">Kg</span></>
+                    )}
                   </td>
 
                   {/* Acumulado Cocina (Total entregado en el periodo) */}
                   <td className="py-2.5 px-3 text-right font-normal bg-amber-50/30">
                     <span className="text-amber-800 font-semibold">{acumUnd}</span>{' '}
                     <span className="text-[10px] text-slate-400">und</span>
-                    <div className="text-[10px] text-amber-900 font-medium">
-                      {acumKg.toFixed(2)} Kg
-                    </div>
+                    {!isUnd && (
+                      <div className="text-[10px] text-amber-900 font-medium">
+                        {acumKg.toFixed(2)} Kg
+                      </div>
+                    )}
                   </td>
 
                   {/* En Cocina (Existencia actual / a la fecha de corte) */}
                   <td className="py-2.5 px-3 text-right font-normal">
                     <span className="text-slate-800 font-semibold">{cocinaUnd}</span>{' '}
                     <span className="text-[10px] text-slate-400">und</span>
-                    <div className="text-[10px] text-slate-500 font-medium">
-                      {cocinaKg.toFixed(2)} Kg
-                    </div>
+                    {!isUnd && (
+                      <div className="text-[10px] text-slate-500 font-medium">
+                        {cocinaKg.toFixed(2)} Kg
+                      </div>
+                    )}
                   </td>
 
                   {/* Merma Acumulada */}
                   <td className="py-2.5 px-3 text-right text-rose-600 font-normal">
-                    {item.merma_acumulada_kg > 0 ? (
+                    {isUnd ? (
+                      <span className="text-slate-300">-</span>
+                    ) : item.merma_acumulada_kg > 0 ? (
                       `${item.merma_acumulada_kg.toFixed(2)} Kg`
                     ) : (
                       <span className="text-slate-300">0.00 Kg</span>
                     )}
                   </td>
 
-                  {/* Costo / Kg */}
+                  {/* Costo / Kg o Und */}
                   <td className="py-2.5 px-3 text-right text-slate-600 font-normal">
                     $ {formatMoney(item.costo_unitario_kg)}
+                    <span className="text-[10px] text-slate-400 block">{isUnd ? '/ und' : '/ Kg'}</span>
                   </td>
 
                   {/* Valor Stock (Solo Bodega) */}

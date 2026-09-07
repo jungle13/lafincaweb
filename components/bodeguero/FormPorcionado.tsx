@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function FormPorcionado({ insumos, onSuccess }: Props) {
-  const [selectedInsumoId, setSelectedInsumoId] = useState<number | null>(null);
+  const [selectedInsumoId, setSelectedInsumoId] = useState<string | number | null>(null);
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [kgAProcesar, setKgAProcesar] = useState('');
   const [porciones, setPorciones] = useState('');
@@ -24,7 +24,7 @@ export default function FormPorcionado({ insumos, onSuccess }: Props) {
   // Mantener siempre el insumo sincronizado con la última actualización de inventario
   const selectedInsumo = useMemo(() => {
     if (!selectedInsumoId) return null;
-    return insumos.find((i) => i.insumo_id === selectedInsumoId) || null;
+    return insumos.find((i) => String(i.insumo_id) === String(selectedInsumoId)) || null;
   }, [insumos, selectedInsumoId]);
 
   const gramosStd = selectedInsumo?.peso_porc_gramos || 350;

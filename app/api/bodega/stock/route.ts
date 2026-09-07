@@ -51,6 +51,7 @@ export async function GET() {
         codigo: item.codigo,
         insumo: item.insumo,
         categoria: item.categoria || 'CARNE DE RES',
+        unidad_medida: item.unidad_medida || 'Kg',
         es_carne: item.es_carne !== false,
         costo_unitario_kg: costoKg,
         peso_porc_gramos: Math.round((parseFloat(item.peso_estandar_porcion_kg) || 0.35) * 1000),

@@ -30,14 +30,22 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
     return insumos.find((i) => String(i.insumo_id) === String(selectedInsumoId)) || null;
   }, [insumos, selectedInsumoId]);
 
+  const isUnd = useMemo(() => {
+    if (!selectedInsumo) return false;
+    const unidad = selectedInsumo.unidad_medida?.toLowerCase();
+    const cat = selectedInsumo.categoria?.toLowerCase() || '';
+    const name = selectedInsumo.insumo?.toLowerCase() || '';
+    return unidad === 'und' || cat.includes('embutido') || cat.includes('elaborado') || name.includes('chorizo') || name.includes('tamal');
+  }, [selectedInsumo]);
+
   const gramosStd = selectedInsumo?.peso_porc_gramos || 350;
-  const pesoEstKg = gramosStd / 1000;
+  const pesoEstKg = isUnd ? 1 : gramosStd / 1000;
   const costoKg = selectedInsumo?.costo_unitario_kg || 0;
 
   const cantNum = parseFloat(cantidad) || 0;
-  const pesoNum = parseFloat(pesoDespachado) || (cantNum * pesoEstKg);
-  const isEntero = tipoEntrega === 'ENTERO';
-  const valorDespacho = Math.round((isEntero ? cantNum : pesoNum) * costoKg);
+  const pesoNum = isUnd ? cantNum : (parseFloat(pesoDespachado) || (cantNum * pesoEstKg));
+  const isEntero = isUnd ? false : tipoEntrega === 'ENTERO';
+  const valorDespacho = Math.round(isUnd ? (cantNum * costoKg) : ((isEntero ? cantNum : pesoNum) * costoKg));
 
   // Kilos de carne entera que se usarían para el auto-porcionado
   const kgEnteroToUse = customKgEntero !== '' ? (parseFloat(customKgEntero) || 0) : pesoNum;
@@ -45,6 +53,11 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
 
   // Evaluar automáticamente si se requiere Auto-Porcionado al cambiar insumo o cantidad
   useEffect(() => {
+    if (isUnd) {
+      setAutoPorcionar(false);
+      setTipoEntrega('PORCIONADO');
+      return;
+    }
     if (!selectedInsumo || isEntero || cantNum <= 0) {
       if (isEntero) setAutoPorcionar(false);
       return;
@@ -63,14 +76,16 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
       // Si hay stock porcionado de sobra, por defecto toma de porcionado existente
       setAutoPorcionar(false);
     }
-  }, [selectedInsumo, cantNum, isEntero, pesoNum]);
+  }, [selectedInsumo, cantNum, isEntero, pesoNum, isUnd]);
 
   // 1. Manejo reactivo de Cantidad
   const handleCantChange = (val: string) => {
     setCantidad(val);
     const c = parseFloat(val) || 0;
     if (selectedInsumo && c > 0) {
-      if (isEntero) {
+      if (isUnd) {
+        setPesoDespachado('0');
+      } else if (isEntero) {
         setPesoDespachado(c.toFixed(2));
       } else {
         const autoKg = parseFloat((c * pesoEstKg).toFixed(2));
@@ -86,7 +101,7 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
   const handlePesoChange = (val: string) => {
     setPesoDespachado(val);
     const p = parseFloat(val) || 0;
-    if (selectedInsumo && p > 0) {
+    if (selectedInsumo && p > 0 && !isUnd) {
       if (isEntero) {
         if (!cantidad || parseFloat(cantidad) === 0) setCantidad(p.toFixed(2));
       } else if (!showAdvancedPorc) {
@@ -100,7 +115,12 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
     if (!selectedInsumo) return alert('Por favor selecciona una carne o insumo.');
     if (cantNum <= 0) return alert('Ingresa la cantidad a entregar.');
 
-    if (isEntero) {
+    if (isUnd) {
+      const dispUnd = (selectedInsumo.bodega_porc_und || 0) + (selectedInsumo.bodega_sin_porc_kg || 0);
+      if (dispUnd < cantNum) {
+        return alert(`Stock insuficiente en bodega. Solo hay ${dispUnd} unidades disponibles.`);
+      }
+    } else if (isEntero) {
       if (selectedInsumo.bodega_sin_porc_kg < cantNum) {
         return alert(`Stock insuficiente en bodega entero. Solo hay ${selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg.`);
       }
@@ -120,13 +140,13 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
         tipo: 'TRASLADO_COCINA',
         insumoId: selectedInsumo.insumo_id,
         fecha,
-        tipoEntrega,
+        tipoEntrega: isUnd ? 'PORCIONADO' : tipoEntrega,
         cantidad: cantNum,
-        pesoKg: isEntero ? cantNum : (parseFloat(pesoDespachado) || (cantNum * pesoEstKg)),
+        pesoKg: isUnd ? 0 : (isEntero ? cantNum : (parseFloat(pesoDespachado) || (cantNum * pesoEstKg))),
         observaciones: observaciones.trim() || undefined,
       };
 
-      if (!isEntero && autoPorcionar) {
+      if (!isEntero && !isUnd && autoPorcionar) {
         payload.autoPorcionar = true;
         payload.kgTomadosEntero = kgEnteroToUse;
         payload.porcionesAuto = cantNum;
@@ -180,26 +200,43 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
             <div>
               <span className="font-semibold text-orange-950">Catálogo:</span>{' '}
               <span className="text-orange-900">
-                1 porción estándar = <strong>{gramosStd} g</strong> ({pesoEstKg} Kg) • Costo: <strong>${formatMoney(costoKg)} / Kg</strong>
+                {isUnd ? (
+                  <>1 unidad = <strong>${formatMoney(costoKg)}</strong> / Und • Despacho directo por unidades</>
+                ) : (
+                  <>1 porción estándar = <strong>{gramosStd} g</strong> ({pesoEstKg} Kg) • Costo: <strong>${formatMoney(costoKg)} / Kg</strong></>
+                )}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-2 text-[11px] font-medium text-slate-700">
-            <span className="bg-white px-2.5 py-1 rounded-lg border border-orange-200 text-orange-950">
-              Bodega Entero: <strong>{selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg</strong>
-            </span>
-            <span className="bg-white px-2.5 py-1 rounded-lg border border-orange-200 text-orange-950">
-              Bodega Porc: <strong>{selectedInsumo.bodega_porc_und} u</strong> ({selectedInsumo.bodega_porc_kg.toFixed(2)}k)
-            </span>
-            <span className="bg-orange-100 text-orange-950 px-2.5 py-1 rounded-lg border border-orange-300">
-              Cocina Actual: <strong>{selectedInsumo.cocina_sin_porc_kg > 0 ? `${selectedInsumo.cocina_sin_porc_kg.toFixed(1)}k ent` : ''} {selectedInsumo.cocina_porc_und} u</strong>
-            </span>
+            {isUnd ? (
+              <>
+                <span className="bg-white px-2.5 py-1 rounded-lg border border-orange-200 text-orange-950">
+                  Bodega: <strong>{(selectedInsumo.bodega_porc_und || 0) + (selectedInsumo.bodega_sin_porc_kg || 0)} und</strong>
+                </span>
+                <span className="bg-orange-100 text-orange-950 px-2.5 py-1 rounded-lg border border-orange-300">
+                  Cocina Actual: <strong>{(selectedInsumo.cocina_porc_und || 0) + (selectedInsumo.cocina_sin_porc_kg || 0)} und</strong>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="bg-white px-2.5 py-1 rounded-lg border border-orange-200 text-orange-950">
+                  Bodega Entero: <strong>{selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg</strong>
+                </span>
+                <span className="bg-white px-2.5 py-1 rounded-lg border border-orange-200 text-orange-950">
+                  Bodega Porc: <strong>{selectedInsumo.bodega_porc_und} u</strong> ({selectedInsumo.bodega_porc_kg.toFixed(2)}k)
+                </span>
+                <span className="bg-orange-100 text-orange-950 px-2.5 py-1 rounded-lg border border-orange-300">
+                  Cocina Actual: <strong>{selectedInsumo.cocina_sin_porc_kg > 0 ? `${selectedInsumo.cocina_sin_porc_kg.toFixed(1)}k ent` : ''} {selectedInsumo.cocina_porc_und} u</strong>
+                </span>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* ⚡ NOTIFICACIÓN INTELIGENTE DE AUTO-PORCIONADO DIRECTO */}
-      {selectedInsumo && !isEntero && cantNum > 0 && autoPorcionar && (
+      {/* ⚡ NOTIFICACIÓN INTELIGENTE DE AUTO-PORCIONADO DIRECTO (Solo carnes en Kg) */}
+      {!isUnd && selectedInsumo && !isEntero && cantNum > 0 && autoPorcionar && (
         <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-300/80 rounded-xl space-y-2.5 text-xs animate-fade-in shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
@@ -280,8 +317,8 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
         </div>
       )}
 
-      {/* Si hay porciones en stock y el usuario quiere activar auto-porcionado manual */}
-      {selectedInsumo && !isEntero && cantNum > 0 && !autoPorcionar && selectedInsumo.bodega_sin_porc_kg > 0 && (
+      {/* Si hay porciones en stock y el usuario quiere activar auto-porcionado manual (Solo Kg) */}
+      {!isUnd && selectedInsumo && !isEntero && cantNum > 0 && !autoPorcionar && selectedInsumo.bodega_sin_porc_kg > 0 && (
         <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           <span className="text-slate-600">
             Usando stock porcionado existente ({selectedInsumo.bodega_porc_und} und disp).
@@ -300,7 +337,7 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isUnd ? 'lg:grid-cols-3' : 'lg:grid-cols-5'} gap-3`}>
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1">Fecha de Traslado</label>
           <input
@@ -312,31 +349,35 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-slate-700 mb-1">Tipo de Entrega</label>
-          <select
-            value={tipoEntrega}
-            onChange={(e) => {
-              const t = e.target.value as any;
-              setTipoEntrega(t);
-              setCantidad('');
-              setPesoDespachado('');
-            }}
-            className="w-full h-9 px-2.5 text-xs font-medium rounded-lg border border-slate-300 outline-none focus:border-orange-500 bg-white text-slate-800 cursor-pointer"
-          >
-            <option value="PORCIONADO">🥩 Porciones Listas (Unidades)</option>
-            <option value="ENTERO">📦 Pieza Entera / Abarrote (Kg)</option>
-          </select>
-        </div>
+        {!isUnd && (
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Tipo de Entrega</label>
+            <select
+              value={tipoEntrega}
+              onChange={(e) => {
+                const t = e.target.value as any;
+                setTipoEntrega(t);
+                setCantidad('');
+                setPesoDespachado('');
+              }}
+              className="w-full h-9 px-2.5 text-xs font-medium rounded-lg border border-slate-300 outline-none focus:border-orange-500 bg-white text-slate-800 cursor-pointer"
+            >
+              <option value="PORCIONADO">🥩 Porciones Listas (Unidades)</option>
+              <option value="ENTERO">📦 Pieza Entera / Abarrote (Kg)</option>
+            </select>
+          </div>
+        )}
 
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-medium text-slate-700">
-              {isEntero ? 'Kilos a Entregar (Kg) *' : 'Porciones a Entregar (Und) *'}
+              {isUnd ? 'Cantidad a Entregar (Und) *' : isEntero ? 'Kilos a Entregar (Kg) *' : 'Porciones a Entregar (Und) *'}
             </label>
             {selectedInsumo && (
               <span className="text-[10px] text-orange-800 font-medium">
-                {isEntero
+                {isUnd
+                  ? `Disp: ${(selectedInsumo.bodega_porc_und || 0) + (selectedInsumo.bodega_sin_porc_kg || 0)}u`
+                  : isEntero
                   ? `Disp: ${selectedInsumo.bodega_sin_porc_kg.toFixed(2)}k`
                   : autoPorcionar
                   ? `Entero disp: ${selectedInsumo.bodega_sin_porc_kg.toFixed(1)}k`
@@ -346,34 +387,36 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
           </div>
           <input
             type="number"
-            step={isEntero ? '0.01' : '1'}
-            min={isEntero ? '0.01' : '1'}
+            step={isUnd || !isEntero ? '1' : '0.01'}
+            min="1"
             required
             value={cantidad}
             onChange={(e) => handleCantChange(e.target.value)}
-            placeholder={isEntero ? 'Ej. 5.00' : 'Ej. 10'}
+            placeholder={isUnd ? 'Ej. 5' : isEntero ? 'Ej. 5.00' : 'Ej. 10'}
             className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-orange-500 text-slate-800 bg-white font-medium"
           />
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-medium text-slate-700">Peso Despachado (Kg) *</label>
-            {!isEntero && cantNum > 0 && (
-              <span className="text-[10px] text-orange-800 font-medium">Auto: {(cantNum * pesoEstKg).toFixed(2)}k</span>
-            )}
+        {!isUnd && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-slate-700">Peso Despachado (Kg) *</label>
+              {!isEntero && cantNum > 0 && (
+                <span className="text-[10px] text-orange-800 font-medium">Auto: {(cantNum * pesoEstKg).toFixed(2)}k</span>
+              )}
+            </div>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              required
+              value={pesoDespachado}
+              onChange={(e) => handlePesoChange(e.target.value)}
+              placeholder="0.00"
+              className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-orange-500 text-slate-800 bg-white"
+            />
           </div>
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            required
-            value={pesoDespachado}
-            onChange={(e) => handlePesoChange(e.target.value)}
-            placeholder="0.00"
-            className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-orange-500 text-slate-800 bg-white"
-          />
-        </div>
+        )}
 
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1">Observaciones / Turno</label>
@@ -393,7 +436,7 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
           <span>BALANCE DEL TRASLADO Y SALDO RESULTANTE</span>
           {valorDespacho > 0 && (
             <span className="text-slate-900 font-bold">
-              Valor Despacho: ${formatMoney(valorDespacho)} COP (${formatMoney(costoKg)}/Kg)
+              Valor Despacho: ${formatMoney(valorDespacho)} COP {isUnd ? `($${formatMoney(costoKg)}/Und)` : `($${formatMoney(costoKg)}/Kg)`}
             </span>
           )}
         </div>
@@ -403,7 +446,14 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
             {/* Origen Bodega */}
             <div className="p-2.5 bg-white rounded-lg border border-slate-200 space-y-1">
               <div className="text-[11px] text-slate-500 font-normal">Bodega (Origen) ➔ Saldo Final:</div>
-              {isEntero ? (
+              {isUnd ? (
+                <div className="text-slate-800 font-semibold mt-0.5">
+                  {((selectedInsumo.bodega_porc_und || 0) + (selectedInsumo.bodega_sin_porc_kg || 0))} und ➔{' '}
+                  <span className={((selectedInsumo.bodega_porc_und || 0) + (selectedInsumo.bodega_sin_porc_kg || 0)) - cantNum < 0 ? 'text-red-600 font-bold' : 'text-slate-900 font-bold'}>
+                    {Math.max(0, ((selectedInsumo.bodega_porc_und || 0) + (selectedInsumo.bodega_sin_porc_kg || 0)) - cantNum)} und
+                  </span>
+                </div>
+              ) : isEntero ? (
                 <div className="text-slate-800 font-semibold mt-0.5">
                   {selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg ➔{' '}
                   <span className={selectedInsumo.bodega_sin_porc_kg - cantNum < 0 ? 'text-red-600 font-bold' : 'text-slate-900 font-bold'}>
@@ -437,11 +487,15 @@ export default function FormTrasladoCocina({ insumos, onSuccess }: Props) {
             <div className="p-2.5 bg-white rounded-lg border border-slate-200">
               <div className="text-[11px] text-slate-500 font-normal">Cocina (Destino) ➔ Saldo Final:</div>
               <div className="text-slate-800 font-semibold mt-0.5">
-                {isEntero
+                {isUnd
+                  ? `${((selectedInsumo.cocina_porc_und || 0) + (selectedInsumo.cocina_sin_porc_kg || 0))} und ➔ `
+                  : isEntero
                   ? `${selectedInsumo.cocina_sin_porc_kg.toFixed(2)} Kg ➔ `
                   : `${selectedInsumo.cocina_porc_und} und (${selectedInsumo.cocina_porc_kg.toFixed(2)} Kg) ➔ `}
                 <span className="text-emerald-700 font-bold">
-                  {isEntero
+                  {isUnd
+                    ? `${((selectedInsumo.cocina_porc_und || 0) + (selectedInsumo.cocina_sin_porc_kg || 0)) + cantNum} und`
+                    : isEntero
                     ? `${(selectedInsumo.cocina_sin_porc_kg + cantNum).toFixed(2)} Kg`
                     : `${selectedInsumo.cocina_porc_und + cantNum} und (${(selectedInsumo.cocina_porc_kg + pesoNum).toFixed(2)} Kg)`}
                 </span>

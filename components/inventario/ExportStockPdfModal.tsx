@@ -56,9 +56,22 @@ export default function ExportStockPdfModal({
     let tValorBodega = 0;
 
     filteredInsumos.forEach((item) => {
-      const vBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
-      tBodegaKg += (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0);
-      tBodegaUnd += item.bodega_porc_und || 0;
+      const isUnd = item.unidad_medida?.toLowerCase() === 'und' || 
+                    item.categoria?.toLowerCase().includes('embutido') || 
+                    item.categoria?.toLowerCase().includes('elaborado') || 
+                    item.insumo?.toLowerCase().includes('chorizo') || 
+                    item.insumo?.toLowerCase().includes('tamal');
+      const totalUnitsBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
+      const vBodega = isUnd 
+        ? (totalUnitsBodega * (item.costo_unitario_kg || 0))
+        : (item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0)));
+      
+      if (isUnd) {
+        tBodegaUnd += totalUnitsBodega;
+      } else {
+        tBodegaKg += (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0);
+        tBodegaUnd += item.bodega_porc_und || 0;
+      }
       tAcumCocinaKg += item.traslado_cocina_acumulado_kg || 0;
       tAcumCocinaUnd += item.traslado_cocina_acumulado_und || 0;
       tMermaKg += item.merma_acumulada_kg || 0;
@@ -257,7 +270,15 @@ export default function ExportStockPdfModal({
                   </tr>
                 ) : (
                   paginatedList.map((item) => {
-                    const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
+                    const isUnd = item.unidad_medida?.toLowerCase() === 'und' || 
+                                  item.categoria?.toLowerCase().includes('embutido') || 
+                                  item.categoria?.toLowerCase().includes('elaborado') || 
+                                  item.insumo?.toLowerCase().includes('chorizo') || 
+                                  item.insumo?.toLowerCase().includes('tamal');
+                    const totalUnitsBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
+                    const valorBodega = isUnd 
+                      ? (totalUnitsBodega * (item.costo_unitario_kg || 0))
+                      : (item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0)));
                     const acumUnd = item.traslado_cocina_acumulado_und || 0;
                     const acumKg = item.traslado_cocina_acumulado_kg || 0;
 
@@ -266,34 +287,50 @@ export default function ExportStockPdfModal({
                         {/* Carne */}
                         <td className="p-1.5 border-r border-slate-200 font-medium text-slate-900 whitespace-nowrap">
                           {item.insumo}
-                          {item.peso_porc_gramos > 0 && (
-                            <span className="text-[8.5px] text-slate-400 block">{item.peso_porc_gramos}g / porción</span>
+                          {isUnd ? (
+                            <span className="text-[8px] text-purple-600 block">UNIDADES</span>
+                          ) : (
+                            item.peso_porc_gramos > 0 && (
+                              <span className="text-[8.5px] text-slate-400 block">{item.peso_porc_gramos}g / porción</span>
+                            )
                           )}
                         </td>
 
                         {/* Bodega Entero */}
                         <td className="p-1.5 text-center border-r border-slate-200 font-medium text-blue-700 whitespace-nowrap">
-                          {item.bodega_sin_porc_kg > 0 ? `${item.bodega_sin_porc_kg.toFixed(2)} Kg` : <span className="text-slate-300">0.00</span>}
+                          {isUnd ? (
+                            <span className="text-slate-300">-</span>
+                          ) : item.bodega_sin_porc_kg > 0 ? (
+                            `${item.bodega_sin_porc_kg.toFixed(2)} Kg`
+                          ) : (
+                            <span className="text-slate-300">0.00</span>
+                          )}
                         </td>
 
                         {/* Bodega Porcionado */}
                         <td className="p-1.5 text-center border-r border-slate-200 font-medium text-purple-700 whitespace-nowrap">
-                          {item.bodega_porc_und > 0 ? (
+                          {isUnd ? (
+                            <span>{totalUnitsBodega} und</span>
+                          ) : item.bodega_porc_und > 0 ? (
                             <span>{item.bodega_porc_und} und <small className="text-slate-400">({item.bodega_porc_kg.toFixed(2)}k)</small></span>
                           ) : (
                             <span className="text-slate-300">0</span>
                           )}
                         </td>
 
-                        {/* Total Bodega Kg */}
+                        {/* Total Bodega */}
                         <td className="p-1.5 text-center border-r border-slate-200 font-bold text-slate-900 bg-blue-50/30 whitespace-nowrap">
-                          {item.peso_total_bodega_kg.toFixed(2)} Kg
+                          {isUnd ? `${totalUnitsBodega} und` : `${item.peso_total_bodega_kg.toFixed(2)} Kg`}
                         </td>
 
                         {/* Acumulado Cocina */}
                         <td className="p-1.5 text-center border-r border-slate-200 font-medium text-amber-900 bg-amber-50/40 whitespace-nowrap">
                           {acumUnd > 0 || acumKg > 0 ? (
-                            <span>{acumUnd} und <small className="text-amber-700">({acumKg.toFixed(2)}k)</small></span>
+                            isUnd ? (
+                              <span>{acumUnd} und</span>
+                            ) : (
+                              <span>{acumUnd} und <small className="text-amber-700">({acumKg.toFixed(2)}k)</small></span>
+                            )
                           ) : (
                             <span className="text-slate-300">0</span>
                           )}
@@ -301,12 +338,19 @@ export default function ExportStockPdfModal({
 
                         {/* Merma */}
                         <td className="p-1.5 text-center border-r border-slate-200 text-rose-600 font-medium whitespace-nowrap">
-                          {item.merma_acumulada_kg > 0 ? `${item.merma_acumulada_kg.toFixed(2)} Kg` : <span className="text-slate-300">0.00</span>}
+                          {isUnd ? (
+                            <span className="text-slate-300">-</span>
+                          ) : item.merma_acumulada_kg > 0 ? (
+                            `${item.merma_acumulada_kg.toFixed(2)} Kg`
+                          ) : (
+                            <span className="text-slate-300">0.00</span>
+                          )}
                         </td>
 
                         {/* Costo Unitario */}
                         <td className="p-1.5 text-center border-r border-slate-200 whitespace-nowrap">
                           ${formatMoney(item.costo_unitario_kg)}
+                          <small className="text-slate-400 block text-[8px]">{isUnd ? '/ und' : '/ Kg'}</small>
                         </td>
 
                         {/* Valor Bodega */}

@@ -1,8 +1,9 @@
 export interface InsumoItem {
-  insumo_id: number;
+  insumo_id: number | string;
   codigo?: string;
   insumo: string;
   categoria: string;
+  unidad_medida?: string;
   es_carne?: boolean;
   bodega_sin_porc_kg: number;
   bodega_porc_und: number;

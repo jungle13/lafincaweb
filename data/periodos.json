@@ -198,7 +198,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 48000
+        "costo_unitario_kg": 1200
       },
       "36a78302-5d60-43f8-ae6b-b5278c0cee3d": {
         "insumo_id": "36a78302-5d60-43f8-ae6b-b5278c0cee3d",
@@ -210,7 +210,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 17500
+        "costo_unitario_kg": 3400
       },
       "a7ef407d-de3d-43c0-835e-51f79d975b93": {
         "insumo_id": "a7ef407d-de3d-43c0-835e-51f79d975b93",
@@ -222,7 +222,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 17500
+        "costo_unitario_kg": 3500
       },
       "a9cedfac-1ed5-43e2-8b31-964b940caf26": {
         "insumo_id": "a9cedfac-1ed5-43e2-8b31-964b940caf26",
@@ -234,7 +234,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 17500
+        "costo_unitario_kg": 3500
       },
       "01795478-0115-40a6-bb72-b80913443a98": {
         "insumo_id": "01795478-0115-40a6-bb72-b80913443a98",
@@ -246,7 +246,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 17500
+        "costo_unitario_kg": 3500
       },
       "aa7a60e3-b6b0-4e80-81ad-12e1287f5112": {
         "insumo_id": "aa7a60e3-b6b0-4e80-81ad-12e1287f5112",
@@ -258,7 +258,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 17450
+        "costo_unitario_kg": 3833
       },
       "12f37831-375d-4f23-a184-93d2ea0f5455": {
         "insumo_id": "12f37831-375d-4f23-a184-93d2ea0f5455",
@@ -894,7 +894,7 @@
         "cocina_sin_porc_kg": 0,
         "cocina_porc_und": 0,
         "cocina_porc_kg": 0,
-        "costo_unitario_kg": 25000
+        "costo_unitario_kg": 5000
       },
       "22e60127-07ac-48a3-b52f-180c8ca26463": {
         "insumo_id": "22e60127-07ac-48a3-b52f-180c8ca26463",

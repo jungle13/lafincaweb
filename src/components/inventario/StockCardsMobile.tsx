@@ -20,7 +20,15 @@ export default function StockCardsMobile({ insumos }: Props) {
   return (
     <div className="md:hidden space-y-3 pb-8">
       {insumos.map((item) => {
-        const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
+        const isUnd = item.unidad_medida?.toLowerCase() === 'und' || 
+                      item.categoria?.toLowerCase().includes('embutido') || 
+                      item.categoria?.toLowerCase().includes('elaborado') || 
+                      item.insumo?.toLowerCase().includes('chorizo') || 
+                      item.insumo?.toLowerCase().includes('tamal');
+        const totalUnitsBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
+        const valorBodega = isUnd 
+          ? (totalUnitsBodega * (item.costo_unitario_kg || 0))
+          : (item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0)));
         const acumUnd = item.traslado_cocina_acumulado_und || 0;
         const acumKg = item.traslado_cocina_acumulado_kg || 0;
         const cocinaUnd = item.cocina_porc_und || 0;
@@ -42,9 +50,9 @@ export default function StockCardsMobile({ insumos }: Props) {
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[9.5px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md uppercase tracking-wider">
-                    {item.categoria}
+                    {item.categoria} {isUnd && '• UND'}
                   </span>
-                  {item.peso_porc_gramos > 0 && (
+                  {!isUnd && item.peso_porc_gramos > 0 && (
                     <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
                       {item.peso_porc_gramos}g / porc
                     </span>
@@ -68,24 +76,24 @@ export default function StockCardsMobile({ insumos }: Props) {
                 </span>
                 <div className="mt-1">
                   <span className="text-sm font-extrabold text-blue-700">
-                    {item.bodega_sin_porc_kg.toFixed(2)}
+                    {isUnd ? '-' : item.bodega_sin_porc_kg.toFixed(2)}
                   </span>
-                  <span className="text-[10px] text-blue-900/60 font-medium ml-1">Kg</span>
+                  {!isUnd && <span className="text-[10px] text-blue-900/60 font-medium ml-1">Kg</span>}
                 </div>
               </div>
 
-              {/* Bodega Porciones */}
+              {/* Bodega Porciones / Unidades */}
               <div className="p-2.5 rounded-xl bg-purple-50/50 border border-purple-100/80">
                 <span className="text-[10px] text-purple-900 font-semibold flex items-center gap-1">
                   <Scissors className="w-3 h-3 text-purple-600 shrink-0" />
-                  <span>Bodega Porc.</span>
+                  <span>{isUnd ? 'Bodega Unidades' : 'Bodega Porc.'}</span>
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
                   <span className="text-sm font-extrabold text-purple-700">
-                    {item.bodega_porc_und}
+                    {isUnd ? totalUnitsBodega : item.bodega_porc_und}
                   </span>
                   <span className="text-[10px] text-purple-900 font-medium">und</span>
-                  <span className="text-[9.5px] text-purple-600/70">({item.bodega_porc_kg.toFixed(1)}k)</span>
+                  {!isUnd && <span className="text-[9.5px] text-purple-600/70">({item.bodega_porc_kg.toFixed(1)}k)</span>}
                 </div>
               </div>
 
@@ -100,7 +108,7 @@ export default function StockCardsMobile({ insumos }: Props) {
                     {acumUnd}
                   </span>
                   <span className="text-[10px] text-amber-900 font-medium">und</span>
-                  <span className="text-[9.5px] text-amber-700">({acumKg.toFixed(1)}k)</span>
+                  {!isUnd && <span className="text-[9.5px] text-amber-700">({acumKg.toFixed(1)}k)</span>}
                 </div>
               </div>
 
@@ -115,7 +123,7 @@ export default function StockCardsMobile({ insumos }: Props) {
                     {cocinaUnd}
                   </span>
                   <span className="text-[10px] text-slate-600 font-medium">und</span>
-                  <span className="text-[9.5px] text-slate-400">({cocinaKg.toFixed(1)}k)</span>
+                  {!isUnd && <span className="text-[9.5px] text-slate-400">({cocinaKg.toFixed(1)}k)</span>}
                 </div>
               </div>
             </div>
@@ -124,13 +132,13 @@ export default function StockCardsMobile({ insumos }: Props) {
             <div className="flex items-center justify-between text-[11px] bg-slate-50/60 p-2 rounded-xl border border-slate-200/60 text-slate-600">
               <div className="flex items-center gap-1">
                 <DollarSign className="w-3.5 h-3.5 text-slate-400" />
-                <span>Costo/Kg: <strong className="text-slate-900">${formatMoney(item.costo_unitario_kg)}</strong></span>
+                <span>Costo/{isUnd ? 'Und' : 'Kg'}: <strong className="text-slate-900">${formatMoney(item.costo_unitario_kg)}</strong></span>
               </div>
 
               <div className="flex items-center gap-1">
                 <TrendingDown className="w-3.5 h-3.5 text-rose-500" />
                 <span>Merma: <strong className={item.merma_acumulada_kg > 0 ? 'text-rose-600' : 'text-slate-500'}>
-                  {item.merma_acumulada_kg > 0 ? `${item.merma_acumulada_kg.toFixed(2)} Kg` : '0.00 Kg'}
+                  {isUnd ? '-' : (item.merma_acumulada_kg > 0 ? `${item.merma_acumulada_kg.toFixed(2)} Kg` : '0.00 Kg')}
                 </strong></span>
               </div>
             </div>
