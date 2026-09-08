@@ -208,39 +208,44 @@ export async function recalibrateStockActual() {
         st.bSinPorc += cantKg;
       }
     } else if (tipo.includes('AJUSTE')) {
-      if (destino.includes('BODEGA_ENTERO') || origen === 'AJUSTE_ENTRADA') {
-        if (cantKg > 0) st.bSinPorc += cantKg;
-      }
-      if (destino.includes('BODEGA_PORCIONADO')) {
-        if (porcUnd > 0) {
-          st.bPorcUnd += porcUnd;
-          st.bPorcKg += (porcKg || (porcUnd * st.peso_std));
-        } else if (cantKg > 0) {
-          st.bPorcKg += cantKg;
-        }
-      }
-      if (destino.includes('COCINA_PORCIONADO')) {
-        if (porcUnd > 0) {
-          st.cPorcUnd += porcUnd;
-          st.cPorcKg += (porcKg || (porcUnd * st.peso_std));
-        }
-      }
-      if (destino.includes('COCINA_ENTERO')) {
-        if (cantKg > 0) st.cSinPorc += cantKg;
-      }
-      if (destino.includes('MERMA') || destino.includes('SALIDA') || origen.includes('MERMA')) {
-        if (origen.includes('BODEGA_ENTERO') && cantKg > 0) st.bSinPorc -= cantKg;
-        if (origen.includes('BODEGA_PORCIONADO')) {
+      const isMerma = destino.includes('MERMA') || destino.includes('SALIDA') || origen.includes('MERMA') || origen.includes('AJUSTE_MERMA');
+      if (isMerma) {
+        if (origen.includes('BODEGA_ENTERO') && cantKg > 0) {
+          st.bSinPorc = Math.max(0, st.bSinPorc - cantKg);
+        } else if (origen.includes('BODEGA_PORCIONADO')) {
           if (porcUnd > 0) {
-            st.bPorcUnd -= porcUnd;
-            st.bPorcKg += (porcKg || (porcUnd * st.peso_std));
+            st.bPorcUnd = Math.max(0, st.bPorcUnd - porcUnd);
+            st.bPorcKg = Math.max(0, st.bPorcKg - (porcKg || (porcUnd * st.peso_std)));
+          } else if (cantKg > 0) {
+            st.bPorcKg = Math.max(0, st.bPorcKg - cantKg);
+          }
+        } else if (origen.includes('COCINA')) {
+          if (porcUnd > 0) {
+            st.cPorcUnd = Math.max(0, st.cPorcUnd - porcUnd);
+            st.cPorcKg = Math.max(0, st.cPorcKg - (porcKg || (porcUnd * st.peso_std)));
+          } else if (cantKg > 0) {
+            st.cSinPorc = Math.max(0, st.cSinPorc - cantKg);
           }
         }
-        if (origen.includes('COCINA')) {
+      } else {
+        if (destino.includes('BODEGA_ENTERO')) {
+          if (cantKg > 0) st.bSinPorc += cantKg;
+        } else if (destino.includes('BODEGA_PORCIONADO')) {
           if (porcUnd > 0) {
-            st.cPorcUnd -= porcUnd;
+            st.bPorcUnd += porcUnd;
+            st.bPorcKg += (porcKg || (porcUnd * st.peso_std));
+          } else if (cantKg > 0) {
+            st.bPorcKg += cantKg;
+          }
+        } else if (destino.includes('COCINA_PORCIONADO')) {
+          if (porcUnd > 0) {
+            st.cPorcUnd += porcUnd;
             st.cPorcKg += (porcKg || (porcUnd * st.peso_std));
           }
+        } else if (destino.includes('COCINA_ENTERO')) {
+          if (cantKg > 0) st.cSinPorc += cantKg;
+        } else if (origen === 'AJUSTE_ENTRADA') {
+          if (cantKg > 0) st.bSinPorc += cantKg;
         }
       }
     }
@@ -446,39 +451,44 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
         st.bodega_sin_porcionar_kg += cantKg;
       }
     } else if (tipo.includes('AJUSTE')) {
-      if (destino.includes('BODEGA_ENTERO') || origen === 'AJUSTE_ENTRADA') {
-        if (cantKg > 0) st.bodega_sin_porcionar_kg += cantKg;
-      }
-      if (destino.includes('BODEGA_PORCIONADO')) {
-        if (porcUnd > 0) {
-          st.bodega_porcionado_und += porcUnd;
-          st.bodega_porcionado_kg += (porcKg || (porcUnd * st.peso_std));
-        } else if (cantKg > 0) {
-          st.bodega_porcionado_kg += cantKg;
-        }
-      }
-      if (destino.includes('COCINA_PORCIONADO')) {
-        if (porcUnd > 0) {
-          st.cocina_porcionado_und += porcUnd;
-          st.cocina_porcionado_kg += (porcKg || (porcUnd * st.peso_std));
-        }
-      }
-      if (destino.includes('COCINA_ENTERO')) {
-        if (cantKg > 0) st.cocina_sin_porcionar_kg += cantKg;
-      }
-      if (destino.includes('MERMA') || destino.includes('SALIDA') || origen.includes('MERMA')) {
-        if (origen.includes('BODEGA_ENTERO') && cantKg > 0) st.bodega_sin_porcionar_kg -= cantKg;
-        if (origen.includes('BODEGA_PORCIONADO')) {
+      const isMerma = destino.includes('MERMA') || destino.includes('SALIDA') || origen.includes('MERMA') || origen.includes('AJUSTE_MERMA');
+      if (isMerma) {
+        if (origen.includes('BODEGA_ENTERO') && cantKg > 0) {
+          st.bodega_sin_porcionar_kg = Math.max(0, st.bodega_sin_porcionar_kg - cantKg);
+        } else if (origen.includes('BODEGA_PORCIONADO')) {
           if (porcUnd > 0) {
-            st.bodega_porcionado_und -= porcUnd;
-            st.bodega_porcionado_kg += (porcKg || (porcUnd * st.peso_std));
+            st.bodega_porcionado_und = Math.max(0, st.bodega_porcionado_und - porcUnd);
+            st.bodega_porcionado_kg = Math.max(0, st.bodega_porcionado_kg - (porcKg || (porcUnd * st.peso_std)));
+          } else if (cantKg > 0) {
+            st.bodega_porcionado_kg = Math.max(0, st.bodega_porcionado_kg - cantKg);
+          }
+        } else if (origen.includes('COCINA')) {
+          if (porcUnd > 0) {
+            st.cocina_porcionado_und = Math.max(0, st.cocina_porcionado_und - porcUnd);
+            st.cocina_porcionado_kg = Math.max(0, st.cocina_porcionado_kg - (porcKg || (porcUnd * st.peso_std)));
+          } else if (cantKg > 0) {
+            st.cocina_sin_porcionar_kg = Math.max(0, st.cocina_sin_porcionar_kg - cantKg);
           }
         }
-        if (origen.includes('COCINA')) {
+      } else {
+        if (destino.includes('BODEGA_ENTERO')) {
+          if (cantKg > 0) st.bodega_sin_porcionar_kg += cantKg;
+        } else if (destino.includes('BODEGA_PORCIONADO')) {
           if (porcUnd > 0) {
-            st.cocina_porcionado_und -= porcUnd;
+            st.bodega_porcionado_und += porcUnd;
+            st.bodega_porcionado_kg += (porcKg || (porcUnd * st.peso_std));
+          } else if (cantKg > 0) {
+            st.bodega_porcionado_kg += cantKg;
+          }
+        } else if (destino.includes('COCINA_PORCIONADO')) {
+          if (porcUnd > 0) {
+            st.cocina_porcionado_und += porcUnd;
             st.cocina_porcionado_kg += (porcKg || (porcUnd * st.peso_std));
           }
+        } else if (destino.includes('COCINA_ENTERO')) {
+          if (cantKg > 0) st.cocina_sin_porcionar_kg += cantKg;
+        } else if (origen === 'AJUSTE_ENTRADA') {
+          if (cantKg > 0) st.bodega_sin_porcionar_kg += cantKg;
         }
       }
     }

@@ -17,11 +17,12 @@ export async function GET() {
       return NextResponse.json({ error: viewErr.message }, { status: 500 });
     }
 
-    // 2. Obtener mermas acumuladas de movimientos
+    // 2. Obtener mermas acumuladas de movimientos formalizados
     const { data: mermasData } = await supabase
       .from('movimientos_inventario')
       .select('insumo_id, merma_kg, costo_unitario_kg')
-      .gt('merma_kg', 0);
+      .gt('merma_kg', 0)
+      .not('observaciones', 'ilike', '%[PENDIENTE_APROBAR]%');
 
     const mermasMap = new Map<string, { mermaKg: number; mermaPesos: number }>();
     (mermasData || []).forEach((m: any) => {

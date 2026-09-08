@@ -38,18 +38,16 @@ export default function InventarioPage() {
   const [fechasConMovimientos, setFechasConMovimientos] = useState<string[]>([]);
   const [totalMovsAplicados, setTotalMovsAplicados] = useState<number>(0);
 
-  // Inicializar fecha al cambiar de periodo
+  // Inicializar fecha al cambiar de periodo o al cargar fechas formalizadas
   useEffect(() => {
     if (currentPeriodo) {
-      const today = new Date().toISOString().split('T')[0];
-      if (today >= currentPeriodo.fecha_inicio && today <= currentPeriodo.fecha_fin) {
-        setSelectedDate(today);
+      if (fechasConMovimientos.length > 0) {
+        setSelectedDate(fechasConMovimientos[fechasConMovimientos.length - 1]);
       } else {
-        setSelectedDate(currentPeriodo.fecha_fin || currentPeriodo.fecha_inicio);
+        setSelectedDate(currentPeriodo.fecha_inicio);
       }
-      setCutoffMode('ACTUAL');
     }
-  }, [currentPeriodo?.id]);
+  }, [currentPeriodo?.id, fechasConMovimientos]);
 
   const loadStock = useCallback(async () => {
     try {
@@ -257,7 +255,7 @@ export default function InventarioPage() {
           <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200/60 text-xs">
             <span className="text-[11px] text-slate-400 font-normal mr-1 flex items-center gap-1">
               <Clock className="w-3 h-3 text-slate-400" />
-              <span>Jornadas con movimientos:</span>
+              <span>Jornadas formalizadas (Aprobadas):</span>
             </span>
             {fechasConMovimientos.map((f) => (
               <button

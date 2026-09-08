@@ -50,6 +50,7 @@ export async function GET(req: Request) {
         .gte('fecha', currentPeriodo.fecha_inicio)
         .lte('fecha', currentPeriodo.fecha_fin)
         .not('tipo_movimiento', 'eq', 'INVENTARIO_INICIAL')
+        .not('observaciones', 'ilike', '%[PENDIENTE_APROBAR]%')
         .order('fecha', { ascending: true });
 
       if (movDates) {
