@@ -8,18 +8,22 @@ import {
   Boxes, 
   LayoutDashboard, 
   ShoppingCart, 
-  DollarSign, 
-  Beef, 
-  CalendarRange, 
-  Wrench
+  DollarSign,
+  Beef,
+  CalendarRange,
+  Wrench,
+  ClipboardList,
+  PackageSearch
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
 const NAV_ITEMS = [
   { label: 'Terminal Bodeguero', href: '/bodeguero', icon: Truck },
   { label: 'Inventario de Carnes', href: '/inventario', icon: Boxes },
+  { label: 'Conteo Físico', href: '/inventario/conteos', icon: ClipboardList, isSubmenu: true },
   { label: 'Ajustes e Inconsistencias', href: '/ajustes', icon: Wrench },
   { label: 'Catálogo de Carnes', href: '/catalogo', icon: Beef },
+  { label: 'Insumos y Costos', href: '/insumos', icon: PackageSearch },
   { label: 'Control de Periodos', href: '/periodos', icon: CalendarRange },
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Compras', href: '/compras', icon: ShoppingCart },
@@ -86,6 +90,8 @@ export default function Sidebar() {
                 }}
                 title={collapsed && !mobileOpen ? item.label : undefined}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                  item.isSubmenu && (!collapsed || mobileOpen) ? 'ml-6 border-l border-slate-700/50' : ''
+                } ${
                   collapsed && !mobileOpen ? 'justify-center !px-2' : ''
                 } ${
                   isExact

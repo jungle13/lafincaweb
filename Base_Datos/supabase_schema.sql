@@ -288,3 +288,32 @@ SET
     cocina_porcionado_und = 8,
     cocina_porcionado_kg = 2.800
 WHERE insumo_id IN (SELECT id FROM public.catalogo_insumos WHERE codigo = 'CAR-002');
+
+-- 8. TABLAS DE CONTEO FÍSICO
+CREATE TABLE IF NOT EXISTS public.conteos_fisicos (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+    usuario VARCHAR(100) NOT NULL,
+    estado VARCHAR(50) NOT NULL DEFAULT 'PENDIENTE',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.conteos_fisicos_detalle (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conteo_id UUID NOT NULL REFERENCES public.conteos_fisicos(id) ON DELETE CASCADE,
+    insumo_id UUID NOT NULL REFERENCES public.catalogo_insumos(id),
+    ubicacion VARCHAR(50) NOT NULL,
+    cant_sin_porcionar_kg NUMERIC(10, 3) DEFAULT 0.000,
+    porciones_und INT DEFAULT 0,
+    peso_porciones_kg NUMERIC(10, 3) DEFAULT 0.000,
+    costo_unitario_kg NUMERIC(12, 2) DEFAULT 0.00,
+    valor_total NUMERIC(14, 2) DEFAULT 0.00,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.conteos_fisicos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conteos_fisicos_detalle ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all on conteos_fisicos" ON public.conteos_fisicos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on conteos_fisicos_detalle" ON public.conteos_fisicos_detalle FOR ALL USING (true) WITH CHECK (true);

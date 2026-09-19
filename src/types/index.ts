@@ -15,6 +15,7 @@ export interface InsumoItem {
   peso_total_cocina_kg: number;
   peso_total_general_kg: number;
   peso_porc_gramos: number;
+  peso_estandar_porcion_kg?: number;
   costo_unitario_kg: number;
   valor_total_general_pesos: number;
   valor_total_bodega_pesos?: number;

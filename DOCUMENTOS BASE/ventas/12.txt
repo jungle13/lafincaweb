@@ -1,0 +1,177 @@
+ 
+CHOCLOS Y ASADOS LA FINCA SAS                                                                                      PAGINA :  1
+LA FINCA                                                                                                           FECHA  :15/09/26
+Todas las Licencias de Operacion                                                                                   HORA   :16:27:59
+                                                        VENTAS DE PRODUCTO                                                         
+Del: 12/09/26 Al 12/09/26                                                                                          USUARIO:
+                                                                                                                   SOPORTE E Y G                 
+                                                   POR NOMBRE SOLO CON DESCUENTO                                                   
+
+                                     CANTI.     VENTA                   VENTA                   GRAN    VALOR NETO
+CODIGO      PRODUCTO                 VENTAS     BRUTA   DESCUENTOS      NETAS       IMP/TO      TOTAL    UNITARIO
+===================================================================================================================================
+
+316   Actigest             ud                0           0           0           0           0           0 ***,***,***    0.00%
+73    Agua tarro           ud               16      41,481           0      41,481       3,319      44,800       2,593    0.44%
+65    Aguacate porc        ud                1       2,778           0       2,778         222       3,000       2,778    0.03%
+12    Arroz con camaron    ud                4     166,667           0     166,667      13,333     180,000      41,667    1.78%
+40    Baby beef 400 gr apr ud                4     220,370           0     220,370      17,630     238,000      55,093    2.36%
+131   Banano unidad        ud                1         278           0         278          22         300         278    0.00%
+95    Baño                 ud                2       1,852           0       1,852         148       2,000         926    0.02%
+136   Calentado chicharron ud                6     144,444           0     144,444      11,556     156,000      24,074    1.55%
+135   Calentado chorizo    ud                2      27,778           0      27,778       2,222      30,000      13,889    0.30%
+6     Calentado especial   ud                5      74,074           0      74,074       5,926      80,000      14,815    0.79%
+87    Cazuela frijol       ud                2      75,000           0      75,000       6,000      81,000      37,500    0.80%
+206   Cazuela mariscos     ud                1      44,907           0      44,907       3,593      48,500      44,907    0.48%
+246   Cerv corona - stella ud                7      45,370           0      45,370       3,630      49,000       6,481    0.49%
+70    Cerv poker - aguila  ud                7      32,407           0      32,407       2,593      35,000       4,630    0.35%
+83    Chichacharron grand  ud                7     145,833           0     145,833      11,667     157,500      20,833    1.56%
+14    Chuleta de cerdo     ud                0           0           0           0           0           0 ***,***,***    0.00%
+27    Chuleta de pollo     ud                0           0           0           0           0           0 ***,***,***    0.00%
+41    Churrasco 400 gr apr ud                1      49,074           0      49,074       3,926      53,000      49,074    0.53%
+122   Coca cola 350        ud                1       2,778           0       2,778         222       3,000       2,778    0.03%
+247   Costeñita            ud                5      15,278           0      15,278       1,222      16,500       3,056    0.16%
+42    Costilla ahumada     ud                3      97,222           0      97,222       7,778     105,000      32,407    1.04%
+44    Costilla c san luis  ud                8     225,926           0     225,926      18,074     244,000      28,241    2.42%
+110   Desechables          ud               29      26,852           0      26,852       2,148      29,000         926    0.29%
+102   Entrada tost ahogado ud                4      27,778           0      27,778       2,222      30,000       6,944    0.30%
+45    Filete pechuga espec ud                7     249,537           0     249,537      19,963     269,500      35,648    2.67%
+30    Francesa             ud                4      25,926           0      25,926       2,074      28,000       6,481    0.28%
+233   Frijolada chicha jun ud                1      18,519           0      18,519       1,481      20,000      18,519    0.20%
+217   Frijolada especial   ud               13     365,741           0     365,741      29,259     395,000      28,134    3.91%
+34    Gaseosa 1500         ud               11      71,296           0      71,296       5,704      77,000       6,481    0.76%
+121   Gaseosa 350          ud               18      50,000           0      50,000       4,000      54,000       2,778    0.54%
+208   Gaseosa 400ml        ud               18      66,667           0      66,667       5,333      72,000       3,704    0.71%
+90    Gatorade             ud                3      12,778           0      12,778       1,022      13,800       4,259    0.14%
+123   H2o saborizada       ud                6      16,667           0      16,667       1,333      18,000       2,778    0.18%
+314   Hojuelas             ud                2       8,333           0       8,333         667       9,000       4,167    0.09%
+31    Huevo                ud                8       9,630           0       9,630         770      10,400       1,204    0.10%
+201   Jarra limo-coco 1 lt ud                1      18,519           0      18,519       1,481      20,000      18,519    0.20%
+212   Jarra limonada 2 lit ud                9     200,000           0     200,000      16,000     216,000      22,222    2.14%
+74    Jugo agua vaso       ud               10      64,815           0      64,815       5,185      70,000       6,481    0.69%
+306   Jugo del valle       ud                1       2,315           0       2,315         185       2,500       2,315    0.02%
+235   Jugo hit nr          ud                3      10,278           0      10,278         822      11,100       3,426    0.11%
+134   Jugo jarra agua 1 li ud                3      38,889           0      38,889       3,111      42,000      12,963    0.42%
+75    Jugo leche vaso      ud                3      27,778           0      27,778       2,222      30,000       9,259    0.30%
+51    Junior ala           ud                1      29,167           0      29,167       2,333      31,500      29,167    0.31%
+88    Junior gallina       ud               18     591,667           0     591,667      47,333     639,000      32,870    6.33%
+RUTA: Listados/De Caja/Ventas por producto                                                                          Continua.......
+ARCHIVO: fungan6 - rep18.prg
+Usuario: SOPORTE E Y G                                                                                                  Gamasoft.  
+CHOCLOS Y ASADOS LA FINCA SAS                                                                                      PAGINA :  2
+LA FINCA                                                                                                           FECHA  :15/09/26
+Todas las Licencias de Operacion                                                                                   HORA   :16:27:59
+                                                        VENTAS DE PRODUCTO                                                         
+Del: 12/09/26 Al 12/09/26                                                                                          USUARIO:
+                                                                                                                   SOPORTE E Y G                 
+                                                   POR NOMBRE SOLO CON DESCUENTO                                                   
+
+                                     CANTI.     VENTA                   VENTA                   GRAN    VALOR NETO
+CODIGO      PRODUCTO                 VENTAS     BRUTA   DESCUENTOS      NETAS       IMP/TO      TOTAL    UNITARIO
+===================================================================================================================================
+
+118   Lengua domingo       ud                4     166,667           0     166,667      13,333     180,000      41,667    1.78%
+205   Limonada cerezada 16 ud                1      12,037           0      12,037         963      13,000      12,037    0.13%
+204   Limonada coco        ud                2      24,074           0      24,074       1,926      26,000      12,037    0.26%
+109   Limonada natural 1l  ud               30     388,889           0     388,889      31,111     420,000      12,963    4.16%
+147   Limonada vaso 16 onz ud                5      32,407           0      32,407       2,593      35,000       6,481    0.35%
+46    Lomo cerdo espec     ud                4     142,593           0     142,593      11,407     154,000      35,648    1.53%
+72    Mazamorra            ud                8      29,630           0      29,630       2,370      32,000       3,704    0.32%
+112   Mega chicharrn 700 g ud                3     125,000           0     125,000      10,000     135,000      41,667    1.34%
+227   Michelado 1000       ud                4       5,556           0       5,556         444       6,000       1,389    0.06%
+119   Paisa especial       ud               16     711,111           0     711,111      56,889     768,000      44,444    7.61%
+21    Perico con arepa     ud                1       7,407           0       7,407         593       8,000       7,407    0.08%
+19    Pericos con arroz    ud                3      27,778           0      27,778       2,222      30,000       9,259    0.30%
+20    Pericos solos        ud                1       6,481           0       6,481         519       7,000       6,481    0.07%
+168   Por cost cerdo       ud                0           0           0           0           0           0 ***,***,***    0.00%
+86    Porc arroz           ud               13      42,130           0      42,130       3,370      45,500       3,241    0.45%
+80    Porc cerdo peque     ud                0           0           0           0           0           0 ***,***,***    0.00%
+91    Porc gallina peque   ud                1      11,111           0      11,111         889      12,000      11,111    0.12%
+79    Porc molida          ud                4      25,926           0      25,926       2,074      28,000       6,481    0.28%
+62    Porc principio       ud                7      48,611           0      48,611       3,889      52,500       6,944    0.52%
+84    Porc sobre peque     ud                0           0           0           0           0           0 ***,***,***    0.00%
+219   Prom chuleta cerdo   ud                2     138,889           0     138,889      11,111     150,000      69,444    1.49%
+220   Prom chuleta pollo   ud                2     138,889           0     138,889      11,111     150,000      69,444    1.49%
+140   Prom churrasco       ud                2     181,481           0     181,481      14,519     196,000      90,741    1.94%
+221   Prom costill ahumada ud                2     108,333           0     108,333       8,667     117,000      54,167    1.16%
+226   Prom punta de anca   ud                2     181,481           0     181,481      14,519     196,000      90,741    1.94%
+222   Prom tilapia         ud                2     126,852           0     126,852      10,148     137,000      63,426    1.36%
+223   Promo cazuela        ud                7     486,111           0     486,111      38,889     525,000      69,444    5.20%
+229   Promo chuleta mix    ud                1      66,204           0      66,204       5,296      71,500      66,204    0.71%
+50    Punta de anca 400    ud                5     245,370           0     245,370      19,630     265,000      49,074    2.63%
+10    Rellena casra        ud                2      27,778           0      27,778       2,222      30,000      13,889    0.30%
+120   Salmon espec         ud                3     125,000           0     125,000      10,000     135,000      41,667    1.34%
+129   Salmon salsa camaron ud                3     133,333           0     133,333      10,667     144,000      44,444    1.43%
+116   Sancocho dom         ud               17      94,444           0      94,444       7,556     102,000       5,556    1.01%
+117   Sobre domingo        ud               13     541,667           0     541,667      43,333     585,000      41,667    5.80%
+36    Soda postobon        ud                6      22,222           0      22,222       1,778      24,000       3,704    0.24%
+61    Sopa sola            ud                1       4,630           0       4,630         370       5,000       4,630    0.05%
+215   Super de cerdo       ud               11     412,500           0     412,500      33,000     445,500      37,500    4.42%
+214   Super de pollo       ud                7     262,500           0     262,500      21,000     283,500      37,500    2.81%
+113   Tamal                ud               28     622,222           0     622,222      49,778     672,000      22,222    6.66%
+256   Tamal ejecutivo      ud                1      18,519           0      18,519       1,481      20,000      18,519    0.20%
+96    Tilapia grande 450 g ud                5     178,241           0     178,241      14,259     192,500      35,648    1.91%
+255   Trucha               ud                2      71,296           0      71,296       5,704      77,000      35,648    0.76%
+                                               =========== =========== =========== =========== ===========
+                                     TOTALES     9,342,037           0   9,342,037     747,363  10,089,400
+
+     - Periodo abierto
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+RUTA: Listados/De Caja/Ventas por producto                                                                          Fin del listado
+ARCHIVO: fungan6 - rep18.prg
+Usuario: SOPORTE E Y G                                                                                                  Gamasoft.  

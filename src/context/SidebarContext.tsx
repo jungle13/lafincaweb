@@ -34,6 +34,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const toggleSidebar = () => {
+    // En desktop colapsa el sidebar, en mobile abre/cierra el drawer
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       setMobileOpen((prev) => !prev);
     } else {

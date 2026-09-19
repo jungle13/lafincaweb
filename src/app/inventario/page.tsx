@@ -32,10 +32,12 @@ export default function InventarioPage() {
   const [loading, setLoading] = useState(true);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
 
-  // Modos de corte: 'ACTUAL' | 'INICIAL' | 'FECHA'
-  const [cutoffMode, setCutoffMode] = useState<'ACTUAL' | 'INICIAL' | 'FECHA'>('ACTUAL');
+  // Modos de corte: 'ACTUAL' | 'INICIAL' | 'FECHA' | 'CONTEO'
+  const [cutoffMode, setCutoffMode] = useState<'ACTUAL' | 'INICIAL' | 'FECHA' | 'CONTEO'>('ACTUAL');
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedConteoId, setSelectedConteoId] = useState<string>('');
   const [fechasConMovimientos, setFechasConMovimientos] = useState<string[]>([]);
+  const [conteosAplicados, setConteosAplicados] = useState<any[]>([]);
   const [totalMovsAplicados, setTotalMovsAplicados] = useState<number>(0);
 
   // Inicializar fecha al cambiar de periodo o al cargar fechas formalizadas
@@ -60,6 +62,8 @@ export default function InventarioPage() {
         cutoffParam = '&fecha_corte=INICIAL';
       } else if (cutoffMode === 'FECHA' && selectedDate) {
         cutoffParam = `&fecha_corte=${selectedDate}`;
+      } else if (cutoffMode === 'CONTEO' && selectedConteoId) {
+        cutoffParam = `&fecha_corte=CONTEO_${selectedConteoId}`;
       } else {
         cutoffParam = '&fecha_corte=ACTUAL';
       }
@@ -76,6 +80,7 @@ export default function InventarioPage() {
 
       if (pData.success) {
         setFechasConMovimientos(pData.fechas_con_movimientos || []);
+        setConteosAplicados(pData.conteos_aplicados || []);
         setTotalMovsAplicados(pData.total_movs_aplicados ?? 0);
 
         if (Array.isArray(pData.stock) && pData.stock.length > 0) {
@@ -231,6 +236,37 @@ export default function InventarioPage() {
               <Calendar className="w-3.5 h-3.5" />
               <span>Por Fecha de Corte</span>
             </button>
+
+            {/* Opción 4: Dropdown de Conteos Físicos Aplicados */}
+            {conteosAplicados.length > 0 && (
+              <div className="flex items-center">
+                <select
+                  value={cutoffMode === 'CONTEO' ? selectedConteoId : ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedConteoId(e.target.value);
+                      const found = conteosAplicados.find((c: any) => c.id === e.target.value);
+                      if (found) setSelectedDate(found.fecha);
+                      setCutoffMode('CONTEO');
+                    } else {
+                      setCutoffMode('ACTUAL');
+                    }
+                  }}
+                  className={`h-8 px-2 rounded-lg text-xs font-medium border transition-all outline-none cursor-pointer ${
+                    cutoffMode === 'CONTEO'
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm font-semibold'
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <option value="" className="text-slate-800 bg-white">📋 Ver Conteo Físico...</option>
+                  {conteosAplicados.map((c: any) => (
+                    <option key={c.id} value={c.id} className="text-slate-800 bg-white">
+                      Conteo {c.fecha} ({c.usuario || 'Bodeguero'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Selector de Fecha específico (activo en modo FECHA) */}
@@ -250,8 +286,8 @@ export default function InventarioPage() {
           </div>
         </div>
 
-        {/* Badges Rápidos de Días con Movimientos en este Periodo */}
-        {fechasConMovimientos.length > 0 && (
+        {/* Badges Rápidos de Días y Conteos Físicos Formalizados */}
+        {(fechasConMovimientos.length > 0 || conteosAplicados.length > 0) && (
           <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200/60 text-xs">
             <span className="text-[11px] text-slate-400 font-normal mr-1 flex items-center gap-1">
               <Clock className="w-3 h-3 text-slate-400" />
@@ -274,6 +310,27 @@ export default function InventarioPage() {
                 📅 {f}
               </button>
             ))}
+
+            {/* Badges para Conteos Físicos Aplicados */}
+            {conteosAplicados.map((c: any) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  setSelectedConteoId(c.id);
+                  setSelectedDate(c.fecha);
+                  setCutoffMode('CONTEO');
+                }}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all border flex items-center gap-1 ${
+                  cutoffMode === 'CONTEO' && selectedConteoId === c.id
+                    ? 'bg-emerald-100 border-emerald-400 text-emerald-950 font-semibold'
+                    : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                }`}
+                title={`Ver fotografía fijada por el Conteo Físico del ${c.fecha}`}
+              >
+                📋 Conteo Físico ({c.fecha})
+              </button>
+            ))}
           </div>
         )}
 
@@ -287,6 +344,9 @@ export default function InventarioPage() {
               )}
               {cutoffMode === 'FECHA' && (
                 <>Mostrando existencias con <strong>corte al {selectedDate}</strong> ({totalMovsAplicados} movimientos formalizados aplicados).</>
+              )}
+              {cutoffMode === 'CONTEO' && (
+                <>Mostrando fotografía exacta fijada por el <strong>Conteo Físico ({selectedDate})</strong> auditado y aplicado a inventario.</>
               )}
               {cutoffMode === 'ACTUAL' && (
                 <>Mostrando <strong>Inventario Actual en Curso</strong> de {currentPeriodo?.nombre} ({totalMovsAplicados} movimientos formalizados).</>
