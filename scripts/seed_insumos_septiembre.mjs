@@ -69,7 +69,7 @@ function classifySubmodule(categoria, item, desc) {
     submodulo = 'BEBIDAS';
   } else if (cat === 'Desechables') {
     submodulo = 'DESECHABLES';
-  } else if (cat === 'Verduras' || cat === 'Grano' || cat === 'Abarrotes' || cat === 'Insumos') {
+  } else if (cat === 'Verduras' || cat === 'Grano' || cat === 'Abarrotes' || cat === 'Insumos' || cat === 'Aseo') {
     submodulo = 'COCINA_VERDURAS_GRANO';
   } else if (cat === 'INVENTARIO INICIAL') {
     submodulo = 'INVENTARIO_INICIAL';
