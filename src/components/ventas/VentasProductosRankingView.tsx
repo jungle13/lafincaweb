@@ -42,7 +42,7 @@ export default function VentasProductosRankingView({
   const [sortBy, setSortBy] = useState<'INGRESOS' | 'CANTIDAD'>('INGRESOS');
 
   const filteredAndSorted = useMemo(() => {
-    let list = [...ranking];
+    let list = [...(ranking || [])];
 
     if (selectedCat !== 'ALL') {
       list = list.filter((p) => p.categoria === selectedCat);
@@ -52,8 +52,8 @@ export default function VentasProductosRankingView({
       const q = searchQuery.toLowerCase();
       list = list.filter(
         (p) =>
-          p.nombre_producto.toLowerCase().includes(q) ||
-          p.codigo_producto.includes(q)
+          (p.nombre_producto || '').toLowerCase().includes(q) ||
+          (p.codigo_producto || '').includes(q)
       );
     }
 

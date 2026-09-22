@@ -1,8 +1,8 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Truck, Boxes, LayoutDashboard, ShoppingCart } from 'lucide-react';
+import { Truck, Boxes, LayoutDashboard, ShoppingCart, DollarSign } from 'lucide-react';
 
 export default function MobileBottomBar() {
   const pathname = usePathname();
@@ -12,6 +12,7 @@ export default function MobileBottomBar() {
     { label: 'Inventario', href: '/inventario', icon: Boxes },
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Compras', href: '/compras', icon: ShoppingCart },
+    { label: 'Ventas', href: '/ventas', icon: DollarSign },
   ];
 
   return (

@@ -51,12 +51,12 @@ export default function VentasCuadreCajaView({ cuadreData, periodoNombre = 'Sept
       if (!searchTerm.trim()) return true;
       const q = searchTerm.toLowerCase();
       return (
-        item.fecha.toLowerCase().includes(q) ||
-        item.dia_semana.toLowerCase().includes(q) ||
-        item.planillas.some(
+        (item.fecha || '').toLowerCase().includes(q) ||
+        (item.dia_semana || '').toLowerCase().includes(q) ||
+        (item.planillas || []).some(
           (p) =>
-            p.sede_responsable.toLowerCase().includes(q) ||
-            p.novedades.toLowerCase().includes(q)
+            (p.sede_responsable || '').toLowerCase().includes(q) ||
+            (p.novedades || '').toLowerCase().includes(q)
         )
       );
     });

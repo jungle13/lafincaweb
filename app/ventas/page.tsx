@@ -9,7 +9,8 @@ import {
   PieChart, 
   RefreshCw, 
   Loader2,
-  Scale
+  Scale,
+  AlertCircle
 } from 'lucide-react';
 import VentasKPIHeader from '@/components/ventas/VentasKPIHeader';
 import VentasDiariasView from '@/components/ventas/VentasDiariasView';
@@ -54,6 +55,7 @@ export default function VentasPage() {
   const [categorias, setCategorias] = useState<string[]>([]);
   const [totalVentasRanking, setTotalVentasRanking] = useState(0);
   const [cuadreData, setCuadreData] = useState<ComparacionCuadreResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [rentabilidad, setRentabilidad] = useState<VentasRentabilidad>({
     totalVentas: 0,
     totalVentaNeta: 0,
@@ -67,8 +69,12 @@ export default function VentasPage() {
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/ventas?periodo_id=${periodoId}&t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: No se pudo obtener la información de ventas`);
+      }
       const json = await res.json();
       if (json.success) {
         if (json.kpis) setKpis(json.kpis);
@@ -78,9 +84,12 @@ export default function VentasPage() {
         if (json.totalVentas) setTotalVentasRanking(json.totalVentas);
         if (json.rentabilidad) setRentabilidad(json.rentabilidad);
         if (json.cuadre) setCuadreData(json.cuadre);
+      } else {
+        throw new Error(json.error || 'Respuesta no exitosa al cargar ventas');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error cargando datos de ventas:', err);
+      setError(err?.message || 'Error de conexión al cargar el módulo de ventas');
     } finally {
       setLoading(false);
     }
@@ -90,7 +99,7 @@ export default function VentasPage() {
     loadAllData();
   }, [loadAllData]);
 
-  const fechasDisponibles = diarias.map((d) => d.fecha);
+  const fechasDisponibles = (diarias || []).map((d) => d.fecha);
 
   return (
     <div className="space-y-4 w-full px-2 sm:px-4 md:px-6 font-normal">
@@ -192,7 +201,7 @@ export default function VentasPage() {
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
               activeTab === 'TRANSACCIONES' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
             }`}>
-              1,099
+              1,597
             </span>
           </button>
 
@@ -230,6 +239,26 @@ export default function VentasPage() {
           </button>
         </div>
       </div>
+
+      {/* ⚠️ Alerta de Error con Botón de Reintento */}
+      {error && !loading && (
+        <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center justify-between gap-3 text-rose-800 animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            <div>
+              <p className="text-xs font-bold">Error de conexión</p>
+              <p className="text-[11px] text-rose-600">{error}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadAllData}
+            className="px-3.5 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-semibold hover:bg-rose-700 transition-colors shrink-0 shadow-xs cursor-pointer"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {/* 📦 Contenido de la Vista Activa */}
       {loading ? (

@@ -50,10 +50,10 @@ export default function VentasDiariasView({ diarias, periodoId }: Props) {
     }
   };
 
-  const filteredDiarias = diarias.filter((d) => {
+  const filteredDiarias = (diarias || []).filter((d) => {
     if (!searchFilter.trim()) return true;
     const q = searchFilter.toLowerCase();
-    return d.fecha.includes(q) || d.dia_semana.toLowerCase().includes(q);
+    return (d.fecha || '').includes(q) || (d.dia_semana || '').toLowerCase().includes(q);
   });
 
   return (
@@ -66,7 +66,7 @@ export default function VentasDiariasView({ diarias, periodoId }: Props) {
           </div>
           <div>
             <h3 className="font-semibold text-slate-800 text-xs">Resumen Diario de Ventas</h3>
-            <p className="text-[11px] text-slate-500">14 días del periodo Septiembre 2026</p>
+            <p className="text-[11px] text-slate-500">{diarias?.length || 0} días del periodo Septiembre 2026</p>
           </div>
         </div>
 
@@ -116,7 +116,7 @@ export default function VentasDiariasView({ diarias, periodoId }: Props) {
 
                 return (
                   <tr
-                    key={d.id}
+                    key={d.id || d.fecha}
                     className={`hover:bg-slate-50/80 transition-colors ${
                       isExpanded ? 'bg-emerald-50/30' : ''
                     }`}
