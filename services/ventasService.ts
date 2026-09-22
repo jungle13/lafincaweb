@@ -402,3 +402,169 @@ export async function getVentasRentabilidad(periodoId: string = 'per-2026-09'): 
     porcentajeCostosSobreVentas
   };
 }
+
+export interface AuditoriaCierrePlanilla {
+  id: string;
+  fecha: string;
+  pagina_planilla: string;
+  sede_responsable: string;
+  datafonos: number;
+  nequi: number;
+  efectivo: number;
+  total_cuadre: number;
+  reporte_x: number;
+  diferencia: number;
+  novedades: string;
+}
+
+export interface ComparacionVentasCuadreItem {
+  fecha: string;
+  dia_semana: string;
+  ventas_total_txt: number;
+  venta_neta: number;
+  impuesto: number;
+  total_articulos: number;
+  reporte_x: number | null;
+  diferencia_reporte_x: number | null; // ventas_total_txt - (reporte_x ?? 0)
+  total_cuadre: number | null;
+  diferencia_cuadre_caja: number | null; // total_cuadre - (reporte_x ?? 0)
+  datafonos: number | null;
+  nequi: number | null;
+  efectivo: number | null;
+  planillas: AuditoriaCierrePlanilla[];
+  estado: 'CUADRADO_EXACTO' | 'DESCUADRE_CAJA' | 'PENDIENTE_PLANILLA';
+}
+
+export interface ComparacionCuadreResult {
+  resumen: {
+    totalVentasAuditadas: number;
+    totalReporteX: number;
+    totalCuadre: number;
+    diferenciaNetaCuadre: number;
+    diasConPlanilla: number;
+    diasTotales: number;
+  };
+  comparacion: ComparacionVentasCuadreItem[];
+}
+
+export async function getComparacionCuadreVentas(
+  periodoId: string = 'per-2026-09'
+): Promise<ComparacionCuadreResult> {
+  // 1. Obtener ventas diarias
+  const { data: ventasDiarias, error: errVentas } = await supabase
+    .from('ventas_diarias')
+    .select('*')
+    .eq('periodo_id', periodoId)
+    .order('fecha', { ascending: true });
+
+  if (errVentas) throw errVentas;
+
+  // 2. Obtener planillas de auditoría de caja
+  const { data: planillasCaja, error: errPlanillas } = await supabase
+    .from('auditoria_cierres_caja')
+    .select('*')
+    .eq('periodo_id', periodoId)
+    .order('pagina_planilla', { ascending: true });
+
+  if (errPlanillas) throw errPlanillas;
+
+  const planillasByFecha = new Map<string, AuditoriaCierrePlanilla[]>();
+  (planillasCaja || []).forEach((p: any) => {
+    const list = planillasByFecha.get(p.fecha) || [];
+    list.push({
+      id: p.id,
+      fecha: p.fecha,
+      pagina_planilla: p.pagina_planilla,
+      sede_responsable: p.sede_responsable,
+      datafonos: parseFloat(p.datafonos || 0),
+      nequi: parseFloat(p.nequi || 0),
+      efectivo: parseFloat(p.efectivo || 0),
+      total_cuadre: parseFloat(p.total_cuadre || 0),
+      reporte_x: parseFloat(p.reporte_x || 0),
+      diferencia: parseFloat(p.diferencia || 0),
+      novedades: p.novedades || ''
+    });
+    planillasByFecha.set(p.fecha, list);
+  });
+
+  let totalVentasAuditadas = 0;
+  let totalReporteX = 0;
+  let totalCuadre = 0;
+  let diasConPlanilla = 0;
+
+  const comparacion: ComparacionVentasCuadreItem[] = (ventasDiarias || []).map((vd: any) => {
+    const vTotal = parseFloat(vd.gran_total || 0);
+    const planillas = planillasByFecha.get(vd.fecha) || [];
+    const hasPlanillas = planillas.length > 0;
+
+    if (!hasPlanillas) {
+      return {
+        fecha: vd.fecha,
+        dia_semana: vd.dia_semana,
+        ventas_total_txt: vTotal,
+        venta_neta: parseFloat(vd.venta_neta || 0),
+        impuesto: parseFloat(vd.impuesto || 0),
+        total_articulos: parseInt(vd.total_articulos || 0),
+        reporte_x: null,
+        diferencia_reporte_x: null,
+        total_cuadre: null,
+        diferencia_cuadre_caja: null,
+        datafonos: null,
+        nequi: null,
+        efectivo: null,
+        planillas: [],
+        estado: 'PENDIENTE_PLANILLA'
+      };
+    }
+
+    diasConPlanilla++;
+    totalVentasAuditadas += vTotal;
+
+    const repX = planillas.reduce((acc, p) => acc + p.reporte_x, 0);
+    const totCuadre = planillas.reduce((acc, p) => acc + p.total_cuadre, 0);
+    const datafonos = planillas.reduce((acc, p) => acc + p.datafonos, 0);
+    const nequi = planillas.reduce((acc, p) => acc + p.nequi, 0);
+    const efectivo = planillas.reduce((acc, p) => acc + p.efectivo, 0);
+
+    totalReporteX += repX;
+    totalCuadre += totCuadre;
+
+    const difReporteX = vTotal - repX;
+    const difCuadreCaja = totCuadre - repX;
+
+    const isExact = Math.abs(difCuadreCaja) <= 1000;
+
+    return {
+      fecha: vd.fecha,
+      dia_semana: vd.dia_semana,
+      ventas_total_txt: vTotal,
+      venta_neta: parseFloat(vd.venta_neta || 0),
+      impuesto: parseFloat(vd.impuesto || 0),
+      total_articulos: parseInt(vd.total_articulos || 0),
+      reporte_x: repX,
+      diferencia_reporte_x: difReporteX,
+      total_cuadre: totCuadre,
+      diferencia_cuadre_caja: difCuadreCaja,
+      datafonos,
+      nequi,
+      efectivo,
+      planillas,
+      estado: isExact ? 'CUADRADO_EXACTO' : 'DESCUADRE_CAJA'
+    };
+  });
+
+  const diferenciaNetaCuadre = totalCuadre - totalReporteX;
+
+  return {
+    resumen: {
+      totalVentasAuditadas,
+      totalReporteX,
+      totalCuadre,
+      diferenciaNetaCuadre,
+      diasConPlanilla,
+      diasTotales: ventasDiarias?.length || 0
+    },
+    comparacion
+  };
+}
+

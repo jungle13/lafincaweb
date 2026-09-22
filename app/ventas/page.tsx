@@ -8,23 +8,26 @@ import {
   ListOrdered, 
   PieChart, 
   RefreshCw, 
-  Loader2 
+  Loader2,
+  Scale
 } from 'lucide-react';
 import VentasKPIHeader from '@/components/ventas/VentasKPIHeader';
 import VentasDiariasView from '@/components/ventas/VentasDiariasView';
 import VentasProductosRankingView from '@/components/ventas/VentasProductosRankingView';
 import VentasTransaccionesView from '@/components/ventas/VentasTransaccionesView';
 import VentasRentabilidadView from '@/components/ventas/VentasRentabilidadView';
+import VentasCuadreCajaView from '@/components/ventas/VentasCuadreCajaView';
 import VentasExportButtons from '@/components/ventas/VentasExportButtons';
 import { 
   VentasKPIs, 
   VentaDiaria, 
   PlatoRanking, 
-  VentasRentabilidad 
+  VentasRentabilidad,
+  ComparacionCuadreResult 
 } from '@/services/ventasService';
 import { usePeriodo } from '@/context/PeriodoContext';
 
-type TabView = 'DIARIO' | 'PRODUCTOS' | 'TRANSACCIONES' | 'RENTABILIDAD';
+type TabView = 'DIARIO' | 'PRODUCTOS' | 'TRANSACCIONES' | 'RENTABILIDAD' | 'CUADRE';
 
 export default function VentasPage() {
   const { currentPeriodo, selectedPeriodoId } = usePeriodo();
@@ -50,6 +53,7 @@ export default function VentasPage() {
   const [ranking, setRanking] = useState<PlatoRanking[]>([]);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [totalVentasRanking, setTotalVentasRanking] = useState(0);
+  const [cuadreData, setCuadreData] = useState<ComparacionCuadreResult | null>(null);
   const [rentabilidad, setRentabilidad] = useState<VentasRentabilidad>({
     totalVentas: 0,
     totalVentaNeta: 0,
@@ -73,6 +77,7 @@ export default function VentasPage() {
         if (json.categorias) setCategorias(json.categorias);
         if (json.totalVentas) setTotalVentasRanking(json.totalVentas);
         if (json.rentabilidad) setRentabilidad(json.rentabilidad);
+        if (json.cuadre) setCuadreData(json.cuadre);
       }
     } catch (err) {
       console.error('Error cargando datos de ventas:', err);
@@ -204,6 +209,25 @@ export default function VentasPage() {
             <PieChart className={`w-3.5 h-3.5 ${activeTab === 'RENTABILIDAD' ? 'text-white' : 'text-purple-600'}`} />
             <span>Rentabilidad & Margen (Ventas vs Costos)</span>
           </button>
+
+          {/* Tab 5: Cuadre de Caja vs Reporte X */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('CUADRE')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'CUADRE'
+                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <Scale className={`w-3.5 h-3.5 ${activeTab === 'CUADRE' ? 'text-white' : 'text-amber-600'}`} />
+            <span>Cuadre de Caja vs Reporte X</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+              activeTab === 'CUADRE' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+            }`}>
+              Auditoría
+            </span>
+          </button>
         </div>
       </div>
 
@@ -227,8 +251,10 @@ export default function VentasPage() {
           fechasDisponibles={fechasDisponibles}
           categoriasDisponibles={categorias}
         />
-      ) : (
+      ) : activeTab === 'RENTABILIDAD' ? (
         <VentasRentabilidadView rentabilidad={rentabilidad} />
+      ) : (
+        <VentasCuadreCajaView cuadreData={cuadreData} periodoNombre={periodoNombre} />
       )}
     </div>
   );

@@ -4,7 +4,8 @@ import {
   getVentasDiarias, 
   getVentasPorProducto, 
   getVentasDetalle, 
-  getVentasRentabilidad 
+  getVentasRentabilidad,
+  getComparacionCuadreVentas 
 } from '@/services/ventasService';
 
 export const dynamic = 'force-dynamic';
@@ -60,13 +61,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, rentabilidad });
     }
 
+    if (view === 'CUADRE') {
+      const cuadre = await getComparacionCuadreVentas(periodoId);
+      return NextResponse.json({ success: true, ...cuadre });
+    }
+
     // Por defecto view === 'ALL': devolver conjunto completo para carga inicial rápida
-    const [kpis, diarias, rankingData, detalleData, rentabilidad] = await Promise.all([
+    const [kpis, diarias, rankingData, detalleData, rentabilidad, cuadre] = await Promise.all([
       getVentasKPIs(periodoId),
       getVentasDiarias(periodoId),
       getVentasPorProducto(periodoId, categoria, search),
       getVentasDetalle({ periodoId, fecha, categoria, search, page: 1, pageSize: 50 }),
-      getVentasRentabilidad(periodoId)
+      getVentasRentabilidad(periodoId),
+      getComparacionCuadreVentas(periodoId)
     ]);
 
     return NextResponse.json({
@@ -76,10 +83,12 @@ export async function GET(request: Request) {
       ranking: rankingData.ranking,
       categorias: rankingData.categorias,
       detalle: detalleData,
-      rentabilidad
+      rentabilidad,
+      cuadre
     });
   } catch (err: any) {
     console.error('Error en GET /api/ventas:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
