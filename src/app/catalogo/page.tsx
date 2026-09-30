@@ -15,10 +15,14 @@ import {
   Sparkles,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  FileDown
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import ExportCatalogoPdfModal from '@/components/catalogo/ExportCatalogoPdfModal';
 import { formatMoney, normalizeStr } from '@/lib/formatters';
+
+export type TipoMedida = 'KGS' | 'UNIDADES' | 'KGS_Y_UNIDADES' | 'PAQUETES';
 
 export interface CatalogoInsumo {
   id: string;
@@ -26,6 +30,7 @@ export interface CatalogoInsumo {
   nombre: string;
   categoria: string;
   unidad_medida: string;
+  tipo_medida: TipoMedida;
   peso_estandar_porcion_kg: number;
   costo_unitario_kg: number;
   stock_minimo_kg: number;
@@ -51,6 +56,7 @@ type SortField =
   | 'nombre'
   | 'categoria'
   | 'unidad_medida'
+  | 'tipo_medida'
   | 'peso_estandar_porcion_kg'
   | 'rendimiento'
   | 'costo_unitario_kg'
@@ -70,12 +76,14 @@ export default function CatalogoPage() {
   const [modalMode, setModalMode] = useState<'CREATE' | 'EDIT' | null>(null);
   const [selectedItem, setSelectedItem] = useState<CatalogoInsumo | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Form State
   const [formCodigo, setFormCodigo] = useState('');
   const [formNombre, setFormNombre] = useState('');
   const [formCategoria, setFormCategoria] = useState('CARNE DE RES');
   const [formUnidad, setFormUnidad] = useState('Kg');
+  const [formTipoMedida, setFormTipoMedida] = useState<TipoMedida>('KGS_Y_UNIDADES');
   const [formRendimientoTeorico, setFormRendimientoTeorico] = useState('');
   const [formPesoEstandar, setFormPesoEstandar] = useState('');
   const [formCostoUnitario, setFormCostoUnitario] = useState('');
@@ -169,12 +177,39 @@ export default function CatalogoPage() {
     }
   };
 
+  const handleTipoMedidaChange = (t: TipoMedida) => {
+    setFormTipoMedida(t);
+    if (t === 'UNIDADES') {
+      setFormUnidad('Und');
+      setFormPesoEstandar('0');
+      setFormRendimientoTeorico('');
+      setFormEsCarne(false);
+    } else if (t === 'PAQUETES') {
+      setFormUnidad('Paquete');
+      setFormPesoEstandar('0');
+      setFormRendimientoTeorico('');
+      setFormEsCarne(false);
+    } else if (t === 'KGS') {
+      setFormUnidad('Kg');
+      setFormPesoEstandar('0');
+      setFormRendimientoTeorico('');
+    } else if (t === 'KGS_Y_UNIDADES') {
+      setFormUnidad('Kg');
+      setFormEsCarne(true);
+      if (!formPesoEstandar || parseFloat(formPesoEstandar) === 0) {
+        setFormPesoEstandar('0.333');
+        setFormRendimientoTeorico('3');
+      }
+    }
+  };
+
   const openCreateModal = () => {
     setSelectedItem(null);
     const nextNum = totalInsumos + 1;
     setFormCodigo(`CAR-${String(nextNum).padStart(3, '0')}`);
     setFormNombre('');
     setFormCategoria('CARNE DE RES');
+    setFormTipoMedida('KGS_Y_UNIDADES');
     setFormUnidad('Kg');
     setFormRendimientoTeorico('3');
     setFormPesoEstandar('0.333');
@@ -190,10 +225,11 @@ export default function CatalogoPage() {
     setFormCodigo(item.codigo || '');
     setFormNombre(item.nombre);
     setFormCategoria(item.categoria || 'CARNE DE RES');
+    setFormTipoMedida(item.tipo_medida || 'KGS_Y_UNIDADES');
     setFormUnidad(item.unidad_medida || 'Kg');
-    const peso = item.peso_estandar_porcion_kg || 0.35;
+    const peso = item.peso_estandar_porcion_kg || 0;
     setFormPesoEstandar(String(peso));
-    setFormRendimientoTeorico(peso > 0 ? (1 / peso).toFixed(2) : '3');
+    setFormRendimientoTeorico(peso > 0 ? (1 / peso).toFixed(2) : '');
     setFormCostoUnitario(String(item.costo_unitario_kg || 0));
     setFormStockMinimo(String(item.stock_minimo_kg || 0));
     setFormEsCarne(item.es_carne);
@@ -213,7 +249,8 @@ export default function CatalogoPage() {
         nombre: formNombre.trim(),
         categoria: formCategoria,
         unidad_medida: formUnidad,
-        peso_estandar_porcion_kg: parseFloat(formPesoEstandar) || 0.35,
+        tipo_medida: formTipoMedida,
+        peso_estandar_porcion_kg: formTipoMedida === 'KGS_Y_UNIDADES' ? (parseFloat(formPesoEstandar) || 0.35) : 0,
         costo_unitario_kg: parseFloat(formCostoUnitario) || 0,
         stock_minimo_kg: parseFloat(formStockMinimo) || 0,
         es_carne: formEsCarne,
@@ -317,11 +354,22 @@ export default function CatalogoPage() {
             />
           </div>
 
+          {/* Botón Exportar PDF */}
+          <button
+            type="button"
+            onClick={() => setIsExportModalOpen(true)}
+            className="px-3 h-8 bg-white hover:bg-slate-50 active:scale-95 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap cursor-pointer"
+            title="Exportar Catálogo de Insumos a PDF bien organizado"
+          >
+            <FileDown className="w-3.5 h-3.5 text-orange-600" />
+            <span>Exportar PDF</span>
+          </button>
+
           {/* Botón Crear */}
           <button
             type="button"
             onClick={openCreateModal}
-            className="px-3.5 h-8 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
+            className="px-3.5 h-8 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Nuevo Insumo</span>
@@ -330,15 +378,15 @@ export default function CatalogoPage() {
       </div>
 
       {/* 🏷️ Filtros de Categoría */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-pan-x py-1 flex-nowrap sm:flex-wrap">
         {['ALL', 'CARNES', ...CATEGORIAS_PREDEFINIDAS].map((cat) => (
           <button
             key={cat}
             type="button"
             onClick={() => setSelectedCat(cat)}
-            className={`px-3 py-1 rounded-lg text-xs font-normal transition-all border ${
+            className={`flex-shrink-0 px-3.5 py-1.5 min-h-[36px] sm:min-h-[28px] rounded-lg text-xs font-normal transition-all border touch-manipulation active:scale-95 cursor-pointer whitespace-nowrap ${
               selectedCat === cat
-                ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                ? 'bg-slate-900 border-slate-900 text-white shadow-sm font-medium'
                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
             }`}
           >
@@ -397,6 +445,17 @@ export default function CatalogoPage() {
                   </div>
                 </th>
 
+                {/* Tipo Medida */}
+                <th 
+                  onClick={() => handleSort('tipo_medida')}
+                  className="py-3 px-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>MEDIDA SISTEMA</span>
+                    {renderSortIcon('tipo_medida')}
+                  </div>
+                </th>
+
                 {/* Peso Estándar */}
                 <th 
                   onClick={() => handleSort('peso_estandar_porcion_kg')}
@@ -452,7 +511,7 @@ export default function CatalogoPage() {
             <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-normal">
               {sortedInsumos.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400 font-normal">
+                  <td colSpan={10} className="py-12 text-center text-slate-400 font-normal">
                     No se encontraron materias primas en el catálogo con el filtro actual.
                   </td>
                 </tr>
@@ -487,9 +546,33 @@ export default function CatalogoPage() {
                         {item.unidad_medida || 'Kg'}
                       </td>
 
+                      {/* Medida Sistema */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        {item.tipo_medida === 'UNIDADES' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            🥚 Solo Unidades
+                          </span>
+                        )}
+                        {item.tipo_medida === 'PAQUETES' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                            📦 Paquetes
+                          </span>
+                        )}
+                        {item.tipo_medida === 'KGS' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            ⚖️ Solo Kilos
+                          </span>
+                        )}
+                        {(!item.tipo_medida || item.tipo_medida === 'KGS_Y_UNIDADES') && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                            🥩 Kgs y Und
+                          </span>
+                        )}
+                      </td>
+
                       {/* Peso estándar */}
                       <td className="py-2.5 px-3 text-right font-normal">
-                        {item.es_carne ? (
+                        {item.tipo_medida === 'KGS_Y_UNIDADES' && item.peso_estandar_porcion_kg > 0 ? (
                           <span className="text-slate-800">
                             {pesoGramos} g <small className="text-slate-400 font-normal">({item.peso_estandar_porcion_kg.toFixed(3)} Kg)</small>
                           </span>
@@ -565,11 +648,21 @@ export default function CatalogoPage() {
                     <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">{item.categoria}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => openEditModal(item)} className="p-1 text-slate-500 hover:text-slate-800">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(item)}
+                    className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200/80 text-slate-600 hover:text-slate-900 active:scale-95 touch-manipulation cursor-pointer"
+                    title="Editar Insumo"
+                  >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => handleDelete(item)} className="p-1 text-slate-400 hover:text-red-600">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item)}
+                    className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl bg-rose-50 border border-rose-200/80 text-rose-500 hover:text-rose-700 active:scale-95 touch-manipulation cursor-pointer"
+                    title="Eliminar Insumo"
+                  >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -632,6 +725,26 @@ export default function CatalogoPage() {
             </div>
           </div>
 
+          {/* 🎯 MEDIDA DE MEDICIÓN OBLIGATORIA */}
+          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-amber-950 font-semibold text-xs">
+                Tipo / Medida de Medición Obligatoria *
+              </label>
+              <span className="text-[11px] text-amber-800 font-medium">Define cómo se muestra y opera en todo el sistema</span>
+            </div>
+            <select
+              value={formTipoMedida}
+              onChange={(e) => handleTipoMedidaChange(e.target.value as TipoMedida)}
+              className="w-full h-8 px-2.5 rounded-lg border border-amber-300 focus:border-amber-600 text-amber-950 bg-white font-medium text-xs cursor-pointer"
+            >
+              <option value="KGS_Y_UNIDADES">🥩 Kgs y Unidades (Carnes con porcionado: Entero Kg + Porciones Und)</option>
+              <option value="UNIDADES">🥚 Solo Unidades (Huevos, chorizos, tamales, empanadas - NUNCA en Kg)</option>
+              <option value="PAQUETES">📦 Paquetes (Papas a la francesa, verduras congeladas)</option>
+              <option value="KGS">⚖️ Solo Kilos (Carnes sin porcionar, visceras, abarrotes a granel)</option>
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-medium mb-1">Categoría</label>
@@ -649,7 +762,7 @@ export default function CatalogoPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-medium mb-1">Unidad de Compra</label>
+              <label className="block text-slate-700 font-medium mb-1">Unidad de Presentación</label>
               <select
                 value={formUnidad}
                 onChange={(e) => setFormUnidad(e.target.value)}
@@ -657,55 +770,59 @@ export default function CatalogoPage() {
               >
                 <option value="Kg">Kilogramos (Kg)</option>
                 <option value="Und">Unidades (Und)</option>
+                <option value="Paquete">Paquete</option>
                 <option value="Gramo">Gramos (g)</option>
                 <option value="Litro">Litros (L)</option>
-                <option value="Paquete">Paquete</option>
               </select>
             </div>
           </div>
 
-          <div className="p-3 bg-purple-50/60 border border-purple-200/70 rounded-xl space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-purple-900 text-xs flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Rendimiento Teórico y Gramaje por Porción
-              </span>
-              <span className="text-[11px] text-purple-700 font-medium">1 Kg = Rendimiento × Peso</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-purple-950 font-medium mb-1">
-                  Rendimiento (Porciones x 1 Kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formRendimientoTeorico}
-                  onChange={(e) => handleRendimientoChange(e.target.value)}
-                  placeholder="Ej: 3 (rinde 3 porciones x Kg)"
-                  className="w-full h-8 px-2.5 rounded-lg border border-purple-300 focus:border-purple-600 text-purple-950 bg-white font-medium"
-                />
+          {formTipoMedida === 'KGS_Y_UNIDADES' && (
+            <div className="p-3 bg-purple-50/60 border border-purple-200/70 rounded-xl space-y-2 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-purple-900 text-xs flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Rendimiento Teórico y Gramaje por Porción
+                </span>
+                <span className="text-[11px] text-purple-700 font-medium">1 Kg = Rendimiento × Peso</span>
               </div>
 
-              <div>
-                <label className="block text-purple-950 font-medium mb-1">
-                  Peso Estándar por Porción (Kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={formPesoEstandar}
-                  onChange={(e) => handlePesoEstandarChange(e.target.value)}
-                  placeholder="Ej: 0.333 Kg (333 gramos)"
-                  className="w-full h-8 px-2.5 rounded-lg border border-purple-300 focus:border-purple-600 text-purple-950 bg-white font-medium"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-purple-950 font-medium mb-1">
+                    Rendimiento (Porciones x 1 Kg)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formRendimientoTeorico}
+                    onChange={(e) => handleRendimientoChange(e.target.value)}
+                    placeholder="Ej: 3 (rinde 3 porciones x Kg)"
+                    className="w-full h-8 px-2.5 rounded-lg border border-purple-300 focus:border-purple-600 text-purple-950 bg-white font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-purple-950 font-medium mb-1">
+                    Peso Estándar por Porción (Kg)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={formPesoEstandar}
+                    onChange={(e) => handlePesoEstandarChange(e.target.value)}
+                    placeholder="Ej: 0.333 Kg (333 gramos)"
+                    className="w-full h-8 px-2.5 rounded-lg border border-purple-300 focus:border-purple-600 text-purple-950 bg-white font-medium"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-700 font-medium mb-1">Costo Unitario Promedio por Kg ($ COP)</label>
+              <label className="block text-slate-700 font-medium mb-1">
+                Costo Base ($ COP / {formTipoMedida === 'UNIDADES' ? 'Und' : formTipoMedida === 'PAQUETES' ? 'Paquete' : 'Kg'})
+              </label>
               <input
                 type="number"
                 step="100"
@@ -717,10 +834,12 @@ export default function CatalogoPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-medium mb-1">Stock Mínimo de Seguridad (Kg)</label>
+              <label className="block text-slate-700 font-medium mb-1">
+                Stock Mínimo de Seguridad ({formTipoMedida === 'UNIDADES' ? 'Und' : formTipoMedida === 'PAQUETES' ? 'Paquetes' : 'Kg'})
+              </label>
               <input
                 type="number"
-                step="0.5"
+                step="1"
                 value={formStockMinimo}
                 onChange={(e) => setFormStockMinimo(e.target.value)}
                 placeholder="Ej. 10"
@@ -761,6 +880,15 @@ export default function CatalogoPage() {
           </div>
         </form>
       </Modal>
+
+      {/* 📄 Modal de Exportación a PDF y Excel del Catálogo */}
+      <ExportCatalogoPdfModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        insumos={insumos}
+        initialCategory={selectedCat}
+        initialSearch={searchQuery}
+      />
     </div>
   );
 }

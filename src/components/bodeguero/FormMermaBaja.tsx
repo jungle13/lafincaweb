@@ -5,6 +5,7 @@ import { Trash2, Loader2, Sparkles, AlertTriangle, ShieldAlert, DollarSign } fro
 import { InsumoItem } from '@/types';
 import SmartSearchInsumo from './SmartSearchInsumo';
 import { formatMoney } from '@/lib/formatters';
+import { useNotification } from '@/context/NotificationContext';
 
 interface Props {
   insumos: InsumoItem[];
@@ -19,6 +20,7 @@ type MotivoMerma =
   | 'OTRO';
 
 export default function FormMermaBaja({ insumos, onSuccess }: Props) {
+  const { success, error, warning, confirm } = useNotification();
   const [selectedInsumoId, setSelectedInsumoId] = useState<string | number | null>(null);
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [ubicacion, setUbicacion] = useState<'BODEGA' | 'COCINA'>('BODEGA');
@@ -70,16 +72,7 @@ export default function FormMermaBaja({ insumos, onSuccess }: Props) {
   const mermaKg = isUnd ? 0 : (tipoProducto === 'ENTERO' ? cantNum : (cantNum * pesoEstKg));
   const mermaPesos = Math.round(isUnd ? (cantNum * costoKg) : (mermaKg * costoKg));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedInsumo) return alert('Por favor selecciona una carne o insumo.');
-    if (cantNum <= 0) return alert('Ingresa una cantidad válida.');
-    if (cantNum > stockDisponible) {
-      if (!confirm(`La cantidad ingresada (${cantNum}) supera el stock disponible registrado (${stockDisponible}). ¿Deseas continuar?`)) {
-        return;
-      }
-    }
-
+  const executeSubmit = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/bodega/movimientos', {
@@ -87,7 +80,7 @@ export default function FormMermaBaja({ insumos, onSuccess }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tipo: 'BAJA_MERMA',
-          insumoId: selectedInsumo.insumo_id,
+          insumoId: selectedInsumo!.insumo_id,
           fecha,
           ubicacion,
           tipoProducto: isUnd ? 'PORCIONADO' : tipoProducto,
@@ -104,12 +97,35 @@ export default function FormMermaBaja({ insumos, onSuccess }: Props) {
 
       setCantidad('');
       setObservaciones('');
+
+      success(
+        `Baja por merma de ${cantNum} ${isUnd || tipoProducto === 'PORCIONADO' ? 'und' : 'Kg'} de ${selectedInsumo!.insumo} registrada en estado pendiente.`,
+        '🗑️ Merma Registrada'
+      );
       onSuccess();
     } catch (err: any) {
-      alert(err.message);
+      error(err.message || 'Error al registrar merma/desperdicio');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedInsumo) return warning('Por favor selecciona una carne o insumo.', 'Campo Requerido');
+    if (cantNum <= 0) return warning('Ingresa una cantidad válida mayor a 0.', 'Campo Requerido');
+    if (cantNum > stockDisponible) {
+      confirm({
+        title: '⚠️ Cantidad Supera Stock Disponible',
+        message: `La cantidad ingresada (${cantNum}) supera el stock disponible registrado (${stockDisponible}). ¿Deseas continuar registrando la baja?`,
+        confirmText: 'Registrar de todos modos',
+        type: 'warning',
+        onConfirm: executeSubmit,
+      });
+      return;
+    }
+
+    await executeSubmit();
   };
 
   return (

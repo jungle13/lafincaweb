@@ -5,6 +5,7 @@ import { CornerDownLeft, Loader2, Sparkles, AlertTriangle, ArrowRight, DollarSig
 import { InsumoItem } from '@/types';
 import SmartSearchInsumo from './SmartSearchInsumo';
 import { formatMoney } from '@/lib/formatters';
+import { useNotification } from '@/context/NotificationContext';
 
 interface Props {
   insumos: InsumoItem[];
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function FormDevolucionCocina({ insumos, onSuccess }: Props) {
+  const { success, error, warning } = useNotification();
   const [selectedInsumoId, setSelectedInsumoId] = useState<string | number | null>(null);
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [tipoDevolucion, setTipoDevolucion] = useState<'PORCIONADO' | 'ENTERO'>('PORCIONADO');
@@ -57,16 +59,22 @@ export default function FormDevolucionCocina({ insumos, onSuccess }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedInsumo) return alert('Por favor selecciona una carne o insumo.');
-    if (cantNum <= 0) return alert('Ingresa la cantidad a devolver.');
+    if (!selectedInsumo) return warning('Por favor selecciona una carne o insumo.', 'Campo Requerido');
+    if (cantNum <= 0) return warning('Ingresa la cantidad a devolver.', 'Campo Requerido');
 
     if (isEntero) {
       if (selectedInsumo.cocina_sin_porc_kg < cantNum) {
-        return alert(`Stock insuficiente en cocina para devolver. Solo hay ${selectedInsumo.cocina_sin_porc_kg.toFixed(2)} Kg en cocina.`);
+        return warning(
+          `Stock insuficiente en cocina para devolver. Solo hay ${selectedInsumo.cocina_sin_porc_kg.toFixed(2)} Kg en cocina.`,
+          'Stock Insuficiente'
+        );
       }
     } else {
       if (selectedInsumo.cocina_porc_und < cantNum) {
-        return alert(`Stock insuficiente en cocina para devolver. Solo hay ${selectedInsumo.cocina_porc_und} porciones en cocina.`);
+        return warning(
+          `Stock insuficiente en cocina para devolver. Solo hay ${selectedInsumo.cocina_porc_und} porciones en cocina.`,
+          'Stock Insuficiente'
+        );
       }
     }
 
@@ -92,9 +100,14 @@ export default function FormDevolucionCocina({ insumos, onSuccess }: Props) {
       setCantidad('');
       setPesoDevuelto('');
       setObservaciones('');
+
+      success(
+        `Devolución de ${cantNum} ${isEntero ? 'Kg' : 'porciones'} de ${selectedInsumo.insumo} registrada en estado pendiente de aprobación.`,
+        '↩️ Devolución Registrada'
+      );
       onSuccess();
     } catch (err: any) {
-      alert(err.message);
+      error(err.message || 'Error al registrar devolución');
     } finally {
       setLoading(false);
     }

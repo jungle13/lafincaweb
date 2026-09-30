@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     let end = fechaFin;
 
     if (periodoId && (!start || !end)) {
-      const p = getPeriodoById(periodoId);
+      const p = await getPeriodoById(periodoId);
       if (p) {
         start = start || p.fecha_inicio;
         end = end || p.fecha_fin;

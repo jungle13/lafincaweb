@@ -17,6 +17,7 @@ import {
 import { normalizeStr } from '@/lib/formatters';
 import { InsumoItem, MovimientoItem } from '@/types';
 import { usePeriodo } from '@/context/PeriodoContext';
+import { useNotification } from '@/context/NotificationContext';
 
 // Subcomponentes modulares de Timeline
 import EditMovementModal from './timeline/EditMovementModal';
@@ -40,6 +41,7 @@ export default function TimelineFeed({
   insumos = [],
 }: Props) {
   const { currentPeriodo } = usePeriodo();
+  const { success, error, warning, info, confirm } = useNotification();
   // Pestaña principal: 'PENDIENTES' | 'HISTORIAL'
   const [activeFeedTab, setActiveFeedTab] = useState<'PENDIENTES' | 'HISTORIAL'>('PENDIENTES');
 
@@ -50,6 +52,9 @@ export default function TimelineFeed({
 
   // Filtro de fecha específico para la sección de Pendientes
   const [pendingDateFilter, setPendingDateFilter] = useState<string>('ALL');
+
+  // Control estricto: Costos de Bodega (siempre) vs Costos de Cocina (opcional)
+  const [showCocinaCosts, setShowCocinaCosts] = useState<boolean>(false);
 
   // Estados de acciones
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -199,10 +204,7 @@ export default function TimelineFeed({
     });
 
     return Array.from(groups.values()).sort((a, b) => {
-      if (a.minTimestamp && b.minTimestamp && a.minTimestamp !== b.minTimestamp) {
-        return a.minTimestamp.localeCompare(b.minTimestamp);
-      }
-      return a.firstIndex - b.firstIndex;
+      return a.carneName.localeCompare(b.carneName, 'es', { sensitivity: 'base' });
     });
   }, [filteredPendingMovs, insumos]);
 
@@ -344,187 +346,205 @@ export default function TimelineFeed({
           action: 'APROBAR',
           movimientoId: movId,
           usuario: 'Administrador',
+          periodoId: currentPeriodo?.id,
         }),
       });
 
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Error al aprobar movimiento');
 
+      success(data.message || 'Movimiento aprobado exitosamente.', '✅ Movimiento Aprobado');
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      alert(err.message);
+      error(err.message, '⚠️ Inconsistencia de Stock');
     } finally {
       setActionLoadingId(null);
     }
   };
 
   // 🛠️ Manejador: Auto-Ajustar Inconsistencias
-  const handleAutoAjustarDia = async (targetDate: string) => {
-    if (
-      !confirm(
-        `🛠️ ¿Deseas aplicar automáticamente los ajustes de inventario necesarios (por error de conteo previo) para subsanar todos los faltantes de stock del día ${targetDate}?\n\nEsta acción registrará las auditorías correspondientes y habilitará la aprobación inmediata del día.`
-      )
-    )
-      return;
+  const handleAutoAjustarDia = (targetDate: string) => {
+    confirm({
+      title: '🛠️ Auto-Ajustar Inconsistencias de Stock',
+      message: `¿Deseas aplicar automáticamente los ajustes de inventario necesarios (por error de conteo previo) para subsanar todos los faltantes de stock del día ${targetDate}?\n\nEsta acción registrará las auditorías correspondientes y habilitará la aprobación inmediata del día.`,
+      confirmText: 'Aplicar Auto-Ajustes',
+      type: 'warning',
+      onConfirm: async () => {
+        setAutoAdjustingDate(targetDate);
+        try {
+          const res = await fetch('/api/bodega/ajustes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'AUTO_AJUSTAR_FECHA',
+              fecha: targetDate,
+              usuario: 'Administrador',
+            }),
+          });
 
-    setAutoAdjustingDate(targetDate);
-    try {
-      const res = await fetch('/api/bodega/ajustes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'AUTO_AJUSTAR_FECHA',
-          fecha: targetDate,
-          usuario: 'Administrador',
-        }),
-      });
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || 'Error al auto-ajustar día');
 
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error al auto-ajustar día');
+          if (data.count === 0) {
+            info(
+              data.message || `Todos los movimientos del día ${targetDate} cuentan con stock suficiente.`,
+              'Stock Cuadrado'
+            );
+          } else {
+            success(
+              `${data.message}\n\nLos cortes ahora cuentan con existencias suficientes para ser aprobados.`,
+              '🛠️ Conciliación Exitosa'
+            );
+          }
 
-      if (data.count === 0) {
-        alert(
-          data.message ||
-            `✅ Todos los movimientos del día ${targetDate} tienen stock suficiente. No se requirieron ajustes.`
-        );
-      } else {
-        alert(`${data.message}\n\nLos cortes ahora cuentan con existencias suficientes para ser aprobados.`);
-      }
-
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setAutoAdjustingDate(null);
-    }
+          if (onSuccess) onSuccess();
+        } catch (err: any) {
+          error(err.message, 'Error al auto-ajustar');
+        } finally {
+          setAutoAdjustingDate(null);
+        }
+      },
+    });
   };
 
   // Manejador: Aprobar Todo el Día
-  const handleAprobarDia = async (targetDate: string) => {
-    if (
-      !confirm(
-        `¿Estás seguro de aprobar TODOS los movimientos pendientes del día ${targetDate} en orden cronológico?`
-      )
-    )
-      return;
+  const handleAprobarDia = (targetDate: string) => {
+    confirm({
+      title: 'Aprobar Jornada Completa',
+      message: `¿Estás seguro de aprobar TODOS los movimientos pendientes del día ${targetDate} en orden cronológico?`,
+      confirmText: 'Aprobar Todo el Día',
+      type: 'info',
+      onConfirm: async () => {
+        setApprovingBatchDate(targetDate);
+        try {
+          const res = await fetch('/api/bodega/movimientos/aprobar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'APROBAR_FECHA',
+              fecha: targetDate,
+              usuario: 'Administrador',
+              periodoId: currentPeriodo?.id,
+            }),
+          });
 
-    setApprovingBatchDate(targetDate);
-    try {
-      const res = await fetch('/api/bodega/movimientos/aprobar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'APROBAR_FECHA',
-          fecha: targetDate,
-          usuario: 'Administrador',
-        }),
-      });
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || 'Error al aprobar día');
 
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error al aprobar día');
-
-      alert(data.message || `✅ Día ${targetDate} aprobado con éxito.`);
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setApprovingBatchDate(null);
-    }
+          success(data.message || `Día ${targetDate} aprobado con éxito.`, '✅ Jornada Aprobada');
+          if (onSuccess) onSuccess();
+        } catch (err: any) {
+          error(err.message, '⚠️ Inconsistencia de Stock');
+        } finally {
+          setApprovingBatchDate(null);
+        }
+      },
+    });
   };
 
   // ↺ Manejador: Revertir Día Aprobado
-  const handleRevertirDia = async (targetDate: string, count: number) => {
-    if (
-      !confirm(
-        `↺ ¿Deseas revertir todos los ${count} movimientos aprobados del día ${targetDate} a estado PENDIENTE?\n\nEl stock de bodega se recalibrará automáticamente para que puedas realizar ajustes o revisiones.`
-      )
-    )
-      return;
+  const handleRevertirDia = (targetDate: string, count: number) => {
+    confirm({
+      title: '↺ Revertir Jornada Aprobada',
+      message: `¿Deseas revertir todos los ${count} movimientos aprobados del día ${targetDate} a estado PENDIENTE?\n\nEl stock de bodega se recalibrará automáticamente para que puedas realizar ajustes o revisiones.`,
+      confirmText: 'Revertir a Pendiente',
+      type: 'warning',
+      onConfirm: async () => {
+        setRevertingDate(targetDate);
+        try {
+          const res = await fetch('/api/bodega/movimientos/aprobar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'REVERTIR_FECHA',
+              fecha: targetDate,
+            }),
+          });
 
-    setRevertingDate(targetDate);
-    try {
-      const res = await fetch('/api/bodega/movimientos/aprobar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'REVERTIR_FECHA',
-          fecha: targetDate,
-        }),
-      });
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || 'Error al revertir los movimientos de la fecha');
 
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error al revertir los movimientos de la fecha');
-
-      alert(data.message || `✅ Movimientos del ${targetDate} vueltos a estado pendiente.`);
-      setActiveFeedTab('PENDIENTES');
-      setPendingDateFilter(targetDate);
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setRevertingDate(null);
-    }
+          warning(data.message || `Movimientos del ${targetDate} vueltos a estado pendiente.`, '↺ Jornada Revertida');
+          setActiveFeedTab('PENDIENTES');
+          setPendingDateFilter(targetDate);
+          if (onSuccess) onSuccess();
+        } catch (err: any) {
+          error(err.message, 'Error al revertir día');
+        } finally {
+          setRevertingDate(null);
+        }
+      },
+    });
   };
 
   // 🗑️ Manejador: Descartar Día Completo
-  const handleDescartarDia = async (targetDate: string, count: number) => {
-    if (
-      !confirm(
-        `⚠️ ¿Estás seguro de descartar y eliminar TODOS los ${count} movimientos pendientes del día ${targetDate}?\n\nEsta acción borrará estos registros pendientes para evitar duplicados.`
-      )
-    )
-      return;
+  const handleDescartarDia = (targetDate: string, count: number) => {
+    confirm({
+      title: '🗑️ Descartar Jornada Completa',
+      message: `¿Estás seguro de descartar y eliminar TODOS los ${count} movimientos pendientes del día ${targetDate}?\n\nEsta acción borrará estos registros pendientes para evitar duplicados.`,
+      confirmText: 'Eliminar Movimientos',
+      cancelText: 'Cancelar',
+      type: 'danger',
+      onConfirm: async () => {
+        setDeletingDate(targetDate);
+        try {
+          const res = await fetch('/api/bodega/movimientos/aprobar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'DESCARTAR_FECHA',
+              fecha: targetDate,
+            }),
+          });
 
-    setDeletingDate(targetDate);
-    try {
-      const res = await fetch('/api/bodega/movimientos/aprobar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'DESCARTAR_FECHA',
-          fecha: targetDate,
-        }),
-      });
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || 'Error al descartar los movimientos de la fecha');
 
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error al descartar los movimientos de la fecha');
-
-      alert(data.message || `✅ Movimientos pendientes del ${targetDate} eliminados con éxito.`);
-      if (pendingDateFilter === targetDate) {
-        setPendingDateFilter('ALL');
-      }
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setDeletingDate(null);
-    }
+          success(data.message || `Movimientos pendientes del ${targetDate} eliminados con éxito.`, '🗑️ Eliminados');
+          if (pendingDateFilter === targetDate) {
+            setPendingDateFilter('ALL');
+          }
+          if (onSuccess) onSuccess();
+        } catch (err: any) {
+          error(err.message, 'Error al descartar día');
+        } finally {
+          setDeletingDate(null);
+        }
+      },
+    });
   };
 
   // Manejador: Descartar Movimiento Individual
-  const handleDescartar = async (movId: string) => {
-    if (!confirm('¿Estás seguro de descartar y eliminar este movimiento pendiente?')) return;
+  const handleDescartar = (movId: string) => {
+    confirm({
+      title: '🗑️ Descartar Movimiento Pendiente',
+      message: '¿Estás seguro de descartar y eliminar este movimiento pendiente?',
+      confirmText: 'Eliminar Movimiento',
+      type: 'danger',
+      onConfirm: async () => {
+        setActionLoadingId(movId);
+        try {
+          const res = await fetch('/api/bodega/movimientos/aprobar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'DESCARTAR',
+              movimientoId: movId,
+            }),
+          });
 
-    setActionLoadingId(movId);
-    try {
-      const res = await fetch('/api/bodega/movimientos/aprobar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'DESCARTAR',
-          movimientoId: movId,
-        }),
-      });
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || 'Error al descartar movimiento');
 
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error al descartar movimiento');
-
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setActionLoadingId(null);
-    }
+          success('Movimiento descartado correctamente.', '🗑️ Descartado');
+          if (onSuccess) onSuccess();
+        } catch (err: any) {
+          error(err.message, 'Error al descartar');
+        } finally {
+          setActionLoadingId(null);
+        }
+      },
+    });
   };
 
   // Manejador: Abrir Modal de Ajuste Rápido
@@ -592,16 +612,17 @@ export default function TimelineFeed({
         <button
           type="button"
           onClick={() => setActiveFeedTab('PENDIENTES')}
-          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+          className={`flex-shrink-0 flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-all whitespace-nowrap min-h-[44px] touch-manipulation active:scale-[0.98] cursor-pointer ${
             activeFeedTab === 'PENDIENTES'
-              ? 'border-amber-600 text-amber-900 bg-amber-50/60 rounded-t-lg'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-amber-600 text-amber-900 bg-amber-50/70 rounded-t-xl font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
           }`}
         >
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-          <span>Movimientos Pendientes de Aprobación</span>
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span className="hidden sm:inline">Movimientos Pendientes de Aprobación</span>
+          <span className="inline sm:hidden">Pendientes</span>
           {allPendingMovs.length > 0 && (
-            <span className="bg-amber-600 text-white px-2 py-0.5 rounded-full text-[10px] font-medium">
+            <span className="bg-amber-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold">
               {allPendingMovs.length}
             </span>
           )}
@@ -610,18 +631,59 @@ export default function TimelineFeed({
         <button
           type="button"
           onClick={() => setActiveFeedTab('HISTORIAL')}
-          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+          className={`flex-shrink-0 flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-all whitespace-nowrap min-h-[44px] touch-manipulation active:scale-[0.98] cursor-pointer ${
             activeFeedTab === 'HISTORIAL'
-              ? 'border-orange-500 text-orange-600 bg-orange-50/60 rounded-t-lg'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-orange-500 text-orange-600 bg-orange-50/70 rounded-t-xl font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
           }`}
         >
-          <History className="w-3.5 h-3.5 text-orange-500" />
-          <span>Kardex y Operaciones Aprobadas</span>
-          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[10px] font-medium border border-slate-200">
+          <History className="w-4 h-4 text-orange-500 shrink-0" />
+          <span className="hidden sm:inline">Kardex y Operaciones Aprobadas</span>
+          <span className="inline sm:hidden">Kardex / Historial</span>
+          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-slate-200">
             {approvedMovs.length}
           </span>
         </button>
+      </div>
+
+      {/* 🔘 SELECTOR DE VISUALIZACIÓN DE COSTOS: BODEGA SIEMPRE / COCINA A ELECCIÓN */}
+      <div className="flex items-center justify-between flex-wrap gap-2 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm text-xs">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-1.5 text-blue-950 font-medium bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200/70">
+            <span className="w-2 h-2 rounded-full bg-blue-600" />
+            <span>Costos Bodega: <strong>Siempre Activo</strong></span>
+          </div>
+          <span className="text-slate-300 hidden sm:inline">|</span>
+          <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700 hover:text-slate-900 transition-colors">
+            <input
+              type="checkbox"
+              checked={showCocinaCosts}
+              onChange={(e) => setShowCocinaCosts(e.target.checked)}
+              className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+            />
+            <span className="font-medium flex items-center gap-1.5">
+              <span>🍳 Ver Costos de Cocina</span>
+              {showCocinaCosts ? (
+                <span className="text-[10px] bg-amber-100 text-amber-900 font-semibold px-2 py-0.5 rounded-full border border-amber-300">
+                  Activado
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                  Oculto
+                </span>
+              )}
+            </span>
+          </label>
+        </div>
+        {showCocinaCosts ? (
+          <span className="text-[11px] text-amber-900 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 font-medium animate-fade-in">
+            Mostrando costos separados: Bodega vs Cocina
+          </span>
+        ) : (
+          <span className="text-[11px] text-slate-400 hidden sm:inline">
+            Mostrando costos de Bodega únicamente
+          </span>
+        )}
       </div>
 
       {/* ⚠️ PESTAÑA 1: MOVIMIENTOS PENDIENTES DE APROBACIÓN */}
@@ -726,6 +788,7 @@ export default function TimelineFeed({
                       mode="PENDIENTES"
                       actionLoadingId={actionLoadingId}
                       earliestPendingDate={earliestPendingDate}
+                      showCocinaCosts={showCocinaCosts}
                       onAprobar={handleAprobar}
                       onDescartar={handleDescartar}
                       onOpenEdit={setEditingMov}
@@ -868,6 +931,7 @@ export default function TimelineFeed({
                   key={group.insumoId}
                   group={group}
                   mode="HISTORIAL"
+                  showCocinaCosts={showCocinaCosts}
                 />
               ))
             )}

@@ -28,7 +28,7 @@ function extractProvider(desc, item) {
   }
 
   // Common fallbacks based on item or desc
-  if (/pezuña|cerdo|chicharr[oó]n|costilla/i.test(item)) return 'Supertiendas Cañaveral / Carnes';
+  if (/pezuña|cerdo|chicharr[oó]n|costilla/i.test(item)) return 'Supertiendas Cañaveral S.A.S.';
   if (/bagre|trucha|pescado|salm[oó]n|marisco|tilapia/i.test(item)) return 'Frio Sabor / Gabriel Ramirez';
   if (/cerveza|corona|poker|aguila|club colombia/i.test(item)) return 'Global Liquors / Bavaria';
   if (/coca|gaseosa|agua cristal/i.test(item)) return 'Coca-Cola FEMSA';
@@ -77,12 +77,12 @@ function classifySubmodule(categoria, item, desc) {
     submodulo = 'NOMINA';
   } else if (cat === 'Servicios Públicos') {
     submodulo = 'SERVICIOS_PUBLICOS';
-  } else if (cat === 'Servicios') {
+  } else if (cat === 'Servicios' || cat === 'Gastos' || cat === 'Gastos Administrativos' || cat === 'Mantenimiento' || cat === 'Transporte') {
     if (it.includes('arriendo') || ds.includes('arriendo')) {
       submodulo = 'ARRENDAMIENTO';
     } else if (
-      /turno|andres|sebastian|wilson|diego|eliana|contadora|vigilancia|n[oó]mina|incentivo/i.test(it) ||
-      /turno|andres|sebastian|wilson|diego|eliana|contadora|vigilancia|n[oó]mina|incentivo/i.test(ds)
+      /turno|andres|sebastian|wilson|diego|eliana|contadora|vigilancia|n[oó]mina|incentivo|propina|mesero|cocinero/i.test(it) ||
+      /turno|andres|sebastian|wilson|diego|eliana|contadora|vigilancia|n[oó]mina|incentivo|propina|mesero|cocinero/i.test(ds)
     ) {
       submodulo = 'NOMINA';
     } else if (
@@ -108,7 +108,7 @@ async function seed() {
   const sheet = workbook.Sheets['Detalle Compras Septiembre 2026'];
   const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-  console.log(`Filas brutas en hoja: ${rawRows.length}`);
+  console.log(`Filas brutas en hoja Detalle Compras: ${rawRows.length}`);
 
   const records = [];
   let totalVr = 0;
@@ -128,8 +128,10 @@ async function seed() {
     const vrVal = row[6];
     const facVal = row[7];
     const cruceVal = row[8];
+    const detalleVal = row[9];
+    const provVal = row[10];
 
-    if (!catVal && !vrVal) continue;
+    if (!catVal && vrVal === undefined) continue;
 
     const diaNum = parseInt(diaVal) || 1;
     const diaFormatted = diaNum < 10 ? `0${diaNum}` : `${diaNum}`;
@@ -144,7 +146,11 @@ async function seed() {
     const numeroFactura = facVal ? String(facVal).trim() : 'SIN_COMPROBANTE';
     const relacionCuaderno = cruceVal ? String(cruceVal).trim() : 'No Cruza con Cuaderno Don Arturo';
 
-    const proveedor = extractProvider(descripcionOriginal, item);
+    // Priorizar columna Proveedor oficial de Excel
+    const proveedor = (provVal && String(provVal).trim())
+      ? String(provVal).trim()
+      : extractProvider(descripcionOriginal, item);
+
     const { submodulo, tipo_contable } = classifySubmodule(categoria, item, descripcionOriginal);
 
     totalVr += valorTotal;
@@ -159,7 +165,7 @@ async function seed() {
       submodulo,
       tipo_contable,
       item,
-      descripcion_original: descripcionOriginal,
+      descripcion_original: detalleVal ? `${descripcionOriginal} [${detalleVal}]` : descripcionOriginal,
       proveedor,
       cantidad,
       costo_unitario: costoUnitario,
@@ -176,7 +182,7 @@ async function seed() {
   console.log(`Gastos Operativos: $${operatingExp.toLocaleString('es-CO')}`);
 
   // Limpiar registros existentes del periodo para evitar duplicación
-  console.log('Limpiando registros previos de per-2026-09...');
+  console.log('Limpiando registros previos de per-2026-09 en transacciones_gastos_insumos...');
   const { error: delErr } = await supabase
     .from('transacciones_gastos_insumos')
     .delete()
@@ -198,13 +204,13 @@ async function seed() {
       console.error(`Error en lote ${b}..${b + batch.length}:`, insErr);
       process.exit(1);
     }
-    console.log(`  ✓ Insertados ${b + batch.length} de ${records.length}`);
+    console.log(`  ✓ Insertados ${Math.min(b + batch.length, records.length)} de ${records.length}`);
   }
 
-  console.log('✅ Ingesta finalizada con éxito en Supabase!');
+  console.log('✅ Ingesta de Insumos y Costos finalizada con éxito en Supabase!');
 }
 
 seed().catch((err) => {
-  console.error('Error fatal en seed:', err);
+  console.error('Error fatal en seed insumos:', err);
   process.exit(1);
 });

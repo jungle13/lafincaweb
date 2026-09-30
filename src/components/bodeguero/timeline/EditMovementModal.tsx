@@ -5,6 +5,7 @@ import { Calendar, Edit2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { formatMoney } from '@/lib/formatters';
 import { InsumoItem, MovimientoItem } from '@/types';
+import { useNotification } from '@/context/NotificationContext';
 
 interface Props {
   editingMov: MovimientoItem | null;
@@ -21,6 +22,7 @@ export default function EditMovementModal({
   onClose,
   onSuccess,
 }: Props) {
+  const { success, error } = useNotification();
   const [editInsumoId, setEditInsumoId] = useState<string | number>('');
   const [editFecha, setEditFecha] = useState<string>('');
   const [editCantKg, setEditCantKg] = useState<string>('');
@@ -147,9 +149,10 @@ export default function EditMovementModal({
       if (!res.ok || data.error) throw new Error(data.error || 'Error al actualizar movimiento');
 
       onClose();
+      success('El movimiento pendiente ha sido actualizado exitosamente.', '📝 Movimiento Actualizado');
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      alert(err.message);
+      error(err.message || 'Error al actualizar el movimiento');
     } finally {
       setSavingEdit(false);
     }

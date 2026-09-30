@@ -27,20 +27,24 @@ export default function BodegueroPage() {
     try {
       const ts = Date.now();
       const periodParam = selectedPeriodoId ? `&periodo_id=${selectedPeriodoId}` : '';
-      const [stockRes, movsRes, periodRes] = await Promise.all([
+      const promises: Promise<Response>[] = [
         fetch(`/api/bodega/stock?t=${ts}`, { cache: 'no-store' }),
         fetch(`/api/bodega/movimientos?t=${ts}`, { cache: 'no-store' }),
-        fetch(`/api/periodos?t=${ts}${periodParam}`, { cache: 'no-store' }),
-      ]);
+      ];
 
-      const stockData = await stockRes.json();
-      const movsData = await movsRes.json();
-      const periodData = await periodRes.json();
+      if (selectedPeriodoId) {
+        promises.push(fetch(`/api/periodos?t=${ts}${periodParam}`, { cache: 'no-store' }));
+      }
+
+      const results = await Promise.all(promises);
+      const stockData = await results[0].json();
+      const movsData = await results[1].json();
+      const periodData = results[2] ? await results[2].json() : null;
 
       let baseInsumos: InsumoItem[] = stockData.data || [];
 
       // Si tenemos stock calculado para este periodo específico, enriquecemos las existencias
-      if (periodData.success && Array.isArray(periodData.stock) && periodData.stock.length > 0) {
+      if (periodData && periodData.success && Array.isArray(periodData.stock) && periodData.stock.length > 0) {
         const periodStockMap = new Map<string, any>();
         periodData.stock.forEach((s: any) => periodStockMap.set(String(s.insumo_id), s));
 

@@ -27,3 +27,18 @@ Thumbs.db
 tsconfig.tsbuildinfo
 .vercel
 supabase/.temp/
+
+# Scratch & temporary local exports
+scratch/
+.archive/
+/*.pdf
+/*.html
+/*.png
+/*.jpg
+/*.jpeg
+/*.xlsx
+/public/reports/
+scripts/*.py
+DOCUMENTOS BASE/*.pdf
+DOCUMENTOS BASE/*.xlsx
+!DOCUMENTOS BASE/COSTOS_GASTOS_SEPTIEMBRE_2026.xlsx

@@ -267,8 +267,14 @@ export const closePeriodAndOpenNext = closeAndAdvancePeriod;
 /**
  * Calcula el stock exacto del periodo a partir de los datos en Supabase
  */
-export async function calculatePeriodoStock(periodoId: string, fechaCorte?: string) {
-  const p = await getPeriodoById(periodoId);
+export async function calculatePeriodoStock(periodoId?: string, fechaCorte?: string) {
+  let p: PeriodoInventario | null = null;
+  if (periodoId && periodoId.trim() !== '') {
+    p = await getPeriodoById(periodoId);
+  }
+  if (!p) {
+    p = await getActivePeriodo();
+  }
   if (!p) return null;
 
   const initialMap = p.inventario_inicial || {};
@@ -281,7 +287,242 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
 
   if (!catalogo) return null;
 
-  // 2. Obtener movimientos aprobados del periodo
+  // 2. Si se solicitó inventario inicial estricto, retornar sin aplicar movimientos ni conteos
+  if (fechaCorte === 'INICIAL') {
+    const stockMap: Record<string, any> = {};
+    catalogo.forEach((c) => {
+      const init = initialMap[c.id];
+      const unitPrice = c.costo_unitario_kg || 0;
+      const gramosStd = c.peso_estandar_porcion_kg ? Math.round(c.peso_estandar_porcion_kg * 1000) : 350;
+      const pesoStd = gramosStd / 1000;
+
+      const bSinPorc = init ? Number(init.bodega_sin_porc_kg) || 0 : 0;
+      const bPorcUnd = init ? Number(init.bodega_porc_und) || 0 : 0;
+      const bPorcKg = init ? Number(init.bodega_porc_kg) || 0 : 0;
+
+      const cSinPorc = init ? Number(init.cocina_sin_porc_kg) || 0 : 0;
+      const cPorcUnd = init ? Number(init.cocina_porc_und) || 0 : 0;
+      const cPorcKg = init ? Number(init.cocina_porc_kg) || 0 : 0;
+
+      const totalBKg = bSinPorc + bPorcKg;
+      const totalCKg = cSinPorc + cPorcKg;
+      const totalGKg = totalBKg + totalCKg;
+      const isContable = c.tipo_medida === 'UNIDADES' || c.tipo_medida === 'PAQUETES';
+
+      stockMap[c.id] = {
+        insumo_id: c.id,
+        codigo: c.codigo,
+        insumo: c.nombre,
+        categoria: c.categoria,
+        es_carne: c.es_carne,
+        unidad_medida: c.unidad_medida,
+        tipo_medida: c.tipo_medida || 'KGS_Y_UNIDADES',
+        peso_estandar_porcion_kg: pesoStd,
+        peso_porc_gramos: gramosStd,
+        peso_std: pesoStd,
+        costo_unitario_kg: unitPrice,
+        bodega_sin_porcionar_kg: bSinPorc,
+        bodega_porcionado_und: bPorcUnd,
+        bodega_porcionado_kg: bPorcKg,
+        cocina_sin_porcionar_kg: cSinPorc,
+        cocina_porcionado_und: cPorcUnd,
+        cocina_porcionado_kg: cPorcKg,
+        peso_total_bodega_kg: isContable ? 0 : totalBKg,
+        peso_total_cocina_kg: isContable ? 0 : totalCKg,
+        peso_total_general_kg: isContable ? 0 : totalGKg,
+        valor_total_bodega_pesos: isContable ? Math.round(bPorcUnd * unitPrice) : Math.round(totalBKg * unitPrice),
+        valor_total_cocina_pesos: isContable ? Math.round(cPorcUnd * unitPrice) : Math.round(totalCKg * unitPrice),
+        valor_total_general_pesos: isContable ? Math.round((bPorcUnd + cPorcUnd) * unitPrice) : Math.round(totalGKg * unitPrice),
+        merma_acumulada_kg: 0,
+        merma_acumulada_pesos: 0,
+        traslado_cocina_acumulado_kg: 0,
+        traslado_cocina_acumulado_und: 0
+      };
+    });
+    return { stockMap, period: p, catalogo, totalMovs: 0 };
+  }
+
+  // 3. Buscar si existe un conteo físico formalizado/aplicado que sirva de fotografía base
+  let targetDate = p.fecha_fin;
+  if (fechaCorte && !fechaCorte.startsWith('CONTEO_') && fechaCorte !== 'ACTUAL') {
+    targetDate = fechaCorte;
+  }
+
+  let targetConteoId: string | null = null;
+  let conteoFecha: string | null = null;
+  let conteoCreatedAt: string | null = null;
+
+  if (fechaCorte && fechaCorte.startsWith('CONTEO_')) {
+    targetConteoId = fechaCorte.replace('CONTEO_', '');
+    const { data: cData } = await supabase
+      .from('conteos_fisicos')
+      .select('id, fecha, created_at')
+      .eq('id', targetConteoId)
+      .maybeSingle();
+    if (cData) {
+      conteoFecha = cData.fecha;
+      conteoCreatedAt = cData.created_at;
+    }
+  } else {
+    // Buscar el conteo físico APLICADO más reciente que sea <= targetDate
+    const { data: cData } = await supabase
+      .from('conteos_fisicos')
+      .select('id, fecha, created_at')
+      .eq('estado', 'APLICADO')
+      .gte('fecha', p.fecha_inicio)
+      .lte('fecha', targetDate)
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (cData) {
+      targetConteoId = cData.id;
+      conteoFecha = cData.fecha;
+      conteoCreatedAt = cData.created_at;
+    }
+  }
+
+  const stockMap: Record<string, any> = {};
+
+  if (targetConteoId) {
+    // 4A. FOTOGRAFÍA OFICIAL DE CONTEO FÍSICO APLICADO
+    // Regla de negocio estricta: Los insumos contados quedan con sus valores del conteo;
+    // todo lo demás que no aparezca en el conteo queda exactamente en CERO (0).
+    const { data: detalles } = await supabase
+      .from('conteos_fisicos_detalle')
+      .select('*')
+      .eq('conteo_id', targetConteoId);
+
+    const detMap = new Map<string, any>();
+    (detalles || []).forEach((d: any) => {
+      detMap.set(`${d.insumo_id}_${d.ubicacion}`, d);
+    });
+
+    catalogo.forEach((c) => {
+      const gramosStd = c.peso_estandar_porcion_kg ? Math.round(c.peso_estandar_porcion_kg * 1000) : 350;
+      const pesoStd = gramosStd / 1000;
+      const detBodega = detMap.get(`${c.id}_BODEGA`);
+      const detCocina = detMap.get(`${c.id}_COCINA`);
+
+      const bSinPorc = detBodega ? parseFloat(detBodega.cant_sin_porcionar_kg || 0) : 0;
+      const bPorcUnd = detBodega ? parseInt(detBodega.porciones_und || 0) : 0;
+      const bPorcKg = detBodega ? parseFloat(detBodega.peso_porciones_kg || 0) : 0;
+
+      const cSinPorc = detCocina ? parseFloat(detCocina.cant_sin_porcionar_kg || 0) : 0;
+      const cPorcUnd = detCocina ? parseInt(detCocina.porciones_und || 0) : 0;
+      const cPorcKg = detCocina ? parseFloat(detCocina.peso_porciones_kg || 0) : 0;
+
+      const totalBKg = bSinPorc + bPorcKg;
+      const totalCKg = cSinPorc + cPorcKg;
+      const totalGKg = totalBKg + totalCKg;
+
+      const unitPrice = detBodega?.costo_unitario_kg != null ? parseFloat(detBodega.costo_unitario_kg) : (c.costo_unitario_kg || 0);
+      const isContable = c.tipo_medida === 'UNIDADES' || c.tipo_medida === 'PAQUETES';
+      const valBodega = detBodega?.valor_total != null 
+        ? Math.round(parseFloat(detBodega.valor_total)) 
+        : (isContable ? Math.round(bPorcUnd * unitPrice) : Math.round(totalBKg * unitPrice));
+      const valCocina = detCocina?.valor_total != null 
+        ? Math.round(parseFloat(detCocina.valor_total)) 
+        : (isContable ? Math.round(cPorcUnd * unitPrice) : Math.round(totalCKg * unitPrice));
+
+      stockMap[c.id] = {
+        insumo_id: c.id,
+        codigo: c.codigo,
+        insumo: c.nombre,
+        categoria: c.categoria,
+        es_carne: c.es_carne,
+        unidad_medida: c.unidad_medida,
+        tipo_medida: c.tipo_medida || 'KGS_Y_UNIDADES',
+        peso_estandar_porcion_kg: pesoStd,
+        peso_porc_gramos: gramosStd,
+        peso_std: pesoStd,
+        costo_unitario_kg: unitPrice,
+        bodega_sin_porcionar_kg: bSinPorc,
+        bodega_porcionado_und: bPorcUnd,
+        bodega_porcionado_kg: bPorcKg,
+        cocina_sin_porcionar_kg: cSinPorc,
+        cocina_porcionado_und: cPorcUnd,
+        cocina_porcionado_kg: cPorcKg,
+        peso_total_bodega_kg: isContable ? 0 : totalBKg,
+        peso_total_cocina_kg: isContable ? 0 : totalCKg,
+        peso_total_general_kg: isContable ? 0 : totalGKg,
+        valor_total_bodega_pesos: valBodega,
+        valor_total_cocina_pesos: 0,
+        valor_total_general_pesos: valBodega,
+        cocina_dia_und: 0,
+        cocina_dia_kg: 0,
+        costo_cocina_dia: 0,
+        merma_acumulada_kg: 0,
+        merma_acumulada_pesos: 0,
+        traslado_cocina_acumulado_kg: 0,
+        traslado_cocina_acumulado_und: 0
+      };
+    });
+
+  } else {
+    // 4B. FOTOGRAFÍA INICIAL CUANDO NO HAY CONTEO FÍSICO APLICADO
+    catalogo.forEach((c) => {
+      const init = initialMap[c.id];
+      const unitPrice = c.costo_unitario_kg || 0;
+      const gramosStd = c.peso_estandar_porcion_kg ? Math.round(c.peso_estandar_porcion_kg * 1000) : 350;
+      const pesoStd = gramosStd / 1000;
+
+      const bSinPorc = init ? Number(init.bodega_sin_porc_kg) || 0 : 0;
+      const bPorcUnd = init ? Number(init.bodega_porc_und) || 0 : 0;
+      const bPorcKg = init ? Number(init.bodega_porc_kg) || 0 : 0;
+
+      const cSinPorc = init ? Number(init.cocina_sin_porc_kg) || 0 : 0;
+      const cPorcUnd = init ? Number(init.cocina_porc_und) || 0 : 0;
+      const cPorcKg = init ? Number(init.cocina_porc_kg) || 0 : 0;
+
+      const totalBKg = bSinPorc + bPorcKg;
+      const totalCKg = cSinPorc + cPorcKg;
+      const totalGKg = totalBKg + totalCKg;
+      const isContable = c.tipo_medida === 'UNIDADES' || c.tipo_medida === 'PAQUETES';
+
+      stockMap[c.id] = {
+        insumo_id: c.id,
+        codigo: c.codigo,
+        insumo: c.nombre,
+        categoria: c.categoria,
+        es_carne: c.es_carne,
+        unidad_medida: c.unidad_medida,
+        tipo_medida: c.tipo_medida || 'KGS_Y_UNIDADES',
+        peso_estandar_porcion_kg: pesoStd,
+        peso_porc_gramos: gramosStd,
+        peso_std: pesoStd,
+        costo_unitario_kg: unitPrice,
+        bodega_sin_porcionar_kg: bSinPorc,
+        bodega_porcionado_und: bPorcUnd,
+        bodega_porcionado_kg: bPorcKg,
+        cocina_sin_porcionar_kg: cSinPorc,
+        cocina_porcionado_und: cPorcUnd,
+        cocina_porcionado_kg: cPorcKg,
+        peso_total_bodega_kg: isContable ? 0 : totalBKg,
+        peso_total_cocina_kg: isContable ? 0 : totalCKg,
+        peso_total_general_kg: isContable ? 0 : totalGKg,
+        valor_total_bodega_pesos: isContable ? Math.round(bPorcUnd * unitPrice) : Math.round(totalBKg * unitPrice),
+        valor_total_cocina_pesos: 0,
+        valor_total_general_pesos: isContable ? Math.round(bPorcUnd * unitPrice) : Math.round(totalBKg * unitPrice),
+        cocina_dia_und: 0,
+        cocina_dia_kg: 0,
+        costo_cocina_dia: 0,
+        merma_acumulada_kg: 0,
+        merma_acumulada_pesos: 0,
+        traslado_cocina_acumulado_kg: 0,
+        traslado_cocina_acumulado_und: 0
+      };
+    });
+  }
+
+  // 5. Si la solicitud es un conteo específico, retornar directamente la foto sin movimientos posteriores
+  if (fechaCorte && fechaCorte.startsWith('CONTEO_')) {
+    return { stockMap, period: p, catalogo, totalMovs: 0 };
+  }
+
+  // 6. Obtener movimientos aprobados del periodo
+  // Si venimos de un conteo aplicado, SOLO se aplican movimientos POSTERIORES a ese conteo
+  const minMovDate = conteoFecha ? conteoFecha : p.fecha_inicio;
   let allMovs: any[] = [];
   let from = 0;
   const step = 1000;
@@ -289,13 +530,13 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
     let query = supabase
       .from('movimientos_inventario')
       .select('*')
-      .gte('fecha', p.fecha_inicio)
+      .gte('fecha', minMovDate)
       .order('fecha', { ascending: true })
       .order('id', { ascending: true })
       .range(from, from + step - 1);
 
-    if (fechaCorte && !fechaCorte.startsWith('CONTEO_') && fechaCorte !== 'ACTUAL' && fechaCorte !== 'INICIAL') {
-      query = query.lte('fecha', fechaCorte);
+    if (targetDate) {
+      query = query.lte('fecha', targetDate);
     } else {
       query = query.lte('fecha', p.fecha_fin);
     }
@@ -307,70 +548,35 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
     from += step;
   }
 
-  // Filtrar pendientes y de apertura inicial duplicados
+  // Filtrar pendientes y movimientos que ocurrieron ANTES o EN la foto del conteo
   const approvedMovs = allMovs.filter((m) => {
     const obs = m.observaciones || '';
     if (obs.includes('[PENDIENTE_APROBAR]')) return false;
     if (m.tipo_movimiento === 'INVENTARIO_INICIAL') return false;
+    if (conteoFecha && m.fecha < conteoFecha) return false;
+    if (conteoFecha && conteoCreatedAt && m.fecha === conteoFecha) {
+      if (m.fecha_hora && m.fecha_hora <= conteoCreatedAt) return false;
+    }
     return true;
   });
 
-  // 3. Inicializar mapa de stock con la foto inicial
-  const stockMap: Record<string, any> = {};
-  catalogo.forEach((c) => {
-    const init = initialMap[c.id];
-    const unitPrice = c.costo_unitario_kg || 0;
-    const gramosStd = c.peso_estandar_porcion_kg ? Math.round(c.peso_estandar_porcion_kg * 1000) : 350;
-    const pesoStd = gramosStd / 1000;
-
-    const bSinPorc = init ? Number(init.bodega_sin_porc_kg) || 0 : 0;
-    const bPorcUnd = init ? Number(init.bodega_porc_und) || 0 : 0;
-    const bPorcKg = init ? Number(init.bodega_porc_kg) || 0 : 0;
-
-    const cSinPorc = init ? Number(init.cocina_sin_porc_kg) || 0 : 0;
-    const cPorcUnd = init ? Number(init.cocina_porc_und) || 0 : 0;
-    const cPorcKg = init ? Number(init.cocina_porc_kg) || 0 : 0;
-
-    const totalBKg = bSinPorc + bPorcKg;
-    const totalCKg = cSinPorc + cPorcKg;
-    const totalGKg = totalBKg + totalCKg;
-
-    stockMap[c.id] = {
-      insumo_id: c.id,
-      codigo: c.codigo,
-      insumo: c.nombre,
-      categoria: c.categoria,
-      es_carne: c.es_carne,
-      unidad_medida: c.unidad_medida,
-      peso_estandar_porcion_kg: pesoStd,
-      peso_porc_gramos: gramosStd,
-      peso_std: pesoStd,
-      costo_unitario_kg: unitPrice,
-      bodega_sin_porcionar_kg: bSinPorc,
-      bodega_porcionado_und: bPorcUnd,
-      bodega_porcionado_kg: bPorcKg,
-      cocina_sin_porcionar_kg: cSinPorc,
-      cocina_porcionado_und: cPorcUnd,
-      cocina_porcionado_kg: cPorcKg,
-      peso_total_bodega_kg: totalBKg,
-      peso_total_cocina_kg: totalCKg,
-      peso_total_general_kg: totalGKg,
-      valor_total_bodega_pesos: Math.round(totalBKg * unitPrice),
-      valor_total_cocina_pesos: Math.round(totalCKg * unitPrice),
-      valor_total_general_pesos: Math.round(totalGKg * unitPrice),
-      merma_acumulada_kg: 0,
-      merma_acumulada_pesos: 0,
-      traslado_cocina_acumulado_kg: 0,
-      traslado_cocina_acumulado_und: 0
-    };
-  });
-
-  // Si se solicitó inventario inicial estricto, retornar sin aplicar movimientos
-  if (fechaCorte === 'INICIAL') {
-    return { stockMap, period: p, catalogo, totalMovs: 0 };
+  // 7A. Determinar fecha de interés para la vista de Cocina (del día específico, NUNCA acumulado)
+  const isCorteFecha = Boolean(fechaCorte && !fechaCorte.startsWith('CONTEO_') && fechaCorte !== 'ACTUAL' && fechaCorte !== 'INICIAL');
+  let targetCocinaDay: string | null = null;
+  if (isCorteFecha) {
+    targetCocinaDay = fechaCorte as string;
+  } else if (fechaCorte === 'INICIAL' || (fechaCorte && fechaCorte.startsWith('CONTEO_'))) {
+    targetCocinaDay = null; // Sin entregas operativas del día en inventario inicial o conteo
+  } else {
+    // Modo ACTUAL: buscar la fecha más reciente con movimientos aprobados
+    approvedMovs.forEach((m) => {
+      if (m.fecha && (!targetCocinaDay || m.fecha > targetCocinaDay)) {
+        targetCocinaDay = m.fecha;
+      }
+    });
   }
 
-  // 4. Aplicar movimientos aprobados cronológicamente
+  // 7B. Aplicar movimientos aprobados cronológicamente
   approvedMovs.forEach((m) => {
     const st = stockMap[m.insumo_id];
     if (!st) return;
@@ -381,9 +587,16 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
     const tipo = m.tipo_movimiento;
     const origen = m.origen || '';
     const destino = m.destino || '';
+    const isCocinaDayMov = Boolean(targetCocinaDay && m.fecha === targetCocinaDay);
+    const unitPrice = st.costo_unitario_kg || 0;
 
     if (tipo === 'ENTRADA_COMPRA' || tipo === 'COMPRA') {
-      st.bodega_sin_porcionar_kg += cantKg;
+      const isContable = st.tipo_medida === 'UNIDADES' || st.tipo_medida === 'PAQUETES';
+      if (isContable) {
+        st.bodega_porcionado_und += (porcUnd || cantKg);
+      } else {
+        st.bodega_sin_porcionar_kg += cantKg;
+      }
     } else if (tipo === 'PORCIONADO') {
       st.bodega_sin_porcionar_kg = Math.max(0, st.bodega_sin_porcionar_kg - cantKg);
       st.bodega_porcionado_und += porcUnd;
@@ -409,29 +622,65 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
         }
       }
     } else if (tipo === 'TRASLADO_COCINA' || tipo === 'TRASLADO_A_COCINA' || tipo === 'TRASLADO') {
-      if (porcUnd > 0) {
+      const isContable = st.tipo_medida === 'UNIDADES' || st.tipo_medida === 'PAQUETES';
+      if (isContable) {
+        const qty = porcUnd || cantKg;
+        st.bodega_porcionado_und = Math.max(0, st.bodega_porcionado_und - qty);
+        st.traslado_cocina_acumulado_und += qty;
+        if (isCocinaDayMov) {
+          st.cocina_dia_und += qty;
+          st.costo_cocina_dia += (Number(m.valor_total_movimiento) || Math.round(qty * unitPrice));
+        }
+      } else if (porcUnd > 0) {
         const k = porcKg || (porcUnd * st.peso_std);
-        st.bodega_porcionado_und = Math.max(0, st.bodega_porcionado_und - porcUnd);
-        st.bodega_porcionado_kg = Math.max(0, st.bodega_porcionado_kg - k);
-        st.cocina_porcionado_und += porcUnd;
-        st.cocina_porcionado_kg += k;
+        const fromListas = Math.min(st.bodega_porcionado_und, porcUnd);
+        const missingFromEntero = Math.max(0, porcUnd - fromListas);
+        const neededKgFromEntero = cantKg > 0 ? cantKg : (missingFromEntero > 0 ? parseFloat((missingFromEntero * (k / porcUnd)).toFixed(2)) : 0);
+        const kgFromListas = Math.max(0, k - neededKgFromEntero);
+
+        st.bodega_porcionado_und = Math.max(0, st.bodega_porcionado_und - fromListas);
+        st.bodega_porcionado_kg = Math.max(0, st.bodega_porcionado_kg - kgFromListas);
+        st.bodega_sin_porcionar_kg = Math.max(0, st.bodega_sin_porcionar_kg - neededKgFromEntero);
+
         st.traslado_cocina_acumulado_und += porcUnd;
         st.traslado_cocina_acumulado_kg += k;
+        if (isCocinaDayMov) {
+          st.cocina_dia_und += porcUnd;
+          st.cocina_dia_kg += k;
+          st.costo_cocina_dia += (Number(m.valor_total_movimiento) || Math.round(k * unitPrice));
+        }
       } else if (cantKg > 0) {
         st.bodega_sin_porcionar_kg = Math.max(0, st.bodega_sin_porcionar_kg - cantKg);
-        st.cocina_sin_porcionar_kg += cantKg;
         st.traslado_cocina_acumulado_kg += cantKg;
+        if (isCocinaDayMov) {
+          st.cocina_dia_kg += cantKg;
+          st.costo_cocina_dia += (Number(m.valor_total_movimiento) || Math.round(cantKg * unitPrice));
+        }
       }
     } else if (tipo === 'DEVOLUCION_COCINA' || tipo === 'DEVOLUCION_A_BODEGA') {
-      if (porcUnd > 0) {
+      const isContable = st.tipo_medida === 'UNIDADES' || st.tipo_medida === 'PAQUETES';
+      if (isContable) {
+        const qty = porcUnd || cantKg;
+        st.bodega_porcionado_und += qty;
+        if (isCocinaDayMov) {
+          st.cocina_dia_und = Math.max(0, st.cocina_dia_und - qty);
+          st.costo_cocina_dia = Math.max(0, st.costo_cocina_dia - (Number(m.valor_total_movimiento) || Math.round(qty * unitPrice)));
+        }
+      } else if (porcUnd > 0) {
         const k = porcKg || (porcUnd * st.peso_std);
-        st.cocina_porcionado_und = Math.max(0, st.cocina_porcionado_und - porcUnd);
-        st.cocina_porcionado_kg = Math.max(0, st.cocina_porcionado_kg - k);
         st.bodega_porcionado_und += porcUnd;
         st.bodega_porcionado_kg += k;
+        if (isCocinaDayMov) {
+          st.cocina_dia_und = Math.max(0, st.cocina_dia_und - porcUnd);
+          st.cocina_dia_kg = Math.max(0, st.cocina_dia_kg - k);
+          st.costo_cocina_dia = Math.max(0, st.costo_cocina_dia - (Number(m.valor_total_movimiento) || Math.round(k * unitPrice)));
+        }
       } else if (cantKg > 0) {
-        st.cocina_sin_porcionar_kg = Math.max(0, st.cocina_sin_porcionar_kg - cantKg);
         st.bodega_sin_porcionar_kg += cantKg;
+        if (isCocinaDayMov) {
+          st.cocina_dia_kg = Math.max(0, st.cocina_dia_kg - cantKg);
+          st.costo_cocina_dia = Math.max(0, st.costo_cocina_dia - (Number(m.valor_total_movimiento) || Math.round(cantKg * unitPrice)));
+        }
       }
     } else if (tipo.includes('AJUSTE')) {
       const isMerma = destino.includes('MERMA') || destino.includes('SALIDA') || origen.includes('MERMA') || origen.includes('AJUSTE_MERMA');
@@ -474,13 +723,22 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
       }
     }
 
-    // Recalcular totales por insumo
-    st.peso_total_bodega_kg = st.bodega_sin_porcionar_kg + st.bodega_porcionado_kg;
-    st.peso_total_cocina_kg = st.cocina_sin_porcionar_kg + st.cocina_porcionado_kg;
+    // Recalcular totales por insumo (Cocina refleja estrictamente la fecha de corte seleccionada)
+    const isContable = st.tipo_medida === 'UNIDADES' || st.tipo_medida === 'PAQUETES';
+    const isKgsOnly = st.tipo_medida === 'KGS';
+    st.cocina_porcionado_und = st.cocina_dia_und;
+    st.cocina_sin_porcionar_kg = isKgsOnly ? st.cocina_dia_kg : 0;
+    st.cocina_porcionado_kg = !isKgsOnly && !isContable ? st.cocina_dia_kg : 0;
+    st.peso_total_cocina_kg = isContable ? 0 : st.cocina_dia_kg;
+    st.costo_cocina_dia = Math.max(0, Math.round(st.costo_cocina_dia));
+    st.valor_total_cocina_pesos = st.costo_cocina_dia;
+
+    st.peso_total_bodega_kg = isContable ? 0 : (st.bodega_sin_porcionar_kg + st.bodega_porcionado_kg);
     st.peso_total_general_kg = st.peso_total_bodega_kg + st.peso_total_cocina_kg;
-    st.valor_total_bodega_pesos = Math.round(st.peso_total_bodega_kg * st.costo_unitario_kg);
-    st.valor_total_cocina_pesos = Math.round(st.peso_total_cocina_kg * st.costo_unitario_kg);
-    st.valor_total_general_pesos = Math.round(st.peso_total_general_kg * st.costo_unitario_kg);
+    st.valor_total_bodega_pesos = isContable 
+      ? Math.round(st.bodega_porcionado_und * st.costo_unitario_kg) 
+      : Math.round(st.peso_total_bodega_kg * st.costo_unitario_kg);
+    st.valor_total_general_pesos = st.valor_total_bodega_pesos;
   });
 
   return {
@@ -490,3 +748,37 @@ export async function calculatePeriodoStock(periodoId: string, fechaCorte?: stri
     totalMovs: approvedMovs.length
   };
 }
+
+/**
+ * Recalibra el stock_actual acumulando desde el último conteo físico aplicado
+ * (o inventario inicial) más todos los movimientos aprobados en Supabase.
+ */
+export async function recalibrateStockActual(periodoId?: string) {
+  const p = periodoId ? await getPeriodoById(periodoId) : await getActivePeriodo();
+  if (!p) return;
+
+  const res = await calculatePeriodoStock(p.id);
+  if (!res || !res.stockMap) return;
+
+  const nowIso = new Date().toISOString();
+  const upsertRows = Object.values(res.stockMap).map((st: any) => {
+    const isContable = st.tipo_medida === 'UNIDADES' || st.tipo_medida === 'PAQUETES';
+    return {
+      insumo_id: st.insumo_id,
+      bodega_sin_porcionar_kg: isContable ? 0 : Number((st.bodega_sin_porcionar_kg || 0).toFixed(2)),
+      bodega_porcionado_und: Math.round(st.bodega_porcionado_und || 0),
+      bodega_porcionado_kg: isContable ? 0 : Number((st.bodega_porcionado_kg || 0).toFixed(2)),
+      cocina_sin_porcionar_kg: isContable ? 0 : Number((st.cocina_sin_porcionar_kg || 0).toFixed(2)),
+      cocina_porcionado_und: Math.round(st.cocina_porcionado_und || 0),
+      cocina_porcionado_kg: isContable ? 0 : Number((st.cocina_porcionado_kg || 0).toFixed(2)),
+      updated_at: nowIso,
+    };
+  });
+
+  for (let i = 0; i < upsertRows.length; i += 50) {
+    const batch = upsertRows.slice(i, i + 50);
+    const { error } = await supabase.from('stock_actual').upsert(batch, { onConflict: 'insumo_id' });
+    if (error) console.error('Error upserting stock_actual batch:', error);
+  }
+}
+

@@ -1,9 +1,12 @@
+export type TipoMedida = 'KGS' | 'UNIDADES' | 'KGS_Y_UNIDADES' | 'PAQUETES';
+
 export interface InsumoItem {
   insumo_id: number | string;
   codigo?: string;
   insumo: string;
   categoria: string;
   unidad_medida?: string;
+  tipo_medida?: TipoMedida;
   es_carne?: boolean;
   bodega_sin_porc_kg: number;
   bodega_porc_und: number;
@@ -19,6 +22,10 @@ export interface InsumoItem {
   costo_unitario_kg: number;
   valor_total_general_pesos: number;
   valor_total_bodega_pesos?: number;
+  valor_total_cocina_pesos?: number;
+  cocina_dia_und?: number;
+  cocina_dia_kg?: number;
+  costo_cocina_dia?: number;
   traslado_cocina_acumulado_kg?: number;
   traslado_cocina_acumulado_und?: number;
   merma_acumulada_kg: number;
@@ -34,6 +41,10 @@ export interface MovimientoItem {
   catalogo_insumos?: {
     nombre: string;
     categoria: string;
+    tipo_medida?: TipoMedida;
+    unidad_medida?: string;
+    peso_estandar_porcion_kg?: number;
+    costo_unitario_kg?: number;
   };
   fecha?: string;
   fecha_hora?: string;

@@ -5,6 +5,7 @@ import { Scissors, Loader2, Sparkles, AlertTriangle, ArrowRight, Scale, DollarSi
 import { InsumoItem } from '@/types';
 import SmartSearchInsumo from './SmartSearchInsumo';
 import { formatMoney } from '@/lib/formatters';
+import { useNotification } from '@/context/NotificationContext';
 
 interface Props {
   insumos: InsumoItem[];
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function FormPorcionado({ insumos, onSuccess }: Props) {
+  const { success, error, warning } = useNotification();
   const [selectedInsumoId, setSelectedInsumoId] = useState<string | number | null>(null);
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [kgAProcesar, setKgAProcesar] = useState('');
@@ -78,10 +80,13 @@ export default function FormPorcionado({ insumos, onSuccess }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedInsumo) return alert('Selecciona una carne para porcionar.');
-    if (kgProcNum <= 0) return alert('Ingresa los Kilos a procesar.');
+    if (!selectedInsumo) return warning('Selecciona una carne para porcionar.', 'Campo Requerido');
+    if (kgProcNum <= 0) return warning('Ingresa los Kilos a procesar.', 'Campo Requerido');
     if (selectedInsumo.bodega_sin_porc_kg < kgProcNum) {
-      return alert(`Stock insuficiente en bodega entero. Solo hay ${selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg enteros disponibles.`);
+      return warning(
+        `Stock insuficiente en bodega entero. Solo hay ${selectedInsumo.bodega_sin_porc_kg.toFixed(2)} Kg enteros disponibles.`,
+        'Stock Insuficiente'
+      );
     }
 
     setLoading(true);
@@ -109,9 +114,14 @@ export default function FormPorcionado({ insumos, onSuccess }: Props) {
       setPesoPorcionesKg('');
       setMermaManualKg('');
       setObservaciones('');
+
+      success(
+        `Porcionado de ${kgProcNum} Kg de ${selectedInsumo.insumo} (${porcNum} porciones) registrado en estado pendiente.`,
+        '🥩 Porcionado Registrado'
+      );
       onSuccess();
     } catch (err: any) {
-      alert(err.message);
+      error(err.message || 'Error al registrar porcionado');
     } finally {
       setLoading(false);
     }

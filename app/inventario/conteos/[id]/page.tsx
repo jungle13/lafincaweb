@@ -4,10 +4,11 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Loader2, CheckCircle2, Trash2, PlusCircle, AlertTriangle,
-  ClipboardList, Scale, Search, Check, Edit2, RotateCcw
+  ClipboardList, Scale, Search, Check, Edit2, RotateCcw, Printer
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import SmartSearchInsumo from '@/components/bodeguero/SmartSearchInsumo';
+import ExportConteoPdfModal from '@/components/inventario/ExportConteoPdfModal';
 import { formatMoney, normalizeStr } from '@/lib/formatters';
 import { InsumoItem } from '@/types';
 
@@ -57,6 +58,7 @@ export default function DetalleConteoPage({ params }: { params: { id: string } }
   const [quickActionId, setQuickActionId] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -404,6 +406,18 @@ export default function DetalleConteoPage({ params }: { params: { id: string } }
           }`}>
             {conteo.estado}
           </span>
+
+          {detalles.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              title="Exportar acta y reporte oficial en PDF o Excel"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Reporte Oficial (PDF / Excel)</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -601,16 +615,30 @@ export default function DetalleConteoPage({ params }: { params: { id: string } }
             </button>
           </div>
 
-          {!isAplicado && detalles.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowApplyModal(true)}
-              className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Aprobar y Aplicar Conteo a Inventario ({detalles.length})</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {detalles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowExportModal(true)}
+                className="h-9 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+                title="Exportar reporte oficial en PDF o Excel"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Reporte Oficial (PDF / Excel)</span>
+              </button>
+            )}
+
+            {!isAplicado && detalles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowApplyModal(true)}
+                className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Aprobar y Aplicar Conteo a Inventario ({detalles.length})</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ----------------- CONTENIDO TAB 1: SOLO LO REGISTRADO ----------------- */}
@@ -914,6 +942,16 @@ export default function DetalleConteoPage({ params }: { params: { id: string } }
           </div>
         </div>
       </Modal>
+
+      {showExportModal && (
+        <ExportConteoPdfModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          conteo={conteo}
+          detalles={detalles}
+          insumosList={insumosList}
+        />
+      )}
     </div>
   );
 }

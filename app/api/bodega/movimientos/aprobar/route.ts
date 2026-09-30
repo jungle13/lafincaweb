@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { recalibrateStockActual, calculatePeriodoStock } from '@/lib/periodos';
+import { recalibrateStockActual } from '@/services/periodosService';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       // 2. Obtener todos los pendientes de esta fecha
       const { data: dayMovs, error: fetchErr } = await supabase
         .from('movimientos_inventario')
-        .select('*, catalogo_insumos(nombre, categoria, peso_estandar_porcion_kg, costo_unitario_kg)')
+        .select('*, catalogo_insumos(nombre, categoria, tipo_medida, unidad_medida, peso_estandar_porcion_kg, costo_unitario_kg)')
         .eq('fecha', fecha)
         .ilike('observaciones', '%[PENDIENTE_APROBAR]%');
 
@@ -111,14 +111,17 @@ export async function POST(request: Request) {
       const insufficientItems: string[] = [];
       const tempStockMap = new Map<string, { bSinPorc: number; bPorcUnd: number; cPorcUnd: number; cSinPorc: number }>();
 
-      const { stockMap } = await calculatePeriodoStock(periodoId || '');
-      if (stockMap) {
-        Object.values(stockMap).forEach((st: any) => {
+      const { data: stockRows } = await supabase
+        .from('stock_actual')
+        .select('*');
+
+      if (stockRows) {
+        stockRows.forEach((st: any) => {
           tempStockMap.set(String(st.insumo_id), {
-            bSinPorc: st.bodega_sin_porcionar_kg || 0,
-            bPorcUnd: st.bodega_porcionado_und || 0,
-            cPorcUnd: st.cocina_porcionado_und || 0,
-            cSinPorc: st.cocina_sin_porcionar_kg || 0,
+            bSinPorc: parseFloat(st.bodega_sin_porcionar_kg) || 0,
+            bPorcUnd: parseInt(st.bodega_porcionado_und) || 0,
+            cPorcUnd: parseInt(st.cocina_porcionado_und) || 0,
+            cSinPorc: parseFloat(st.cocina_sin_porcionar_kg) || 0,
           });
         });
       }
@@ -132,9 +135,16 @@ export async function POST(request: Request) {
         const cantKg = parseFloat(mov.cant_sin_porcionar_kg) || 0;
         const porcUnd = parseInt(mov.porciones_und) || 0;
         const name = mov.catalogo_insumos?.nombre || `Insumo #${mov.insumo_id}`;
+        const tipoMedida = (mov.catalogo_insumos?.tipo_medida || '').toUpperCase();
+        const unidadMedida = (mov.catalogo_insumos?.unidad_medida || '').toLowerCase();
+        const isContable = tipoMedida === 'UNIDADES' || tipoMedida === 'PAQUETES' || ['und', 'unidad', 'unidades', 'paquete', 'paquetes'].includes(unidadMedida);
 
         if (mov.tipo_movimiento === 'ENTRADA_COMPRA') {
-          cur.bSinPorc += cantKg;
+          if (isContable) {
+            cur.bPorcUnd += (porcUnd || cantKg);
+          } else {
+            cur.bSinPorc += cantKg;
+          }
         } else if (mov.tipo_movimiento === 'PORCIONADO') {
           if (cur.bSinPorc < cantKg) {
             insufficientItems.push(`${name} (Faltan ${(cantKg - cur.bSinPorc).toFixed(2)} Kg en Bodega Entero para porcionar)`);
@@ -143,12 +153,29 @@ export async function POST(request: Request) {
             cur.bPorcUnd += porcUnd;
           }
         } else if (mov.tipo_movimiento === 'TRASLADO_COCINA') {
-          if (porcUnd > 0) {
-            if (cur.bPorcUnd < porcUnd) {
-              insufficientItems.push(`${name} (Faltan ${porcUnd - cur.bPorcUnd} und porcionadas en Bodega para traslado)`);
+          if (isContable) {
+            const needed = porcUnd || cantKg;
+            if (cur.bPorcUnd < needed) {
+              insufficientItems.push(`${name} (Faltan ${needed - cur.bPorcUnd} ${mov.catalogo_insumos?.unidad_medida || 'und'} en Bodega)`);
             } else {
+              cur.bPorcUnd -= needed;
+              cur.cPorcUnd += needed;
+            }
+          } else if (porcUnd > 0) {
+            const missingUnd = Math.max(0, porcUnd - cur.bPorcUnd);
+            if (missingUnd === 0) {
               cur.bPorcUnd -= porcUnd;
               cur.cPorcUnd += porcUnd;
+            } else {
+              const pesoStd = mov.catalogo_insumos?.peso_estandar_porcion_kg || (porcUnd > 0 && mov.peso_porciones_kg > 0 ? mov.peso_porciones_kg / porcUnd : 0.35);
+              const neededKg = parseFloat((missingUnd * pesoStd).toFixed(2));
+              if (cur.bSinPorc >= neededKg) {
+                cur.bPorcUnd = 0;
+                cur.bSinPorc = Math.max(0, cur.bSinPorc - neededKg);
+                cur.cPorcUnd += porcUnd;
+              } else {
+                insufficientItems.push(`${name} (Faltan ${missingUnd} und y el entero disponible (${cur.bSinPorc.toFixed(2)} Kg) no alcanza)`);
+              }
             }
           } else {
             if (cur.bSinPorc < cantKg) {
@@ -159,7 +186,11 @@ export async function POST(request: Request) {
             }
           }
         } else if (mov.tipo_movimiento === 'DEVOLUCION_COCINA') {
-          if (porcUnd > 0) {
+          if (isContable) {
+            const qty = porcUnd || cantKg;
+            cur.cPorcUnd = Math.max(0, cur.cPorcUnd - qty);
+            cur.bPorcUnd += qty;
+          } else if (porcUnd > 0) {
             cur.cPorcUnd -= porcUnd;
             cur.bPorcUnd += porcUnd;
           } else {
@@ -175,9 +206,27 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      // 4. Si todo el stock es suficiente, aprobar en lote
+      // 4. Si todo el stock es suficiente, aprobar en lote de manera secuencial y atómica
+      const liveStockMap = new Map<string, any>();
+      if (stockRows) {
+        stockRows.forEach((st: any) => {
+          liveStockMap.set(String(st.insumo_id), { ...st });
+        });
+      }
+
       for (const mov of sortedMovs) {
-        await approveSingleMovement(mov, usuario);
+        const idKey = String(mov.insumo_id);
+        const currentStock = liveStockMap.get(idKey) || {
+          insumo_id: mov.insumo_id,
+          bodega_sin_porcionar_kg: 0,
+          bodega_porcionado_und: 0,
+          bodega_porcionado_kg: 0,
+          cocina_sin_porcionar_kg: 0,
+          cocina_porcionado_und: 0,
+          cocina_porcionado_kg: 0,
+        };
+        const { updatedStock } = await approveSingleMovement(mov, usuario, {}, currentStock);
+        liveStockMap.set(idKey, updatedStock);
       }
 
       return NextResponse.json({
@@ -194,7 +243,7 @@ export async function POST(request: Request) {
     // 1. Obtener el movimiento individual
     const { data: mov, error: movErr } = await supabase
       .from('movimientos_inventario')
-      .select('*, catalogo_insumos(nombre, categoria, peso_estandar_porcion_kg, costo_unitario_kg)')
+      .select('*, catalogo_insumos(nombre, categoria, tipo_medida, unidad_medida, peso_estandar_porcion_kg, costo_unitario_kg)')
       .eq('id', movimientoId)
       .single();
 
@@ -235,7 +284,7 @@ export async function POST(request: Request) {
         .from('movimientos_inventario')
         .update(updateData)
         .eq('id', movimientoId)
-        .select('*, catalogo_insumos(nombre, categoria)')
+        .select('*, catalogo_insumos(nombre, categoria, tipo_medida, unidad_medida, peso_estandar_porcion_kg, costo_unitario_kg)')
         .single();
 
       if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
@@ -262,16 +311,22 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validar stock actual para este movimiento específico
+    // Validar stock actual para este movimiento específico directamente desde stock_actual (O(1))
     const insumoId = overrides.insumo_id || mov.insumo_id;
-    const { stockMap } = await calculatePeriodoStock(periodoId || '');
-    const stockData = (stockMap as Record<string, any>)?.[String(insumoId)];
+    let { data: dbStock } = await supabase
+      .from('stock_actual')
+      .select('*')
+      .eq('insumo_id', insumoId)
+      .maybeSingle();
 
-    const curBSinPorc = stockData ? (stockData.bodega_sin_porcionar_kg || 0) : 0;
-    const curBPorcUnd = stockData ? (stockData.bodega_porcionado_und || 0) : 0;
+    const curBSinPorc = parseFloat(dbStock?.bodega_sin_porcionar_kg) || 0;
+    const curBPorcUnd = parseInt(dbStock?.bodega_porcionado_und) || 0;
     const cantKg = overrides.cant_sin_porcionar_kg !== undefined ? parseFloat(overrides.cant_sin_porcionar_kg) : parseFloat(mov.cant_sin_porcionar_kg) || 0;
     const porciones = overrides.porciones_und !== undefined ? parseInt(overrides.porciones_und) : parseInt(mov.porciones_und) || 0;
     const insumoNombre = mov.catalogo_insumos?.nombre || 'Insumo';
+    const tipoMedida = (mov.catalogo_insumos?.tipo_medida || '').toUpperCase();
+    const unidadMedida = (mov.catalogo_insumos?.unidad_medida || '').toLowerCase();
+    const isContable = tipoMedida === 'UNIDADES' || tipoMedida === 'PAQUETES' || ['und', 'unidad', 'unidades', 'paquete', 'paquetes'].includes(unidadMedida);
 
     if (mov.tipo_movimiento === 'PORCIONADO') {
       if (curBSinPorc < cantKg) {
@@ -280,11 +335,23 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
     } else if (mov.tipo_movimiento === 'TRASLADO_COCINA') {
-      if (porciones > 0) {
-        if (curBPorcUnd < porciones) {
+      if (isContable) {
+        const unitsNeeded = porciones > 0 ? porciones : cantKg;
+        if (curBPorcUnd < unitsNeeded) {
           return NextResponse.json({
-            error: `⚠️ Stock insuficiente para aprobar este traslado:\n• ${insumoNombre}: Se requieren ${porciones} und porcionadas en Bodega pero solo hay ${curBPorcUnd} und.\n\nPor favor presiona "🛠️ Ajustar" en esta tarjeta para ingresar el ajuste previo.`
+            error: `⚠️ Stock insuficiente para trasladar ${unitsNeeded} ${mov.catalogo_insumos?.unidad_medida || 'und'} de ${insumoNombre}: Hay ${curBPorcUnd} ${mov.catalogo_insumos?.unidad_medida || 'und'} en bodega.`
           }, { status: 400 });
+        }
+      } else if (porciones > 0) {
+        if (curBPorcUnd < porciones) {
+          const missingUnd = porciones - curBPorcUnd;
+          const pesoStd = mov.catalogo_insumos?.peso_estandar_porcion_kg || (porciones > 0 && mov.peso_porciones_kg > 0 ? mov.peso_porciones_kg / porciones : 0.35);
+          const neededKg = parseFloat((missingUnd * pesoStd).toFixed(2));
+          if (curBSinPorc < neededKg) {
+            return NextResponse.json({
+              error: `⚠️ Stock insuficiente para trasladar ${porciones} und de ${insumoNombre}: Hay ${curBPorcUnd} und porcionadas y ${curBSinPorc.toFixed(2)} Kg en entero (insuficiente para cubrir el faltante de ${neededKg} Kg).`
+            }, { status: 400 });
+          }
         }
       } else if (cantKg > 0) {
         if (curBSinPorc < cantKg) {
@@ -295,17 +362,16 @@ export async function POST(request: Request) {
       }
     }
 
-    // Aprobar ÚNICAMENTE este movimiento específico
-    const approvedMov = await approveSingleMovement(mov, usuario, overrides);
-    await recalibrateStockActual();
-    return NextResponse.json({ success: true, data: approvedMov, message: `✅ Movimiento de ${insumoNombre} aprobado exitosamente.` });
+    // Aprobar ÚNICAMENTE este movimiento específico de forma directa y atómica
+    const { updatedMov } = await approveSingleMovement(mov, usuario, overrides, dbStock);
+    return NextResponse.json({ success: true, data: updatedMov, message: `✅ Movimiento de ${insumoNombre} aprobado exitosamente.` });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-// Función auxiliar para aprobar un movimiento y sincronizar stock
-async function approveSingleMovement(mov: any, usuario: string, overrides: any = {}) {
+// Función auxiliar para aprobar un movimiento y sincronizar stock directamente en O(1)
+async function approveSingleMovement(mov: any, usuario: string, overrides: any = {}, cachedStock?: any) {
   const insumoId = overrides.insumo_id || mov.insumo_id;
   const tipo = mov.tipo_movimiento;
   const cantKg = overrides.cant_sin_porcionar_kg !== undefined ? parseFloat(overrides.cant_sin_porcionar_kg) : parseFloat(mov.cant_sin_porcionar_kg) || 0;
@@ -314,25 +380,29 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
   let costoUnitarioKg = overrides.costo_unitario_kg !== undefined ? parseFloat(overrides.costo_unitario_kg) : parseFloat(mov.costo_unitario_kg) || 0;
   let totalPesos = overrides.valor_total_movimiento !== undefined ? parseFloat(overrides.valor_total_movimiento) : parseFloat(mov.valor_total_movimiento) || 0;
 
-  // Obtener stock actual a partir del periodo
-  const { stockMap } = await calculatePeriodoStock(mov.periodo_id || '');
-  const stPeriod = (stockMap as Record<string, any>)?.[String(insumoId)];
-
-  let { data: stockData } = await supabase
-    .from('stock_actual')
-    .select('*')
-    .eq('insumo_id', insumoId)
-    .maybeSingle();
-
-  const prevBSinPorc = stPeriod ? (stPeriod.bodega_sin_porcionar_kg || 0) : (parseFloat(stockData?.bodega_sin_porcionar_kg) || 0);
-  const prevBPorcUnd = stPeriod ? (stPeriod.bodega_porcionado_und || 0) : (parseInt(stockData?.bodega_porcionado_und) || 0);
-  const prevBPorcKg = stPeriod ? (stPeriod.bodega_porcionado_kg || 0) : (parseFloat(stockData?.bodega_porcionado_kg) || 0);
-  const prevCSinPorc = stPeriod ? (stPeriod.cocina_sin_porcionar_kg || 0) : (parseFloat(stockData?.cocina_sin_porcionar_kg) || 0);
-  const prevCPorcUnd = stPeriod ? (stPeriod.cocina_porcionado_und || 0) : (parseInt(stockData?.cocina_porcionado_und) || 0);
-  const prevCPorcKg = stPeriod ? (stPeriod.cocina_porcionado_kg || 0) : (parseFloat(stockData?.cocina_porcionado_kg) || 0);
-
   const nowIso = new Date().toISOString();
   const todayStr = mov.fecha || nowIso.split('T')[0];
+
+  let stockData = cachedStock;
+  if (!stockData) {
+    const { data } = await supabase
+      .from('stock_actual')
+      .select('*')
+      .eq('insumo_id', insumoId)
+      .maybeSingle();
+    stockData = data;
+  }
+
+  const prevBSinPorc = parseFloat(stockData?.bodega_sin_porcionar_kg) || 0;
+  const prevBPorcUnd = parseInt(stockData?.bodega_porcionado_und) || 0;
+  const prevBPorcKg = parseFloat(stockData?.bodega_porcionado_kg) || 0;
+  const prevCSinPorc = parseFloat(stockData?.cocina_sin_porcionar_kg) || 0;
+  const prevCPorcUnd = parseInt(stockData?.cocina_porcionado_und) || 0;
+  const prevCPorcKg = parseFloat(stockData?.cocina_porcionado_kg) || 0;
+
+  const tipoMedida = (mov.catalogo_insumos?.tipo_medida || '').toUpperCase();
+  const unidadMedida = (mov.catalogo_insumos?.unidad_medida || '').toLowerCase();
+  const isContable = tipoMedida === 'UNIDADES' || tipoMedida === 'PAQUETES' || ['und', 'unidad', 'unidades', 'paquete', 'paquetes'].includes(unidadMedida);
 
   let updateStockPayload: any = {
     insumo_id: insumoId,
@@ -360,19 +430,42 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
   movUpdatePayload.observaciones = rawObs.replace(/\[PENDIENTE_APROBAR\]/g, '').trim() || 'Movimiento aprobado';
 
   if (tipo === 'ENTRADA_COMPRA') {
-    const newBSinPorc = prevBSinPorc + cantKg;
-    updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
+    if (isContable) {
+      const unitsPurchased = porciones > 0 ? porciones : cantKg;
+      const newBPorcUnd = prevBPorcUnd + unitsPurchased;
+      updateStockPayload.bodega_porcionado_und = newBPorcUnd;
+      updateStockPayload.bodega_sin_porcionar_kg = 0;
+      updateStockPayload.bodega_porcionado_kg = 0;
 
-    movUpdatePayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
-    movUpdatePayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
+      movUpdatePayload.cant_sin_porcionar_kg = 0;
+      movUpdatePayload.porciones_und = unitsPurchased;
+      movUpdatePayload.peso_porciones_kg = 0;
+      movUpdatePayload.bodega_porc_und_anterior = prevBPorcUnd;
+      movUpdatePayload.bodega_porc_und_nuevo = newBPorcUnd;
 
-    if (cantKg > 0 && totalPesos > 0) {
-      costoUnitarioKg = Math.round(totalPesos / cantKg);
-      movUpdatePayload.costo_unitario_kg = costoUnitarioKg;
-      await supabase
-        .from('catalogo_insumos')
-        .update({ costo_unitario_kg: costoUnitarioKg, updated_at: nowIso })
-        .eq('id', insumoId);
+      if (unitsPurchased > 0 && totalPesos > 0) {
+        costoUnitarioKg = Math.round(totalPesos / unitsPurchased);
+        movUpdatePayload.costo_unitario_kg = costoUnitarioKg;
+        await supabase
+          .from('catalogo_insumos')
+          .update({ costo_unitario_kg: costoUnitarioKg, updated_at: nowIso })
+          .eq('id', insumoId);
+      }
+    } else {
+      const newBSinPorc = prevBSinPorc + cantKg;
+      updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
+
+      movUpdatePayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
+      movUpdatePayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
+
+      if (cantKg > 0 && totalPesos > 0) {
+        costoUnitarioKg = Math.round(totalPesos / cantKg);
+        movUpdatePayload.costo_unitario_kg = costoUnitarioKg;
+        await supabase
+          .from('catalogo_insumos')
+          .update({ costo_unitario_kg: costoUnitarioKg, updated_at: nowIso })
+          .eq('id', insumoId);
+      }
     }
 
     // Crear registro oficial en compras
@@ -405,7 +498,7 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
         await supabase.from('compras_detalle').insert([{
           compra_id: compra.id,
           insumo_id: insumoId,
-          cantidad_kg: cantKg,
+          cantidad_kg: isContable ? (porciones > 0 ? porciones : cantKg) : cantKg,
           costo_unitario_kg: costoUnitarioKg,
           costo_total: totalPesos
         }]);
@@ -431,22 +524,53 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
     movUpdatePayload.bodega_porc_kg_nuevo = newBPorcKg;
     movUpdatePayload.merma_kg = mermaKg;
   } else if (tipo === 'TRASLADO_COCINA') {
-    if (porciones > 0) {
-      const newBPorcUnd = Math.max(0, prevBPorcUnd - porciones);
-      const newBPorcKg = Math.max(0, prevBPorcKg - pesoPorciones);
+    if (isContable) {
+      const unitsToTransfer = porciones > 0 ? porciones : cantKg;
+      const newBPorcUnd = Math.max(0, prevBPorcUnd - unitsToTransfer);
+      const newCPorcUnd = prevCPorcUnd + unitsToTransfer;
+
+      updateStockPayload.bodega_porcionado_und = newBPorcUnd;
+      updateStockPayload.cocina_porcionado_und = newCPorcUnd;
+      updateStockPayload.bodega_sin_porcionar_kg = 0;
+      updateStockPayload.bodega_porcionado_kg = 0;
+      updateStockPayload.cocina_sin_porcionar_kg = 0;
+      updateStockPayload.cocina_porcionado_kg = 0;
+
+      movUpdatePayload.origen = 'BODEGA_PORCIONADO';
+      movUpdatePayload.destino = 'COCINA_PORCIONADO';
+      movUpdatePayload.cant_sin_porcionar_kg = 0;
+      movUpdatePayload.porciones_und = unitsToTransfer;
+      movUpdatePayload.peso_porciones_kg = 0;
+      movUpdatePayload.bodega_porc_und_anterior = prevBPorcUnd;
+      movUpdatePayload.bodega_porc_und_nuevo = newBPorcUnd;
+      movUpdatePayload.cocina_porc_und_anterior = prevCPorcUnd;
+      movUpdatePayload.cocina_porc_und_nuevo = newCPorcUnd;
+    } else if (porciones > 0) {
+      const fromListas = Math.min(prevBPorcUnd, porciones);
+      const missingFromEntero = Math.max(0, porciones - fromListas);
+      const pesoStd = (porciones > 0 && pesoPorciones > 0) ? (pesoPorciones / porciones) : (mov.catalogo_insumos?.peso_estandar_porcion_kg || 0.35);
+      const neededKgFromEntero = missingFromEntero > 0 ? parseFloat((missingFromEntero * pesoStd).toFixed(2)) : 0;
+      const kgFromListas = parseFloat((pesoPorciones - neededKgFromEntero).toFixed(2));
+
+      const newBPorcUnd = Math.max(0, prevBPorcUnd - fromListas);
+      const newBPorcKg = Math.max(0, prevBPorcKg - kgFromListas);
+      const newBSinPorc = Math.max(0, prevBSinPorc - neededKgFromEntero);
       const newCPorcUnd = prevCPorcUnd + porciones;
       const newCPorcKg = prevCPorcKg + pesoPorciones;
 
       updateStockPayload.bodega_porcionado_und = newBPorcUnd;
       updateStockPayload.bodega_porcionado_kg = newBPorcKg;
+      updateStockPayload.bodega_sin_porcionar_kg = newBSinPorc;
       updateStockPayload.cocina_porcionado_und = newCPorcUnd;
       updateStockPayload.cocina_porcionado_kg = newCPorcKg;
 
       movUpdatePayload.origen = 'BODEGA_PORCIONADO';
       movUpdatePayload.destino = 'COCINA_PORCIONADO';
-      movUpdatePayload.cant_sin_porcionar_kg = 0;
+      movUpdatePayload.cant_sin_porcionar_kg = neededKgFromEntero;
       movUpdatePayload.porciones_und = porciones;
       movUpdatePayload.peso_porciones_kg = pesoPorciones;
+      movUpdatePayload.bodega_sin_porc_anterior_kg = prevBSinPorc;
+      movUpdatePayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
       movUpdatePayload.bodega_porc_und_anterior = prevBPorcUnd;
       movUpdatePayload.bodega_porc_und_nuevo = newBPorcUnd;
       movUpdatePayload.bodega_porc_kg_anterior = prevBPorcKg;
@@ -471,7 +595,28 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
       movUpdatePayload.bodega_sin_porc_nuevo_kg = newBSinPorc;
     }
   } else if (tipo === 'DEVOLUCION_COCINA') {
-    if (porciones > 0) {
+    if (isContable) {
+      const unitsToReturn = porciones > 0 ? porciones : cantKg;
+      const newCPorcUnd = Math.max(0, prevCPorcUnd - unitsToReturn);
+      const newBPorcUnd = prevBPorcUnd + unitsToReturn;
+
+      updateStockPayload.cocina_porcionado_und = newCPorcUnd;
+      updateStockPayload.bodega_porcionado_und = newBPorcUnd;
+      updateStockPayload.bodega_sin_porcionar_kg = 0;
+      updateStockPayload.bodega_porcionado_kg = 0;
+      updateStockPayload.cocina_sin_porcionar_kg = 0;
+      updateStockPayload.cocina_porcionado_kg = 0;
+
+      movUpdatePayload.origen = 'COCINA_PORCIONADO';
+      movUpdatePayload.destino = 'BODEGA_PORCIONADO';
+      movUpdatePayload.cant_sin_porcionar_kg = 0;
+      movUpdatePayload.porciones_und = unitsToReturn;
+      movUpdatePayload.peso_porciones_kg = 0;
+      movUpdatePayload.cocina_porc_und_anterior = prevCPorcUnd;
+      movUpdatePayload.cocina_porc_und_nuevo = newCPorcUnd;
+      movUpdatePayload.bodega_porc_und_anterior = prevBPorcUnd;
+      movUpdatePayload.bodega_porc_und_nuevo = newBPorcUnd;
+    } else if (porciones > 0) {
       const newCPorcUnd = Math.max(0, prevCPorcUnd - porciones);
       const newCPorcKg = Math.max(0, prevCPorcKg - pesoPorciones);
       const newBPorcUnd = prevBPorcUnd + porciones;
@@ -517,15 +662,20 @@ async function approveSingleMovement(mov: any, usuario: string, overrides: any =
     .from('movimientos_inventario')
     .update(movUpdatePayload)
     .eq('id', mov.id)
-    .select('*, catalogo_insumos(nombre, categoria)')
+    .select('*, catalogo_insumos(nombre, categoria, tipo_medida, unidad_medida, peso_estandar_porcion_kg, costo_unitario_kg)')
     .single();
 
   if (updateMovErr) throw updateMovErr;
 
   // Actualizar tabla stock_actual
-  await supabase
+  const { error: stockErr } = await supabase
     .from('stock_actual')
-    .upsert(updateStockPayload);
+    .upsert(updateStockPayload, { onConflict: 'insumo_id' });
 
-  return updatedMov;
+  if (stockErr) {
+    console.error('Error al actualizar stock_actual en aprobación:', stockErr);
+    throw new Error(`Error actualizando stock_actual: ${stockErr.message}`);
+  }
+
+  return { updatedMov, updatedStock: updateStockPayload };
 }

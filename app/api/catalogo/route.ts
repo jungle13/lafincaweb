@@ -32,6 +32,7 @@ export async function POST(request: Request) {
       nombre,
       categoria = 'CARNE DE RES',
       unidad_medida = 'Kg',
+      tipo_medida = 'KGS_Y_UNIDADES',
       es_carne = true,
       peso_estandar_porcion_kg = 0.35,
       costo_unitario_kg = 0,
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
         nombre: nombre.trim(),
         categoria: categoria.trim(),
         unidad_medida: unidad_medida.trim(),
+        tipo_medida: tipo_medida.trim(),
         es_carne: Boolean(es_carne),
         peso_estandar_porcion_kg: parseFloat(peso_estandar_porcion_kg) || 0.35,
         costo_unitario_kg: parseFloat(costo_unitario_kg) || 0,
@@ -108,6 +110,7 @@ export async function PUT(request: Request) {
     if (nombre !== undefined) updatePayload.nombre = nombre.trim();
     if (categoria !== undefined) updatePayload.categoria = categoria.trim();
     if (unidad_medida !== undefined) updatePayload.unidad_medida = unidad_medida.trim();
+    if (body.tipo_medida !== undefined) updatePayload.tipo_medida = body.tipo_medida.trim();
     if (es_carne !== undefined) updatePayload.es_carne = Boolean(es_carne);
     if (peso_estandar_porcion_kg !== undefined) updatePayload.peso_estandar_porcion_kg = parseFloat(peso_estandar_porcion_kg) || 0.35;
     if (costo_unitario_kg !== undefined) updatePayload.costo_unitario_kg = parseFloat(costo_unitario_kg) || 0;

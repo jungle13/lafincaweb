@@ -3,46 +3,74 @@
 import { useMemo } from 'react';
 import { InsumoItem } from '@/types';
 import { formatMoney } from '@/lib/formatters';
+import { Warehouse, CookingPot } from 'lucide-react';
 
 interface Props {
   insumos: InsumoItem[];
+  showCocinaCosts?: boolean;
 }
 
 export default function StockKpis({ insumos }: Props) {
   const stats = useMemo(() => {
-    let totalValor = 0;
-    let totalBodegaKg = 0;
-    let totalCocinaKg = 0;
-    let totalMermaKg = 0;
+    let totalValorBodega = 0;
+    let totalValorCocina = 0;
 
     insumos.forEach((item) => {
-      const valorBodega = item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0));
-      totalValor += valorBodega || 0;
-      totalBodegaKg += item.peso_total_bodega_kg || 0;
-      totalCocinaKg += item.peso_total_cocina_kg || 0;
-      totalMermaKg += item.merma_acumulada_kg || 0;
+      const tipoMedida = item.tipo_medida || 'KGS_Y_UNIDADES';
+      const isContable = tipoMedida === 'UNIDADES' || tipoMedida === 'PAQUETES';
+      const totalUnitsBodega = isContable ? (item.bodega_porc_und || item.bodega_sin_porc_kg || 0) : (item.bodega_porc_und || 0);
+      const totalKgBodega = item.peso_total_bodega_kg ?? ((item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0));
+      const tieneStockBodega = isContable ? (totalUnitsBodega > 0) : (totalKgBodega > 0 || totalUnitsBodega > 0);
+
+      const valorBodega = !tieneStockBodega ? 0 : (
+        (item.valor_total_bodega_pesos != null && item.valor_total_bodega_pesos > 0)
+          ? item.valor_total_bodega_pesos
+          : (isContable 
+              ? (totalUnitsBodega * (item.costo_unitario_kg || 0))
+              : Math.round(totalKgBodega * (item.costo_unitario_kg || 0)))
+      );
+      
+      const valorCocina = item.costo_cocina_dia != null 
+        ? item.costo_cocina_dia 
+        : (item.valor_total_cocina_pesos != null ? item.valor_total_cocina_pesos : 0);
+
+      totalValorBodega += valorBodega || 0;
+      totalValorCocina += valorCocina || 0;
     });
 
-    return { totalValor, totalBodegaKg, totalCocinaKg, totalMermaKg };
+    return { totalValorBodega, totalValorCocina };
   }, [insumos]);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 py-2 border-b border-slate-100 font-normal">
-      <div className="bg-slate-50 md:bg-transparent p-2.5 md:p-0 rounded-xl border md:border-none border-slate-200/60">
-        <span className="text-[11px] md:text-xs text-slate-500 font-medium md:font-normal block">Valor Total Stock</span>
-        <div className="text-base sm:text-lg md:text-xl font-bold md:font-medium text-slate-900 mt-0.5">$ {formatMoney(stats.totalValor)}</div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2 border-b border-slate-100">
+      {/* 1. Valor Inventario en Bodega */}
+      <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80 flex items-center justify-between">
+        <div>
+          <span className="text-xs text-slate-500 font-medium block">
+            Valor Inventario en Bodega
+          </span>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5 tracking-tight">
+            $ {formatMoney(stats.totalValorBodega)}
+          </div>
+        </div>
+        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+          <Warehouse className="w-5 h-5" />
+        </div>
       </div>
-      <div className="bg-slate-50 md:bg-transparent p-2.5 md:p-0 rounded-xl border md:border-none border-slate-200/60">
-        <span className="text-[11px] md:text-xs text-slate-500 font-medium md:font-normal block">Total en Bodega</span>
-        <div className="text-base sm:text-lg md:text-xl font-bold md:font-medium text-blue-700 md:text-slate-900 mt-0.5">{stats.totalBodegaKg.toFixed(2)} <span className="text-xs text-slate-400 font-normal">Kg</span></div>
-      </div>
-      <div className="bg-slate-50 md:bg-transparent p-2.5 md:p-0 rounded-xl border md:border-none border-slate-200/60">
-        <span className="text-[11px] md:text-xs text-slate-500 font-medium md:font-normal block">Total en Cocina</span>
-        <div className="text-base sm:text-lg md:text-xl font-bold md:font-medium text-slate-800 md:text-slate-900 mt-0.5">{stats.totalCocinaKg.toFixed(2)} <span className="text-xs text-slate-400 font-normal">Kg</span></div>
-      </div>
-      <div className="bg-rose-50/50 md:bg-transparent p-2.5 md:p-0 rounded-xl border md:border-none border-rose-100/80">
-        <span className="text-[11px] md:text-xs text-rose-700 md:text-slate-500 font-medium md:font-normal block">Merma Acumulada</span>
-        <div className="text-base sm:text-lg md:text-xl font-bold md:font-medium text-rose-600 mt-0.5">{stats.totalMermaKg.toFixed(2)} <span className="text-xs text-rose-400 md:text-slate-400 font-normal">Kg</span></div>
+
+      {/* 2. Valor Insumos en Cocina */}
+      <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200/70 flex items-center justify-between">
+        <div>
+          <span className="text-xs text-amber-900 font-medium block">
+            Valor Insumos en Cocina
+          </span>
+          <div className="text-xl sm:text-2xl font-bold text-amber-950 mt-0.5 tracking-tight">
+            $ {formatMoney(stats.totalValorCocina)}
+          </div>
+        </div>
+        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+          <CookingPot className="w-5 h-5" />
+        </div>
       </div>
     </div>
   );

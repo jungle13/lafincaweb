@@ -59,26 +59,26 @@ const rawDailyMovements = [
   { fecha: '2026-09-06', insumo: 'Filete de pollox 320 gr', tipo: 'TRASLADO_COCINA', porc: 40, obs: 'Salida a cocina 40 porciones Filete Pollo' },
 
   // ==========================================
-  // FECHA: 9 Sep 2026 (2026-09-09)
+  // FECHA: 8 Sep 2026 (2026-09-08)
   // ==========================================
-  { fecha: '2026-09-09', insumo: 'Filete de pollox 320 gr', tipo: 'TRASLADO_COCINA', porc: 35, obs: 'Salida a cocina 35 porciones Filete Pollo' },
-  { fecha: '2026-09-09', insumo: 'Lomo de cerdo', tipo: 'TRASLADO_COCINA', porc: 15, obs: 'Salida a cocina 15 porciones Lomo Cerdo' },
-  { fecha: '2026-09-09', insumo: 'Costilla de res', tipo: 'TRASLADO_COCINA', porc: 68, obs: 'Salida a cocina 68 porciones Costilla Res' },
-  { fecha: '2026-09-09', insumo: 'Morrillo', tipo: 'TRASLADO_COCINA', porc: 63, obs: 'Salida a cocina 63 porciones Morrillo' },
-  { fecha: '2026-09-09', insumo: 'Punta de anca', tipo: 'TRASLADO_COCINA', porc: 5, obs: 'Salida a cocina 5 porciones Punta de Anca' },
-  { fecha: '2026-09-09', insumo: 'Churrasco', tipo: 'TRASLADO_COCINA', porc: 5, obs: 'Salida a cocina 5 porciones Churrasco' },
-  { fecha: '2026-09-09', insumo: 'Costilla ahumada', tipo: 'TRASLADO_COCINA', cantKg: 4.0, obs: 'Salida a cocina 4.0 Kg Costilla Ahumada' },
-  { fecha: '2026-09-09', insumo: 'Sobaco', tipo: 'TRASLADO_COCINA', cantKg: 11.2, obs: 'Salida a cocina 11.2 Kg Sobaco' },
-  { fecha: '2026-09-09', insumo: 'Tocino', tipo: 'TRASLADO_COCINA', porc: 25, obs: 'Salida a cocina 25 porciones Tocino' },
-  { fecha: '2026-09-09', insumo: 'Pernil de pollo', tipo: 'ENTRADA_COMPRA', cantKg: 14.9, obs: 'Entrada del día 14.9 Kg Pernil Pollo' },
-  { fecha: '2026-09-09', insumo: 'Pernil de pollo', tipo: 'DEVOLUCION_COCINA', porc: 60, obs: 'Devolución de cocina 60 porciones Pernil Pollo' },
-  { fecha: '2026-09-09', insumo: 'Filete de pollox 320 gr', tipo: 'ENTRADA_COMPRA', cantKg: 14.1, obs: 'Entrada del día 14.1 Kg Filete Pollo' },
-  { fecha: '2026-09-09', insumo: 'Filete de pollox 320 gr', tipo: 'DEVOLUCION_COCINA', porc: 46, obs: 'Devolución de cocina 46 porciones Filete Pollo' },
-  { fecha: '2026-09-09', insumo: 'Lomo de cerdo', tipo: 'ENTRADA_COMPRA', cantKg: 13.6, obs: 'Entrada del día 13.6 Kg Lomo Cerdo' },
-  { fecha: '2026-09-09', insumo: 'Lomo de cerdo', tipo: 'DEVOLUCION_COCINA', porc: 36, obs: 'Devolución de cocina 36 porciones Lomo Cerdo' },
-  { fecha: '2026-09-09', insumo: 'Huevo', tipo: 'ENTRADA_COMPRA', cantKg: 0, porc: 450, obs: 'Entrada del día 450 unds Huevos' },
-  { fecha: '2026-09-09', insumo: 'Pezuña de cerdo', tipo: 'ENTRADA_COMPRA', cantKg: 7.5, obs: 'Entrada del día 7.5 Kg Pezuña' },
-  { fecha: '2026-09-09', insumo: 'Pezuña de cerdo', tipo: 'TRASLADO_COCINA', cantKg: 7.5, obs: 'Salida a cocina 7.5 Kg Pezuña' },
+  { fecha: '2026-09-08', insumo: 'Filete de pollox 320 gr', tipo: 'TRASLADO_COCINA', porc: 35, obs: 'Salida a cocina 35 porciones Filete Pollo' },
+  { fecha: '2026-09-08', insumo: 'Lomo de cerdo', tipo: 'TRASLADO_COCINA', porc: 15, obs: 'Salida a cocina 15 porciones Lomo Cerdo' },
+  { fecha: '2026-09-08', insumo: 'Costilla de res', tipo: 'TRASLADO_COCINA', porc: 68, obs: 'Salida a cocina 68 porciones Costilla Res' },
+  { fecha: '2026-09-08', insumo: 'Morrillo', tipo: 'TRASLADO_COCINA', porc: 63, obs: 'Salida a cocina 63 porciones Morrillo' },
+  { fecha: '2026-09-08', insumo: 'Punta de anca', tipo: 'TRASLADO_COCINA', porc: 5, obs: 'Salida a cocina 5 porciones Punta de Anca' },
+  { fecha: '2026-09-08', insumo: 'Churrasco', tipo: 'TRASLADO_COCINA', porc: 5, obs: 'Salida a cocina 5 porciones Churrasco' },
+  { fecha: '2026-09-08', insumo: 'Costilla ahumada', tipo: 'TRASLADO_COCINA', cantKg: 4.0, obs: 'Salida a cocina 4.0 Kg Costilla Ahumada' },
+  { fecha: '2026-09-08', insumo: 'Sobaco', tipo: 'TRASLADO_COCINA', cantKg: 11.2, obs: 'Salida a cocina 11.2 Kg Sobaco' },
+  { fecha: '2026-09-08', insumo: 'Tocino', tipo: 'TRASLADO_COCINA', porc: 25, obs: 'Salida a cocina 25 porciones Tocino' },
+  { fecha: '2026-09-08', insumo: 'Pernil de pollo', tipo: 'ENTRADA_COMPRA', cantKg: 14.9, obs: 'Entrada del día 14.9 Kg Pernil Pollo' },
+  { fecha: '2026-09-08', insumo: 'Pernil de pollo', tipo: 'DEVOLUCION_COCINA', porc: 60, obs: 'Devolución de cocina 60 porciones Pernil Pollo' },
+  { fecha: '2026-09-08', insumo: 'Filete de pollox 320 gr', tipo: 'ENTRADA_COMPRA', cantKg: 14.1, obs: 'Entrada del día 14.1 Kg Filete Pollo' },
+  { fecha: '2026-09-08', insumo: 'Filete de pollox 320 gr', tipo: 'DEVOLUCION_COCINA', porc: 46, obs: 'Devolución de cocina 46 porciones Filete Pollo' },
+  { fecha: '2026-09-08', insumo: 'Lomo de cerdo', tipo: 'ENTRADA_COMPRA', cantKg: 13.6, obs: 'Entrada del día 13.6 Kg Lomo Cerdo' },
+  { fecha: '2026-09-08', insumo: 'Lomo de cerdo', tipo: 'DEVOLUCION_COCINA', porc: 36, obs: 'Devolución de cocina 36 porciones Lomo Cerdo' },
+  { fecha: '2026-09-08', insumo: 'Huevo', tipo: 'ENTRADA_COMPRA', cantKg: 0, porc: 450, obs: 'Entrada del día 450 unds Huevos' },
+  { fecha: '2026-09-08', insumo: 'Pezuña de cerdo', tipo: 'ENTRADA_COMPRA', cantKg: 7.5, obs: 'Entrada del día 7.5 Kg Pezuña' },
+  { fecha: '2026-09-08', insumo: 'Pezuña de cerdo', tipo: 'TRASLADO_COCINA', cantKg: 7.5, obs: 'Salida a cocina 7.5 Kg Pezuña' },
 
   // ==========================================
   // FECHA: 14 Sep 2026 (2026-09-14)

@@ -5,6 +5,7 @@ import { PlusCircle, Loader2, Sparkles, DollarSign, Package } from 'lucide-react
 import { InsumoItem } from '@/types';
 import SmartSearchInsumo from './SmartSearchInsumo';
 import { formatMoney } from '@/lib/formatters';
+import { useNotification } from '@/context/NotificationContext';
 
 interface Props {
   insumos: InsumoItem[];
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
+  const { success, error, warning } = useNotification();
   const [selectedInsumoId, setSelectedInsumoId] = useState<string | number | null>(null);
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [proveedor, setProveedor] = useState('');
@@ -26,31 +28,41 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
     return insumos.find((i) => String(i.insumo_id) === String(selectedInsumoId)) || null;
   }, [insumos, selectedInsumoId]);
 
-  const isUnd = useMemo(() => {
-    if (!selectedInsumo) return false;
+  const tipoMedida = useMemo(() => {
+    if (!selectedInsumo) return 'KGS_Y_UNIDADES';
+    if (selectedInsumo.tipo_medida) return selectedInsumo.tipo_medida;
     const unidad = selectedInsumo.unidad_medida?.toLowerCase();
     const cat = selectedInsumo.categoria?.toLowerCase() || '';
     const name = selectedInsumo.insumo?.toLowerCase() || '';
-    return unidad === 'und' || cat.includes('embutido') || cat.includes('elaborado') || name.includes('chorizo') || name.includes('tamal');
+    if (unidad === 'und' || cat.includes('embutido') || name.includes('chorizo') || name.includes('tamal') || name.includes('huevo')) return 'UNIDADES';
+    if (unidad?.includes('paquete') || name.includes('papa')) return 'PAQUETES';
+    return 'KGS_Y_UNIDADES';
   }, [selectedInsumo]);
 
+  const isUnd = tipoMedida === 'UNIDADES';
+  const isPaquete = tipoMedida === 'PAQUETES';
+  const isCountable = isUnd || isPaquete;
+  const unitLabel = isUnd ? 'Und' : isPaquete ? 'Paquetes' : 'Kg';
+
   const gramosStd = selectedInsumo?.peso_porc_gramos || 350;
-  const pesoEstKg = isUnd ? 1 : gramosStd / 1000;
+  const pesoEstKg = isCountable ? 1 : gramosStd / 1000;
   const costoCatalogoKg = selectedInsumo?.costo_unitario_kg || 0;
 
   const cantNum = parseFloat(cantidadKg) || 0;
   const costoNum = parseFloat(costoTotal) || 0;
   const costoUnitarioEfectivo = cantNum > 0 && costoNum > 0 ? Math.round(costoNum / cantNum) : costoCatalogoKg;
-  const stockActualVal = isUnd ? ((selectedInsumo?.bodega_sin_porc_kg || 0) + (selectedInsumo?.bodega_porc_und || 0)) : (selectedInsumo?.bodega_sin_porc_kg || 0);
+  const stockActualVal = isCountable 
+    ? (selectedInsumo?.bodega_porc_und || 0) 
+    : (selectedInsumo?.bodega_sin_porc_kg || 0);
   const nuevoStockKg = stockActualVal + cantNum;
-  const porcionesPotenciales = isUnd ? cantNum : (cantNum > 0 ? Math.round(cantNum / pesoEstKg) : 0);
+  const porcionesPotenciales = isCountable ? cantNum : (cantNum > 0 ? Math.round(cantNum / pesoEstKg) : 0);
 
-  // Manejo automático al cambiar Kilos Recibidos
+  // Manejo automático al cambiar Cantidad Recibida
   const handleKgChange = (val: string) => {
     setCantidadKg(val);
-    const kg = parseFloat(val) || 0;
-    if (selectedInsumo && kg > 0) {
-      const autoTotal = Math.round(kg * costoCatalogoKg);
+    const qty = parseFloat(val) || 0;
+    if (selectedInsumo && qty > 0) {
+      const autoTotal = Math.round(qty * costoCatalogoKg);
       if (!costoTotal || parseFloat(costoTotal) === 0) {
         setCostoTotal(autoTotal.toString());
       }
@@ -60,7 +72,7 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedInsumo) return alert('Por favor selecciona una carne o insumo.');
-    if (cantNum <= 0) return alert('Ingresa una cantidad válida en Kg.');
+    if (cantNum <= 0) return alert(`Ingresa una cantidad válida en ${unitLabel}.`);
 
     setLoading(true);
     try {
@@ -71,11 +83,13 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
           tipo: 'ENTRADA_COMPRA',
           insumoId: selectedInsumo.insumo_id,
           fecha,
-          cantidadKg: cantNum,
+          cantidadKg: isCountable ? 0 : cantNum,
+          cantidadUnd: isCountable ? cantNum : 0,
+          tipoMedida,
           costoTotal: costoNum || (cantNum * costoCatalogoKg),
           proveedor: proveedor.trim() || 'Proveedor Local',
           factura: factura.trim() || 'Pendiente',
-          observaciones: observaciones.trim() || `Entrada compra ${selectedInsumo.insumo} (${cantNum} Kg)`,
+          observaciones: observaciones.trim() || `Entrada compra ${selectedInsumo.insumo} (${cantNum} ${unitLabel})`,
         }),
       });
 
@@ -87,9 +101,14 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
       setCantidadKg('');
       setCostoTotal('');
       setObservaciones('');
+
+      success(
+        `Ingreso de ${cantNum} ${unitLabel} de ${selectedInsumo.insumo} registrado en estado pendiente de aprobación.`,
+        '📥 Compra Registrada'
+      );
       onSuccess();
     } catch (err: any) {
-      alert(err.message);
+      error(err.message || 'Error al registrar compra');
     } finally {
       setLoading(false);
     }
@@ -118,8 +137,8 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
             <div>
               <span className="font-semibold text-blue-950">Precio Base Catálogo:</span>{' '}
               <span className="text-blue-900">
-                <strong>${formatMoney(costoCatalogoKg)} / {isUnd ? 'Und' : 'Kg'}</strong>
-                {!isUnd && (
+                <strong>${formatMoney(costoCatalogoKg)} / {unitLabel}</strong>
+                {!isCountable && (
                   <> • Rinde ~<strong>{(1 / pesoEstKg).toFixed(1)} porc/Kg</strong> ({gramosStd}g/porc)</>
                 )}
               </span>
@@ -127,12 +146,12 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
           </div>
           <div className="flex items-center gap-2 text-[11px] font-medium text-slate-700">
             <span className="bg-white px-2.5 py-1 rounded-lg border border-blue-200 text-blue-950">
-              Bodega Actual: <strong>{stockActualVal.toFixed(isUnd ? 0 : 2)} {isUnd ? 'Und' : 'Kg enteros'}</strong>
+              Bodega Actual: <strong>{isCountable ? `${stockActualVal} ${unitLabel}` : `${stockActualVal.toFixed(2)} Kg enteros`}</strong>
             </span>
             {cantNum > 0 && (
               <span className="bg-blue-100 text-blue-950 px-2.5 py-1 rounded-lg border border-blue-300">
-                {isUnd ? (
-                  <>Ingreso: <strong>+{cantNum} unidades</strong></>
+                {isCountable ? (
+                  <>Ingreso: <strong>+{cantNum} {unitLabel}</strong></>
                 ) : (
                   <>Rendimiento: <strong>~{porcionesPotenciales} porciones</strong></>
                 )}
@@ -178,16 +197,16 @@ export default function FormEntradaCompra({ insumos, onSuccess }: Props) {
 
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1">
-            {isUnd ? 'Cantidad Recibida (Unidades) *' : 'Cantidad Recibida (Kg) *'}
+            {isUnd ? 'Cantidad Recibida (Unidades) *' : isPaquete ? 'Cantidad Recibida (Paquetes) *' : 'Cantidad Recibida (Kg) *'}
           </label>
           <input
             type="number"
-            step={isUnd ? '1' : '0.01'}
-            min={isUnd ? '1' : '0.01'}
+            step={isCountable ? '1' : '0.01'}
+            min={isCountable ? '1' : '0.01'}
             required
             value={cantidadKg}
             onChange={(e) => handleKgChange(e.target.value)}
-            placeholder={isUnd ? '0' : '0.00'}
+            placeholder={isCountable ? '0' : '0.00'}
             className="w-full h-9 px-2.5 text-xs font-normal rounded-lg border border-slate-300 outline-none focus:border-blue-500 text-slate-800 bg-white"
           />
         </div>

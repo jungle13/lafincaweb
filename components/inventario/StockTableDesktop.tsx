@@ -7,6 +7,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface Props {
   insumos: InsumoItem[];
+  showCocinaCosts?: boolean;
 }
 
 type SortField = 
@@ -15,10 +16,9 @@ type SortField =
   | 'bodega_sin_porc_kg'
   | 'bodega_porc_und'
   | 'peso_total_bodega_kg'
-  | 'traslado_cocina_acumulado_kg'
   | 'cocina_porc_und'
   | 'peso_total_cocina_kg'
-  | 'merma_acumulada_kg'
+  | 'costo_cocina_dia'
   | 'costo_unitario_kg'
   | 'valor_total_bodega_pesos';
 
@@ -43,6 +43,11 @@ export default function StockTableDesktop({ insumos }: Props) {
       if (sortField === 'valor_total_bodega_pesos') {
         valA = a.valor_total_bodega_pesos ?? Math.round((a.peso_total_bodega_kg || 0) * (a.costo_unitario_kg || 0));
         valB = b.valor_total_bodega_pesos ?? Math.round((b.peso_total_bodega_kg || 0) * (b.costo_unitario_kg || 0));
+      }
+
+      if (sortField === 'costo_cocina_dia') {
+        valA = a.costo_cocina_dia ?? a.valor_total_cocina_pesos ?? 0;
+        valB = b.costo_cocina_dia ?? b.valor_total_cocina_pesos ?? 0;
       }
 
       if (typeof valA === 'string') {
@@ -126,40 +131,29 @@ export default function StockTableDesktop({ insumos }: Props) {
                 </div>
               </th>
 
-              {/* Acumulado Cocina */}
-              <th 
-                onClick={() => handleSort('traslado_cocina_acumulado_kg')}
-                className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap text-amber-800 bg-amber-50/40"
-              >
-                <div className="flex items-center justify-end gap-1.5">
-                  <span>Acumulado Cocina</span>
-                  {renderSortIcon('traslado_cocina_acumulado_kg')}
-                </div>
-              </th>
-
-              {/* En Cocina */}
+              {/* Cocina (Entregas netas del día/fecha seleccionada) */}
               <th 
                 onClick={() => handleSort('peso_total_cocina_kg')}
-                className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap text-slate-800"
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  <span>En Cocina</span>
+                  <span>Cocina</span>
                   {renderSortIcon('peso_total_cocina_kg')}
                 </div>
               </th>
 
-              {/* Merma Acumulada */}
+              {/* Costo en Cocina (Costo del insumo en cocina en esa fecha) */}
               <th 
-                onClick={() => handleSort('merma_acumulada_kg')}
-                className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap text-rose-600"
+                onClick={() => handleSort('costo_cocina_dia')}
+                className="py-3 px-3 text-right cursor-pointer hover:bg-amber-50/80 transition-colors select-none group whitespace-nowrap text-amber-900 bg-amber-50/40"
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  <span>Merma Acumulada</span>
-                  {renderSortIcon('merma_acumulada_kg')}
+                  <span>Costo en Cocina</span>
+                  {renderSortIcon('costo_cocina_dia')}
                 </div>
               </th>
 
-              {/* Costo / Kg */}
+              {/* Costo / Kg o Und */}
               <th 
                 onClick={() => handleSort('costo_unitario_kg')}
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
@@ -170,13 +164,13 @@ export default function StockTableDesktop({ insumos }: Props) {
                 </div>
               </th>
 
-              {/* Valor Stock (Bodega) */}
+              {/* Valor Inventario en Bodega */}
               <th 
                 onClick={() => handleSort('valor_total_bodega_pesos')}
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap text-slate-800"
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  <span>Valor Stock</span>
+                  <span>Valor Inventario (Bodega)</span>
                   {renderSortIcon('valor_total_bodega_pesos')}
                 </div>
               </th>
@@ -184,19 +178,29 @@ export default function StockTableDesktop({ insumos }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-normal">
             {sortedInsumos.map((item) => {
-              const isUnd = item.unidad_medida?.toLowerCase() === 'und' || 
-                            item.categoria?.toLowerCase().includes('embutido') || 
-                            item.categoria?.toLowerCase().includes('elaborado') || 
-                            item.insumo?.toLowerCase().includes('chorizo') || 
-                            item.insumo?.toLowerCase().includes('tamal');
-              const totalUnitsBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_und || 0);
-              const valorBodega = isUnd 
-                ? (totalUnitsBodega * (item.costo_unitario_kg || 0))
-                : (item.valor_total_bodega_pesos ?? Math.round((item.peso_total_bodega_kg || 0) * (item.costo_unitario_kg || 0)));
-              const acumUnd = item.traslado_cocina_acumulado_und || 0;
-              const acumKg = item.traslado_cocina_acumulado_kg || 0;
-              const cocinaUnd = item.cocina_porc_und || 0;
-              const cocinaKg = item.peso_total_cocina_kg || (item.cocina_porc_kg + item.cocina_sin_porc_kg) || 0;
+              const tipoMedida = item.tipo_medida || 'KGS_Y_UNIDADES';
+              const isContable = tipoMedida === 'UNIDADES' || tipoMedida === 'PAQUETES';
+              const isPaquetes = tipoMedida === 'PAQUETES';
+              const isKgsOnly = tipoMedida === 'KGS';
+              const isHybrid = tipoMedida === 'KGS_Y_UNIDADES';
+              const unitLabel = isPaquetes ? 'paq' : 'und';
+
+              const totalUnitsBodega = isContable ? (item.bodega_porc_und || item.bodega_sin_porc_kg || 0) : (item.bodega_porc_und || 0);
+              const totalKgBodega = item.peso_total_bodega_kg ?? ((item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0));
+              const tieneStockBodega = isContable ? (totalUnitsBodega > 0) : (totalKgBodega > 0 || totalUnitsBodega > 0);
+
+              const valorBodega = !tieneStockBodega ? 0 : (
+                (item.valor_total_bodega_pesos != null && item.valor_total_bodega_pesos > 0)
+                  ? item.valor_total_bodega_pesos
+                  : (isContable 
+                      ? (totalUnitsBodega * (item.costo_unitario_kg || 0))
+                      : Math.round(totalKgBodega * (item.costo_unitario_kg || 0)))
+              );
+
+              // Datos de Cocina del día seleccionado
+              const cocinaUnd = item.cocina_dia_und ?? item.cocina_porc_und ?? 0;
+              const cocinaKg = item.cocina_dia_kg ?? (item.peso_total_cocina_kg || (item.cocina_porc_kg + item.cocina_sin_porc_kg) || 0);
+              const costoCocina = item.costo_cocina_dia ?? item.valor_total_cocina_pesos ?? 0;
 
               return (
                 <tr
@@ -207,13 +211,13 @@ export default function StockTableDesktop({ insumos }: Props) {
                   <td className="py-2.5 px-3">
                     <div className="font-medium text-slate-900 text-xs md:text-sm">{item.insumo}</div>
                     <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">
-                      {item.categoria} {isUnd && '• UNIDADES'}
+                      {item.categoria} • <span className="font-semibold text-slate-500">{isPaquetes ? 'PAQUETES' : isContable ? 'UNIDADES' : isKgsOnly ? 'KILOS' : 'KGS Y UND'}</span>
                     </div>
                   </td>
 
                   {/* Bodega Entero */}
                   <td className="py-2.5 px-3 text-right text-blue-600 font-normal">
-                    {isUnd ? (
+                    {isContable ? (
                       <span className="text-slate-300">-</span>
                     ) : (
                       <>{item.bodega_sin_porc_kg.toFixed(2)} <span className="text-[10px] text-slate-400">Kg</span></>
@@ -222,64 +226,73 @@ export default function StockTableDesktop({ insumos }: Props) {
 
                   {/* Bodega Porciones */}
                   <td className="py-2.5 px-3 text-right font-normal">
-                    <span className="text-purple-600 font-semibold">{isUnd ? totalUnitsBodega : item.bodega_porc_und}</span>{' '}
-                    <span className="text-[10px] text-slate-400">und</span>
-                    {!isUnd && (
-                      <div className="text-[10px] text-slate-400">
-                        {item.bodega_porc_kg.toFixed(2)} Kg
-                      </div>
+                    {isKgsOnly ? (
+                      <span className="text-slate-300">-</span>
+                    ) : (
+                      <>
+                        <span className="text-purple-600 font-semibold">{totalUnitsBodega}</span>{' '}
+                        <span className="text-[10px] text-slate-400">{unitLabel}</span>
+                        {isHybrid && (
+                          <div className="text-[10px] text-slate-400">
+                            {item.bodega_porc_kg.toFixed(2)} Kg
+                          </div>
+                        )}
+                      </>
                     )}
                   </td>
 
                   {/* Total Bodega */}
                   <td className="py-2.5 px-3 text-right text-emerald-600 font-medium">
-                    {isUnd ? (
-                      <span className="text-purple-700 font-bold">{totalUnitsBodega} <span className="text-[10px] text-slate-400 font-normal">und</span></span>
+                    {isContable ? (
+                      <span className="text-purple-700 font-bold">{totalUnitsBodega} <span className="text-[10px] text-slate-400 font-normal">{unitLabel}</span></span>
                     ) : (
                       <>{item.peso_total_bodega_kg.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">Kg</span></>
                     )}
                   </td>
 
-                  {/* Acumulado Cocina (Total entregado en el periodo) */}
-                  <td className="py-2.5 px-3 text-right font-normal bg-amber-50/30">
-                    <span className="text-amber-800 font-semibold">{acumUnd}</span>{' '}
-                    <span className="text-[10px] text-slate-400">und</span>
-                    {!isUnd && (
-                      <div className="text-[10px] text-amber-900 font-medium">
-                        {acumKg.toFixed(2)} Kg
-                      </div>
-                    )}
-                  </td>
-
-                  {/* En Cocina (Existencia actual / a la fecha de corte) */}
+                  {/* Cocina (Entregas netas del día) */}
                   <td className="py-2.5 px-3 text-right font-normal">
-                    <span className="text-slate-800 font-semibold">{cocinaUnd}</span>{' '}
-                    <span className="text-[10px] text-slate-400">und</span>
-                    {!isUnd && (
-                      <div className="text-[10px] text-slate-500 font-medium">
-                        {cocinaKg.toFixed(2)} Kg
-                      </div>
+                    {isKgsOnly ? (
+                      cocinaKg > 0 ? (
+                        <div className="text-slate-800 font-medium">
+                          {cocinaKg.toFixed(2)} <span className="text-[10px] text-slate-400">Kg</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-300">0.00 Kg</span>
+                      )
+                    ) : (
+                      cocinaUnd > 0 || cocinaKg > 0 ? (
+                        <>
+                          <span className="text-slate-800 font-semibold">{cocinaUnd}</span>{' '}
+                          <span className="text-[10px] text-slate-400">{unitLabel}</span>
+                          {isHybrid && cocinaKg > 0 && (
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              {cocinaKg.toFixed(2)} Kg
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-slate-300">0 {unitLabel}</span>
+                      )
                     )}
                   </td>
 
-                  {/* Merma Acumulada */}
-                  <td className="py-2.5 px-3 text-right text-rose-600 font-normal">
-                    {isUnd ? (
-                      <span className="text-slate-300">-</span>
-                    ) : item.merma_acumulada_kg > 0 ? (
-                      `${item.merma_acumulada_kg.toFixed(2)} Kg`
+                  {/* Costo en Cocina (Valor del insumo en cocina en esa fecha) */}
+                  <td className="py-2.5 px-3 text-right font-medium text-amber-950 bg-amber-50/30">
+                    {costoCocina > 0 ? (
+                      <span>$ {formatMoney(costoCocina)}</span>
                     ) : (
-                      <span className="text-slate-300">0.00 Kg</span>
+                      <span className="text-slate-300">$ 0</span>
                     )}
                   </td>
 
                   {/* Costo / Kg o Und */}
                   <td className="py-2.5 px-3 text-right text-slate-600 font-normal">
                     $ {formatMoney(item.costo_unitario_kg)}
-                    <span className="text-[10px] text-slate-400 block">{isUnd ? '/ und' : '/ Kg'}</span>
+                    <span className="text-[10px] text-slate-400 block">{isPaquetes ? '/ paq' : isContable ? '/ und' : '/ Kg'}</span>
                   </td>
 
-                  {/* Valor Stock (Solo Bodega) */}
+                  {/* Valor Inventario (Solo Bodega) */}
                   <td className="py-2.5 px-3 text-right text-slate-900 font-medium">
                     $ {formatMoney(valorBodega)}
                   </td>
@@ -292,4 +305,3 @@ export default function StockTableDesktop({ insumos }: Props) {
     </div>
   );
 }
-

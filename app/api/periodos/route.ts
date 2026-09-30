@@ -74,7 +74,7 @@ export async function GET(req: Request) {
     // Si el corte solicitado es un conteo físico específico (ej. CONTEO_uuid)
     if (fechaCorte && fechaCorte.startsWith('CONTEO_')) {
       const targetConteoId = fechaCorte.replace('CONTEO_', '');
-      const { data: conteoDetalles } = await supabase
+      const { data: conteoDetalles, error: detErr } = await supabase
         .from('conteos_fisicos_detalle')
         .select('*')
         .eq('conteo_id', targetConteoId);
@@ -92,21 +92,26 @@ export async function GET(req: Request) {
           const detBodega = detMap.get(`${iId}_BODEGA`);
           const detCocina = detMap.get(`${iId}_COCINA`);
 
-          const bSinPorc = detBodega ? parseFloat(detBodega.cant_sin_porcionar_kg || 0) : parseFloat(item.bodega_sin_porcionar_kg || item.bodega_sin_porc_kg || 0);
-          const bPorcUnd = detBodega ? parseInt(detBodega.porciones_und || 0) : parseInt(item.bodega_porcionado_und || item.bodega_porc_und || 0);
-          const bPorcKg = detBodega ? parseFloat(detBodega.peso_porciones_kg || 0) : parseFloat(item.bodega_porcionado_kg || item.bodega_porc_kg || 0);
+          // Regla estricta: si el insumo no fue contado, queda en cero
+          const bSinPorc = detBodega ? parseFloat(detBodega.cant_sin_porcionar_kg || 0) : 0;
+          const bPorcUnd = detBodega ? parseInt(detBodega.porciones_und || 0) : 0;
+          const bPorcKg = detBodega ? parseFloat(detBodega.peso_porciones_kg || 0) : 0;
 
-          const cSinPorc = detCocina ? parseFloat(detCocina.cant_sin_porcionar_kg || 0) : parseFloat(item.cocina_sin_porcionar_kg || item.cocina_sin_porc_kg || 0);
-          const cPorcUnd = detCocina ? parseInt(detCocina.porciones_und || 0) : parseInt(item.cocina_porcionado_und || item.cocina_porc_und || 0);
-          const cPorcKg = detCocina ? parseFloat(detCocina.peso_porciones_kg || 0) : parseFloat(item.cocina_porcionado_kg || item.cocina_porc_kg || 0);
+          const cSinPorc = detCocina ? parseFloat(detCocina.cant_sin_porcionar_kg || 0) : 0;
+          const cPorcUnd = detCocina ? parseInt(detCocina.porciones_und || 0) : 0;
+          const cPorcKg = detCocina ? parseFloat(detCocina.peso_porciones_kg || 0) : 0;
 
           const totalBodegaKg = bSinPorc + bPorcKg;
           const totalCocinaKg = cSinPorc + cPorcKg;
           const totalGeneralKg = totalBodegaKg + totalCocinaKg;
-          const unitCost = item.costo_unitario_kg || 0;
+          const unitCost = detBodega?.costo_unitario_kg != null ? parseFloat(detBodega.costo_unitario_kg) : (item.costo_unitario_kg || 0);
+
+          const valBodega = detBodega?.valor_total != null ? Math.round(parseFloat(detBodega.valor_total)) : Math.round(totalBodegaKg * unitCost);
+          const valCocina = detCocina?.valor_total != null ? Math.round(parseFloat(detCocina.valor_total)) : Math.round(totalCocinaKg * unitCost);
 
           return {
             ...item,
+            costo_unitario_kg: unitCost,
             bodega_sin_porcionar_kg: bSinPorc,
             bodega_sin_porc_kg: bSinPorc,
             bodega_porcionado_und: bPorcUnd,
@@ -122,8 +127,13 @@ export async function GET(req: Request) {
             cocina_porc_kg: cPorcKg,
             peso_total_cocina_kg: totalCocinaKg,
             peso_total_general_kg: totalGeneralKg,
-            valor_total_bodega_pesos: Math.round(totalBodegaKg * unitCost),
-            valor_total_general_pesos: Math.round(totalGeneralKg * unitCost),
+            valor_total_bodega_pesos: valBodega,
+            valor_total_cocina_pesos: valCocina,
+            valor_total_general_pesos: valBodega,
+            merma_acumulada_kg: 0,
+            merma_acumulada_pesos: 0,
+            traslado_cocina_acumulado_kg: 0,
+            traslado_cocina_acumulado_und: 0
           };
         });
       }

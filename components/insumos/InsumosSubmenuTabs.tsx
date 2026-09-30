@@ -125,7 +125,7 @@ interface Props {
 
 export default function InsumosSubmenuTabs({ activeTab, onTabChange, counts = {} }: Props) {
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 pt-1 touch-pan-x">
+    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1.5 pt-1 touch-pan-x">
       {SUBMODULOS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -136,14 +136,15 @@ export default function InsumosSubmenuTabs({ activeTab, onTabChange, counts = {}
             key={tab.id}
             type="button"
             onClick={() => onTabChange(tab.id)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 min-h-[40px] rounded-full text-xs font-medium border transition-all whitespace-nowrap cursor-pointer touch-manipulation active:scale-95 ${
               isActive
                 ? tab.activeClass
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
             }`}
           >
-            <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : tab.colorClass}`} />
-            <span>{tab.label}</span>
+            <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : tab.colorClass}`} />
+            <span className="hidden sm:inline">{tab.label}</span>
+            <span className="inline sm:hidden">{tab.shortLabel}</span>
             {count !== undefined && count > 0 && (
               <span
                 className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${

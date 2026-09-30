@@ -10,17 +10,9 @@ import { InsumoItem } from '@/types';
 import { 
   Search, 
   Loader2, 
-  Calendar, 
-  Zap, 
-  Package, 
-  Clock, 
-  Filter, 
-  Info,
-  CheckCircle2,
-  CalendarRange,
-  Printer
+  FileText
 } from 'lucide-react';
-import { normalizeStr, formatMoney } from '@/lib/formatters';
+import { normalizeStr } from '@/lib/formatters';
 import { usePeriodo } from '@/context/PeriodoContext';
 
 export default function InventarioPage() {
@@ -40,16 +32,23 @@ export default function InventarioPage() {
   const [conteosAplicados, setConteosAplicados] = useState<any[]>([]);
   const [totalMovsAplicados, setTotalMovsAplicados] = useState<number>(0);
 
-  // Inicializar fecha al cambiar de periodo o al cargar fechas formalizadas
+  // Inicializar fecha solo al cambiar de periodo o si aún no está definida
+  const [lastPeriodoId, setLastPeriodoId] = useState<string | null>(null);
+
   useEffect(() => {
-    if (currentPeriodo) {
+    if (!currentPeriodo) return;
+
+    if (currentPeriodo.id !== lastPeriodoId) {
+      setLastPeriodoId(currentPeriodo.id);
       if (fechasConMovimientos.length > 0) {
         setSelectedDate(fechasConMovimientos[fechasConMovimientos.length - 1]);
       } else {
         setSelectedDate(currentPeriodo.fecha_inicio);
       }
+    } else if (!selectedDate && fechasConMovimientos.length > 0) {
+      setSelectedDate(fechasConMovimientos[fechasConMovimientos.length - 1]);
     }
-  }, [currentPeriodo?.id, fechasConMovimientos]);
+  }, [currentPeriodo?.id, lastPeriodoId, fechasConMovimientos, selectedDate]);
 
   const loadStock = useCallback(async () => {
     try {
@@ -89,15 +88,26 @@ export default function InventarioPage() {
 
           base = base.map((item: any) => {
             const s = pMap.get(String(item.insumo_id));
+            const tipoMedida = item.tipo_medida || s?.tipo_medida || 'KGS_Y_UNIDADES';
+            const isContable = tipoMedida === 'UNIDADES' || tipoMedida === 'PAQUETES';
+
             if (!s) {
               const bTotal = (parseFloat(item.bodega_sin_porc_kg) || 0) + (parseFloat(item.bodega_porc_kg) || 0);
-              const vBodega = Math.round(bTotal * (item.costo_unitario_kg || 0));
+              const vBodega = item.valor_total_bodega_pesos != null 
+                ? Math.round(item.valor_total_bodega_pesos)
+                : (isContable 
+                    ? Math.round((parseInt(item.bodega_porc_und) || 0) * (item.costo_unitario_kg || 0))
+                    : Math.round(bTotal * (item.costo_unitario_kg || 0)));
               return {
                 ...item,
+                tipo_medida: tipoMedida,
                 valor_total_bodega_pesos: vBodega,
                 valor_total_general_pesos: vBodega,
-                traslado_cocina_acumulado_kg: item.traslado_cocina_acumulado_kg || 0,
-                traslado_cocina_acumulado_und: item.traslado_cocina_acumulado_und || 0,
+                valor_total_cocina_pesos: 0,
+                cocina_dia_und: 0,
+                cocina_dia_kg: 0,
+                costo_cocina_dia: 0,
+                merma_acumulada_kg: 0,
               };
             }
 
@@ -107,33 +117,39 @@ export default function InventarioPage() {
             const cSinPorc = parseFloat(s.cocina_sin_porcionar_kg ?? item.cocina_sin_porc_kg) || 0;
             const cPorcUnd = parseInt(s.cocina_porcionado_und ?? item.cocina_porc_und) || 0;
             const cPorcKg = parseFloat(s.cocina_porcionado_kg ?? item.cocina_porc_kg) || 0;
-            const totalBodegaKg = bSinPorc + bPorcKg;
-            const totalCocinaKg = cSinPorc + cPorcKg;
+            const totalBodegaKg = isContable ? 0 : (bSinPorc + bPorcKg);
+            const totalCocinaKg = isContable ? 0 : (cSinPorc + cPorcKg);
             const totalGeneralKg = totalBodegaKg + totalCocinaKg;
-            const valorTotalBodega = Math.round(totalBodegaKg * (item.costo_unitario_kg || 0));
-            const valorTotalGeneral = Math.round(totalGeneralKg * (item.costo_unitario_kg || 0));
+            const valorTotalBodega = s.valor_total_bodega_pesos != null 
+              ? Math.round(s.valor_total_bodega_pesos) 
+              : (isContable 
+                  ? Math.round(bPorcUnd * (item.costo_unitario_kg || 0))
+                  : Math.round(totalBodegaKg * (item.costo_unitario_kg || 0)));
 
-            // Si es inventario inicial, merma y traslados acumulados son 0
-            const mermaKg = cutoffMode === 'INICIAL' ? 0 : (parseFloat(s.merma_acumulada_kg ?? item.merma_acumulada_kg) || 0);
-            const trasladoAcumUnd = cutoffMode === 'INICIAL' ? 0 : (parseInt(s.traslado_cocina_acumulado_und) || 0);
-            const trasladoAcumKg = cutoffMode === 'INICIAL' ? 0 : (parseFloat(s.traslado_cocina_acumulado_kg) || 0);
+            const cocinaDiaUnd = s.cocina_dia_und !== undefined ? s.cocina_dia_und : cPorcUnd;
+            const cocinaDiaKg = s.cocina_dia_kg !== undefined ? s.cocina_dia_kg : totalCocinaKg;
+            const costoCocinaDia = s.costo_cocina_dia !== undefined 
+              ? Math.round(s.costo_cocina_dia) 
+              : (s.valor_total_cocina_pesos != null ? Math.round(s.valor_total_cocina_pesos) : 0);
 
             return {
               ...item,
+              tipo_medida: tipoMedida,
+              costo_unitario_kg: s.costo_unitario_kg ?? item.costo_unitario_kg,
               bodega_sin_porc_kg: bSinPorc,
               bodega_porc_und: bPorcUnd,
               bodega_porc_kg: bPorcKg,
               peso_total_bodega_kg: totalBodegaKg,
               cocina_sin_porc_kg: cSinPorc,
-              cocina_porc_und: cPorcUnd,
+              cocina_porc_und: cocinaDiaUnd,
               cocina_porc_kg: cPorcKg,
-              peso_total_cocina_kg: totalCocinaKg,
-              peso_total_general_kg: totalGeneralKg,
+              peso_total_cocina_kg: cocinaDiaKg,
               valor_total_bodega_pesos: valorTotalBodega,
-              valor_total_general_pesos: valorTotalBodega, // Ahora el valor del stock es estrictamente Bodega
-              traslado_cocina_acumulado_und: trasladoAcumUnd,
-              traslado_cocina_acumulado_kg: trasladoAcumKg,
-              merma_acumulada_kg: mermaKg,
+              cocina_dia_und: cocinaDiaUnd,
+              cocina_dia_kg: cocinaDiaKg,
+              costo_cocina_dia: costoCocinaDia,
+              valor_total_cocina_pesos: costoCocinaDia,
+              merma_acumulada_kg: 0,
             };
           });
         }
@@ -145,7 +161,7 @@ export default function InventarioPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedPeriodoId, cutoffMode, selectedDate]);
+  }, [selectedPeriodoId, cutoffMode, selectedDate, selectedConteoId]);
 
   useEffect(() => {
     loadStock();
@@ -154,8 +170,11 @@ export default function InventarioPage() {
   const filteredInsumos = useMemo(() => {
     const cleanSearch = normalizeStr(searchQuery);
     return insumos.filter((item) => {
-      // 1. Filtrado por categoría
-      if (selectedCat === 'CARNES') {
+      // 1. Filtrado por tipo / categoría
+      if (selectedCat === 'WITH_STOCK') {
+        const totalBodega = (item.bodega_sin_porc_kg || 0) + (item.bodega_porc_kg || 0);
+        if (totalBodega <= 0 && (item.bodega_porc_und || 0) <= 0) return false;
+      } else if (selectedCat === 'CARNES') {
         if (item.es_carne === false) return false;
       } else if (selectedCat !== 'ALL') {
         const itemCat = normalizeStr(item.categoria || '');
@@ -181,180 +200,148 @@ export default function InventarioPage() {
   }, [insumos, selectedCat, searchQuery]);
 
   return (
-    <div className="w-full space-y-4 animate-fade-in font-normal">
-      {/* KPIs Superiores Planos */}
+    <div className="w-full space-y-3.5 animate-fade-in font-normal">
+      {/* KPIs Superiores: Valor Inventario en Bodega y Valor Insumos en Cocina */}
       <StockKpis insumos={insumos} />
 
-      {/* 📅 BARRA DE FILTRO POR FECHA / INVENTARIO INICIAL */}
-      <div className="bg-slate-50/90 border border-slate-200/90 rounded-xl p-3 shadow-sm space-y-2.5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Botones de Selección de Modo */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-slate-500 font-medium mr-1 flex items-center gap-1">
-              <CalendarRange className="w-3.5 h-3.5 text-orange-500" />
-              <span>Ver Inventario:</span>
-            </span>
-
-            {/* Opción 1: Inventario Actual / Cierre */}
+      {/* Barra de Selección de Modo y Fecha Simplificada */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs space-y-2.5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Segmented Control de Modo de Inventario */}
+          <div className="flex items-center overflow-x-auto no-scrollbar touch-pan-x rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs font-medium w-full sm:w-auto shrink-0">
             <button
               type="button"
               onClick={() => setCutoffMode('ACTUAL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+              className={`px-3 py-1.5 min-h-[36px] sm:min-h-[28px] rounded-md transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
                 cutoffMode === 'ACTUAL'
-                  ? 'bg-orange-600 border-orange-600 text-white shadow-sm'
-                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Inventario Actual (En Vivo)</span>
+              En Vivo (Actual)
             </button>
 
-            {/* Opción 2: Inventario Inicial del Periodo */}
-            <button
-              type="button"
-              onClick={() => setCutoffMode('INICIAL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
-                cutoffMode === 'INICIAL'
-                  ? 'bg-orange-600 border-orange-600 text-white shadow-sm'
-                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Inventario Inicial ({currentPeriodo?.nombre || 'Mes'})</span>
-            </button>
-
-            {/* Opción 3: Por Fecha de Corte */}
             <button
               type="button"
               onClick={() => setCutoffMode('FECHA')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+              className={`px-3 py-1.5 min-h-[36px] sm:min-h-[28px] rounded-md transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
                 cutoffMode === 'FECHA'
-                  ? 'bg-orange-600 border-orange-600 text-white shadow-sm'
-                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Por Fecha de Corte</span>
+              Por Fecha de Corte
             </button>
 
-            {/* Opción 4: Dropdown de Conteos Físicos Aplicados */}
+            <button
+              type="button"
+              onClick={() => setCutoffMode('INICIAL')}
+              className={`px-3 py-1.5 min-h-[36px] sm:min-h-[28px] rounded-md transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
+                cutoffMode === 'INICIAL'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Inventario Inicial
+            </button>
+
             {conteosAplicados.length > 0 && (
-              <div className="flex items-center">
-                <select
-                  value={cutoffMode === 'CONTEO' ? selectedConteoId : ''}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      setSelectedConteoId(e.target.value);
-                      const found = conteosAplicados.find((c: any) => c.id === e.target.value);
-                      if (found) setSelectedDate(found.fecha);
-                      setCutoffMode('CONTEO');
-                    } else {
-                      setCutoffMode('ACTUAL');
-                    }
-                  }}
-                  className={`h-8 px-2 rounded-lg text-xs font-medium border transition-all outline-none cursor-pointer ${
-                    cutoffMode === 'CONTEO'
-                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm font-semibold'
-                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <option value="" className="text-slate-800 bg-white">📋 Ver Conteo Físico...</option>
-                  {conteosAplicados.map((c: any) => (
-                    <option key={c.id} value={c.id} className="text-slate-800 bg-white">
-                      Conteo {c.fecha} ({c.usuario || 'Bodeguero'})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedConteoId(conteosAplicados[0].id);
+                  setSelectedDate(conteosAplicados[0].fecha);
+                  setCutoffMode('CONTEO');
+                }}
+                className={`px-3 py-1.5 min-h-[36px] sm:min-h-[28px] rounded-md transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
+                  cutoffMode === 'CONTEO'
+                    ? 'bg-white text-emerald-800 shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Conteo Físico
+              </button>
             )}
           </div>
 
-          {/* Selector de Fecha específico (activo en modo FECHA) */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-normal">Fecha de corte:</span>
-            <input
-              type="date"
-              min={currentPeriodo?.fecha_inicio}
-              max={currentPeriodo?.fecha_fin}
-              value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
-                setCutoffMode('FECHA');
-              }}
-              className="h-8 px-2.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-800 bg-white outline-none focus:border-orange-500 shadow-sm cursor-pointer"
-            />
-          </div>
-        </div>
-
-        {/* Badges Rápidos de Días y Conteos Físicos Formalizados */}
-        {(fechasConMovimientos.length > 0 || conteosAplicados.length > 0) && (
-          <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200/60 text-xs">
-            <span className="text-[11px] text-slate-400 font-normal mr-1 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-slate-400" />
-              <span>Jornadas formalizadas (Aprobadas):</span>
-            </span>
-            {fechasConMovimientos.map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => {
-                  setSelectedDate(f);
+          {/* Controles de Selección de Fecha Contextuales */}
+          {cutoffMode === 'FECHA' && (
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="text-slate-500 font-normal">Fecha de corte:</span>
+              <input
+                type="date"
+                min={currentPeriodo?.fecha_inicio}
+                max={currentPeriodo?.fecha_fin}
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
                   setCutoffMode('FECHA');
                 }}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all border ${
-                  cutoffMode === 'FECHA' && selectedDate === f
-                    ? 'bg-orange-100 border-orange-300 text-orange-900 font-semibold'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                📅 {f}
-              </button>
-            ))}
+                className="h-8 px-2.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-800 bg-white outline-none focus:border-orange-500 shadow-2xs cursor-pointer"
+              />
 
-            {/* Badges para Conteos Físicos Aplicados */}
-            {conteosAplicados.map((c: any) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  setSelectedConteoId(c.id);
-                  setSelectedDate(c.fecha);
-                  setCutoffMode('CONTEO');
+              {fechasConMovimientos.length > 0 && (
+                <select
+                  value={fechasConMovimientos.includes(selectedDate) ? selectedDate : ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedDate(e.target.value);
+                      setCutoffMode('FECHA');
+                    }
+                  }}
+                  className="h-8 px-2.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 bg-white outline-none cursor-pointer"
+                >
+                  <option value="">Ir a jornada aprobada...</option>
+                  {fechasConMovimientos.map((f) => (
+                    <option key={f} value={f}>
+                      Jornada {f}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {cutoffMode === 'CONTEO' && conteosAplicados.length > 0 && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-500 font-normal">Auditoría:</span>
+              <select
+                value={selectedConteoId}
+                onChange={(e) => {
+                  setSelectedConteoId(e.target.value);
+                  const found = conteosAplicados.find((c: any) => c.id === e.target.value);
+                  if (found) setSelectedDate(found.fecha);
                 }}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all border flex items-center gap-1 ${
-                  cutoffMode === 'CONTEO' && selectedConteoId === c.id
-                    ? 'bg-emerald-100 border-emerald-400 text-emerald-950 font-semibold'
-                    : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                }`}
-                title={`Ver fotografía fijada por el Conteo Físico del ${c.fecha}`}
+                className="h-8 px-2.5 rounded-lg border border-emerald-300 text-xs font-semibold text-emerald-900 bg-emerald-50 outline-none cursor-pointer"
               >
-                📋 Conteo Físico ({c.fecha})
-              </button>
-            ))}
-          </div>
-        )}
+                {conteosAplicados.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    Conteo {c.fecha} ({c.usuario || 'Bodeguero'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
 
-        {/* Banner Informativo de Estado de la Vista */}
-        <div className="flex items-center justify-between gap-2 text-xs bg-white px-3 py-1.5 rounded-lg border border-slate-200/70 text-slate-600">
-          <div className="flex items-center gap-2">
-            <Info className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-            <span>
-              {cutoffMode === 'INICIAL' && (
-                <>Mostrando <strong>Inventario Inicial</strong> de {currentPeriodo?.nombre} (Foto contable al arranque del mes, sin movimientos posteriores).</>
-              )}
-              {cutoffMode === 'FECHA' && (
-                <>Mostrando existencias con <strong>corte al {selectedDate}</strong> ({totalMovsAplicados} movimientos formalizados aplicados).</>
-              )}
-              {cutoffMode === 'CONTEO' && (
-                <>Mostrando fotografía exacta fijada por el <strong>Conteo Físico ({selectedDate})</strong> auditado y aplicado a inventario.</>
-              )}
-              {cutoffMode === 'ACTUAL' && (
-                <>Mostrando <strong>Inventario Actual en Curso</strong> de {currentPeriodo?.nombre} ({totalMovsAplicados} movimientos formalizados).</>
-              )}
-            </span>
+        {/* Resumen Contextual Discreto de Una Sola Línea */}
+        <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">
+          <div>
+            {cutoffMode === 'INICIAL' && (
+              <span>Inventario inicial de {currentPeriodo?.nombre || 'periodo'} (arranque del mes).</span>
+            )}
+            {cutoffMode === 'FECHA' && (
+              <span>Corte al {selectedDate} ({totalMovsAplicados} movimientos aplicados). La columna <strong>Cocina</strong> refleja los movimientos de este día.</span>
+            )}
+            {cutoffMode === 'CONTEO' && (
+              <span>Fotografía de conteo físico aplicado del {selectedDate}.</span>
+            )}
+            {cutoffMode === 'ACTUAL' && (
+              <span>Inventario en vivo ({totalMovsAplicados} movimientos aplicados). La columna <strong>Cocina</strong> refleja la jornada activa.</span>
+            )}
           </div>
           {loading && (
-            <div className="flex items-center gap-1 text-[11px] text-orange-600">
+            <div className="flex items-center gap-1 text-[11px] text-orange-600 shrink-0">
               <Loader2 className="w-3 h-3 animate-spin" />
               <span>Calculando...</span>
             </div>
@@ -362,41 +349,41 @@ export default function InventarioPage() {
         </div>
       </div>
 
-      {/* Header de Búsqueda y Filtros de Categoría */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+      {/* Header de Búsqueda y Exportación */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
         <div>
           <h2 className="text-base font-semibold text-slate-900 tracking-tight">Control de Existencias de Carnes</h2>
-          <p className="text-xs text-slate-500 font-normal">Monitoreo en vivo de bodega, cocina, mermas y costos ({currentPeriodo?.nombre || 'Periodo Activo'})</p>
+          <p className="text-xs text-slate-500 font-normal">Monitoreo de bodega, entregas a cocina y costos ({currentPeriodo?.nombre || 'Periodo Activo'})</p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 sm:w-64 md:w-72">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar carne por nombre o código..."
-              className="w-full h-9 pl-9 pr-3 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 font-normal"
+              className="w-full h-8 pl-9 pr-3 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 font-normal"
             />
           </div>
 
-          {/* Botón Exportar PDF de Inventario */}
+          {/* Botón Reporte Oficial */}
           <button
             type="button"
             onClick={() => setIsPdfModalOpen(true)}
-            className="h-9 px-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 active:scale-95 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap"
+            className="h-8 px-3 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 active:scale-95 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
           >
-            <Printer className="w-3.5 h-3.5 text-blue-600" />
-            <span>Exportar PDF</span>
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>Reporte Oficial</span>
           </button>
         </div>
       </div>
 
-      {/* Category Chips Dinámicos con Conteo Real */}
+      {/* Filtros de Categoría Simplificados */}
       <CategoryFilterChips insumos={insumos} selectedCat={selectedCat} onSelectCat={setSelectedCat} />
 
-      {/* Desktop Table Plana */}
+      {/* Tablas de Existencias */}
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2 text-slate-400">
           <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
@@ -409,17 +396,32 @@ export default function InventarioPage() {
         </>
       )}
 
-      {/* Modal de Exportación a PDF Oficial */}
+      {/* Modal de Exportación a PDF y Reportes Oficiales */}
       <ExportStockPdfModal
         isOpen={isPdfModalOpen}
         onClose={() => setIsPdfModalOpen(false)}
         insumos={insumos}
         periodoNombre={currentPeriodo?.nombre || 'Periodo en Curso'}
+        cutoffMode={cutoffMode}
+        selectedDate={selectedDate}
+        selectedConteoId={selectedConteoId}
+        periodoId={selectedPeriodoId}
+        fechaInicio={currentPeriodo?.fecha_inicio}
+        fechaFin={currentPeriodo?.fecha_fin}
+        fechasConMovimientos={fechasConMovimientos}
+        conteosAplicados={conteosAplicados}
+        onSelectCutoff={(mode, date, conteoId) => {
+          setCutoffMode(mode);
+          if (date) setSelectedDate(date);
+          if (conteoId) setSelectedConteoId(conteoId);
+        }}
         cutoffInfo={
           cutoffMode === 'INICIAL' 
             ? 'Inventario Inicial' 
             : cutoffMode === 'FECHA' 
             ? `Corte al ${selectedDate}` 
+            : cutoffMode === 'CONTEO'
+            ? 'Conteo Físico'
             : 'Inventario Actual en Vivo'
         }
       />
