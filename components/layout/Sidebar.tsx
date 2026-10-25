@@ -13,11 +13,17 @@ import {
   CalendarRange,
   Wrench,
   ClipboardList,
-  PackageSearch
+  PackageSearch,
+  FileSpreadsheet,
+  ClipboardCheck,
+  BookOpen
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
 const NAV_ITEMS = [
+  { label: 'Costeo Diario Cocina', href: '/costeo-diario', icon: FileSpreadsheet },
+  { label: 'Auditoría Cocina', href: '/auditoria-cocina', icon: ClipboardCheck },
+  { label: 'Recetas', href: '/recetas', icon: BookOpen },
   { label: 'Terminal Bodeguero', href: '/bodeguero', icon: Truck },
   { label: 'Inventario de Carnes', href: '/inventario', icon: Boxes },
   { label: 'Conteo Físico', href: '/inventario/conteos', icon: ClipboardList, isSubmenu: true },

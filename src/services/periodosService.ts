@@ -364,17 +364,31 @@ export async function calculatePeriodoStock(periodoId?: string, fechaCorte?: str
       conteoCreatedAt = cData.created_at;
     }
   } else {
-    // Buscar el conteo físico APLICADO más reciente que sea <= targetDate
-    const { data: cData } = await supabase
+    // Si la fecha de corte es una jornada específica (ej. 2026-09-24 o 2026-09-30):
+    // El conteo físico base de arranque debe ser ESTRICTAMENTE ANTERIOR a esa fecha (< targetDate).
+    // Esto garantiza que la fecha consultada muestre el Inventario Teórico del Sistema
+    // acumulado con los movimientos de dicha jornada (incluyendo compras y traslados a cocina).
+    // Y que los movimientos posteriores a un conteo previo se apliquen sobre dicho conteo previo.
+    const isExplicitDate = Boolean(fechaCorte && !fechaCorte.startsWith('CONTEO_') && fechaCorte !== 'ACTUAL' && fechaCorte !== 'INICIAL');
+
+    let queryConteo = supabase
       .from('conteos_fisicos')
       .select('id, fecha, created_at')
       .eq('estado', 'APLICADO')
-      .gte('fecha', p.fecha_inicio)
-      .lte('fecha', targetDate)
+      .gte('fecha', p.fecha_inicio);
+
+    if (isExplicitDate) {
+      queryConteo = queryConteo.lt('fecha', targetDate);
+    } else {
+      queryConteo = queryConteo.lte('fecha', targetDate);
+    }
+
+    const { data: cData } = await queryConteo
       .order('fecha', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
     if (cData) {
       targetConteoId = cData.id;
       conteoFecha = cData.fecha;
@@ -548,15 +562,21 @@ export async function calculatePeriodoStock(periodoId?: string, fechaCorte?: str
     from += step;
   }
 
-  // Filtrar pendientes y movimientos que ocurrieron ANTES o EN la foto del conteo
+  // Filtrar pendientes y movimientos que ocurrieron ANTES o EN la foto del conteo previo
   const approvedMovs = allMovs.filter((m) => {
     const obs = m.observaciones || '';
     if (obs.includes('[PENDIENTE_APROBAR]')) return false;
     if (m.tipo_movimiento === 'INVENTARIO_INICIAL') return false;
-    if (conteoFecha && m.fecha < conteoFecha) return false;
-    if (conteoFecha && conteoCreatedAt && m.fecha === conteoFecha) {
-      if (m.fecha_hora && m.fecha_hora <= conteoCreatedAt) return false;
+
+    // Los ajustes generados por auditoría/conteo físico se omiten en el replay del kárdex teórico
+    if (m.tipo_movimiento === 'AJUSTE_INVENTARIO' && (obs.includes('Ajuste por Conteo') || m.origen === 'AUDITORIA_FISICA')) {
+      return false;
     }
+
+    // Si hay un conteo previo como base, los movimientos de ese día del conteo ya están incorporados en la foto
+    // Por tanto, solo se aplican movimientos de fechas POSTERIORES al conteo previo
+    if (conteoFecha && m.fecha <= conteoFecha) return false;
+
     return true;
   });
 

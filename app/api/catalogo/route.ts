@@ -7,14 +7,116 @@ export const revalidate = 0;
 // 1. GET: Listar todos los insumos del catálogo
 export async function GET() {
   try {
-    const { data, error } = await supabase
+    const { data: dbCatalog, error } = await supabase
       .from('catalogo_insumos')
       .select('*')
       .order('categoria', { ascending: true })
       .order('nombre', { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json({ success: true, data: data || [] }, {
+
+    // Obtener insumos adicionales de compras históricas (verduras, granos, desechables, vasos, bebidas, lácteos, etc.)
+    const { data: transData } = await supabase
+      .from('transacciones_gastos_insumos')
+      .select('item, categoria, submodulo, costo_unitario');
+
+    const EXCLUDED_CATEGORIES = new Set([
+      'nomina',
+      'nómina',
+      'servicios',
+      'servicios publicos',
+      'servicios públicos',
+      'mantenimiento',
+      'gastos administrativos',
+      'gastos',
+      'transporte',
+      'arrendamiento'
+    ]);
+
+    const EXCLUDED_SUBMODULOS = new Set([
+      'NOMINA',
+      'SERVICIOS_GENERALES',
+      'SERVICIOS_PUBLICOS',
+      'ARRENDAMIENTO'
+    ]);
+
+    const mergedMap = new Map();
+
+    // 1. Insumos del catálogo maestro oficial
+    (dbCatalog || []).forEach(item => {
+      const key = (item.nombre || item.insumo || '').toLowerCase().trim();
+      if (!key) return;
+      
+      let cat = (item.categoria || '').trim();
+      const lowerName = key;
+      if (lowerName.includes('huevo') || lowerName.includes('leche') || lowerName.includes('queso') || lowerName.includes('yogurt')) {
+        cat = 'HUEVOS Y LACTEOS';
+      }
+
+      mergedMap.set(key, {
+        ...item,
+        categoria: cat
+      });
+    });
+
+    // 2. Insumos de transacciones históricas (granos, verduras, desechables, vasos, bebidas, etc.)
+    (transData || []).forEach(t => {
+      if (!t.item) return;
+      const rawName = t.item.trim();
+      const key = rawName.toLowerCase();
+      
+      const sub = (t.submodulo || '').toUpperCase().trim();
+      const rawCat = (t.categoria || '').toLowerCase().trim();
+
+      // Excluir nóminas, servicios públicos y gastos no físicos
+      if (EXCLUDED_SUBMODULOS.has(sub) || EXCLUDED_CATEGORIES.has(rawCat)) {
+        return;
+      }
+
+      if (!mergedMap.has(key)) {
+        let cat = 'GRANOS Y ABARROTES';
+        const lowerName = rawName.toLowerCase();
+
+        if (lowerName.includes('huevo') || lowerName.includes('leche') || lowerName.includes('queso') || lowerName.includes('crema de leche') || lowerName.includes('mantequilla')) {
+          cat = 'HUEVOS Y LACTEOS';
+        } else if (sub === 'DESECHABLES' || lowerName.includes('vaso') || lowerName.includes('tapa') || lowerName.includes('bolsa') || lowerName.includes('contenedor') || lowerName.includes('pitillo') || lowerName.includes('servilleta')) {
+          cat = 'DESECHABLES';
+        } else if (sub === 'BEBIDAS' || lowerName.includes('coca') || lowerName.includes('cerveza') || lowerName.includes('poker') || lowerName.includes('jugo') || lowerName.includes('agua') || lowerName.includes('bretaña') || lowerName.includes('postobon')) {
+          cat = 'BEBIDAS';
+        } else if (rawCat.includes('verdura') || lowerName.includes('papa') || lowerName.includes('tomate') || lowerName.includes('cebolla') || lowerName.includes('platano') || lowerName.includes('plátano') || lowerName.includes('limon') || lowerName.includes('limón') || lowerName.includes('aguacate') || lowerName.includes('zanahoria')) {
+          cat = 'VERDURAS';
+        } else if (sub === 'CARNES' || rawCat.includes('carne') || lowerName.includes('res') || lowerName.includes('cerdo') || lowerName.includes('pollo') || lowerName.includes('pescado') || lowerName.includes('costilla')) {
+          if (lowerName.includes('cerdo') || lowerName.includes('tocino') || lowerName.includes('chicharron') || lowerName.includes('chicharrón') || lowerName.includes('bondiola')) {
+            cat = 'CARNE DE CERDO';
+          } else if (lowerName.includes('pollo') || lowerName.includes('pechuga') || lowerName.includes('alitas')) {
+            cat = 'CARNE POLLO';
+          } else if (lowerName.includes('pescado') || lowerName.includes('tilapia') || lowerName.includes('trucha') || lowerName.includes('salmon') || lowerName.includes('salmón') || lowerName.includes('marisco')) {
+            cat = 'PESCADOS Y MARISCOS';
+          } else {
+            cat = 'CARNE DE RES';
+          }
+        }
+
+        const isMeat = cat.includes('CARNE') || cat.includes('PESCADOS');
+        const unitMed = cat === 'DESECHABLES' ? 'Paquete' : (cat === 'BEBIDAS' ? 'Und' : (cat === 'HUEVOS Y LACTEOS' ? 'Und' : 'Kg'));
+
+        mergedMap.set(key, {
+          id: `trans-${encodeURIComponent(key)}`,
+          nombre: rawName,
+          insumo: rawName,
+          categoria: cat,
+          unidad_medida: unitMed,
+          tipo_medida: cat === 'DESECHABLES' ? 'PAQUETES' : 'KGS',
+          es_carne: isMeat,
+          peso_estandar_porcion_kg: isMeat ? 0.25 : 0,
+          costo_unitario_kg: Number(t.costo_unitario) || 0
+        });
+      }
+    });
+
+    const fullCatalog = Array.from(mergedMap.values());
+
+    return NextResponse.json({ success: true, data: fullCatalog }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       }

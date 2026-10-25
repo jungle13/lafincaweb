@@ -249,8 +249,10 @@ export default function InventarioPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedConteoId(conteosAplicados[0].id);
-                  setSelectedDate(conteosAplicados[0].fecha);
+                  const matching = conteosAplicados.find((c: any) => c.fecha === selectedDate);
+                  const target = matching || conteosAplicados[0];
+                  setSelectedConteoId(target.id);
+                  setSelectedDate(target.fecha);
                   setCutoffMode('CONTEO');
                 }}
                 className={`px-3 py-1.5 min-h-[36px] sm:min-h-[28px] rounded-md transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
@@ -324,17 +326,43 @@ export default function InventarioPage() {
           )}
         </div>
 
-        {/* Resumen Contextual Discreto de Una Sola Línea */}
+        {/* Resumen Contextual Discreto con Botón de Comparación Rápida */}
         <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">
           <div>
             {cutoffMode === 'INICIAL' && (
               <span>Inventario inicial de {currentPeriodo?.nombre || 'periodo'} (arranque del mes).</span>
             )}
             {cutoffMode === 'FECHA' && (
-              <span>Corte al {selectedDate} ({totalMovsAplicados} movimientos aplicados). La columna <strong>Cocina</strong> refleja los movimientos de este día.</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>Inventario del Sistema al {selectedDate} ({totalMovsAplicados} movimientos aplicados). La columna <strong>Cocina</strong> refleja los movimientos de este día.</span>
+                {conteosAplicados.find((c: any) => c.fecha === selectedDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const c = conteosAplicados.find((x: any) => x.fecha === selectedDate);
+                      if (c) {
+                        setSelectedConteoId(c.id);
+                        setCutoffMode('CONTEO');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    <span>📊 Comparar con Conteo Físico ({selectedDate})</span>
+                  </button>
+                )}
+              </div>
             )}
             {cutoffMode === 'CONTEO' && (
-              <span>Fotografía de conteo físico aplicado del {selectedDate}.</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>Fotografía de auditoría física aplicada del {selectedDate}.</span>
+                <button
+                  type="button"
+                  onClick={() => setCutoffMode('FECHA')}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 text-[11px] font-semibold transition-colors cursor-pointer"
+                >
+                  <span>📋 Ver Inventario Teórico del Sistema</span>
+                </button>
+              </div>
             )}
             {cutoffMode === 'ACTUAL' && (
               <span>Inventario en vivo ({totalMovsAplicados} movimientos aplicados). La columna <strong>Cocina</strong> refleja la jornada activa.</span>
