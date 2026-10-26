@@ -72,14 +72,14 @@ export default function Sidebar() {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header compacto: Logo vectorizado a la izquierda y botón 'X' a la derecha */}
-        <div className="h-14 px-4 flex items-center justify-between border-b border-slate-900/80 shrink-0">
+        {/* Header: Logo vectorizado y botón 'X' de cierre */}
+        <div className="py-2.5 px-4 flex items-center justify-between border-b border-slate-900/80 shrink-0 min-h-[60px]">
           <Link href="/" onClick={closeSidebar} className="flex items-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/Logo_Letras_Vectorizadas.svg"
               alt="La Finca Choclos y Asados"
-              className="h-8 max-w-[190px] w-auto object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+              className="w-[160px] max-w-[185px] h-auto max-h-12 object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
             />
           </Link>
 
@@ -87,7 +87,7 @@ export default function Sidebar() {
             type="button"
             onClick={closeSidebar}
             title="Cerrar menú"
-            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-900/80 transition-colors cursor-pointer"
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-900/80 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
