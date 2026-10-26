@@ -1,11 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 interface SidebarContextType {
+  isOpen: boolean;
   collapsed: boolean;
   mobileOpen: boolean;
   toggleSidebar: () => void;
+  openSidebar: () => void;
+  closeSidebar: () => void;
   setCollapsed: (v: boolean) => void;
   openMobile: () => void;
   closeMobile: () => void;
@@ -13,9 +16,12 @@ interface SidebarContextType {
 }
 
 const SidebarContext = createContext<SidebarContextType>({
-  collapsed: false,
+  isOpen: false,
+  collapsed: true,
   mobileOpen: false,
   toggleSidebar: () => {},
+  openSidebar: () => {},
+  closeSidebar: () => {},
   setCollapsed: () => {},
   openMobile: () => {},
   closeMobile: () => {},
@@ -23,43 +29,26 @@ const SidebarContext = createContext<SidebarContextType>({
 });
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // Por defecto el drawer está cerrado para aprovechar el 100% de la pantalla (estilo GitHub)
+  const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebar_collapsed');
-    if (saved !== null) {
-      setCollapsed(saved === 'true');
-    }
-  }, []);
-
-  const toggleSidebar = () => {
-    // En desktop colapsa el sidebar, en mobile abre/cierra el drawer
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setMobileOpen((prev) => !prev);
-    } else {
-      setCollapsed((prev) => {
-        const next = !prev;
-        localStorage.setItem('sidebar_collapsed', String(next));
-        return next;
-      });
-    }
-  };
-
-  const openMobile = () => setMobileOpen(true);
-  const closeMobile = () => setMobileOpen(false);
-  const toggleMobile = () => setMobileOpen((prev) => !prev);
+  const toggleSidebar = () => setIsOpen((prev) => !prev);
+  const openSidebar = () => setIsOpen(true);
+  const closeSidebar = () => setIsOpen(false);
 
   return (
     <SidebarContext.Provider
       value={{
-        collapsed,
-        mobileOpen,
+        isOpen,
+        collapsed: !isOpen,
+        mobileOpen: isOpen,
         toggleSidebar,
-        setCollapsed,
-        openMobile,
-        closeMobile,
-        toggleMobile,
+        openSidebar,
+        closeSidebar,
+        setCollapsed: (v) => setIsOpen(!v),
+        openMobile: openSidebar,
+        closeMobile: closeSidebar,
+        toggleMobile: toggleSidebar,
       }}
     >
       {children}
