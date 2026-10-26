@@ -49,6 +49,15 @@ const CATEGORIAS_PREDEFINIDAS = [
   'ABARROTES',
 ];
 
+const CATEGORIAS_CARNICAS = [
+  'CARNE DE CERDO',
+  'CARNE DE RES',
+  'CARNE POLLO',
+  'EMBUTIDO',
+  'PESCADOS Y MARISCOS',
+  'MIXTO'
+];
+
 type SortField = 
   | 'codigo'
   | 'nombre'
@@ -82,8 +91,7 @@ export default function CatalogoPage() {
   const [formCategoria, setFormCategoria] = useState('CARNE DE RES');
   const [formUnidad, setFormUnidad] = useState('Kg');
   const [formTipoMedida, setFormTipoMedida] = useState<TipoMedida>('KGS_Y_UNIDADES');
-  const [formRendimientoTeorico, setFormRendimientoTeorico] = useState('');
-  const [formPesoEstandar, setFormPesoEstandar] = useState('');
+  const [formPesoGramos, setFormPesoGramos] = useState('333');
   const [formCostoUnitario, setFormCostoUnitario] = useState('');
   const [formStockMinimo, setFormStockMinimo] = useState('');
   const [formEsCarne, setFormEsCarne] = useState(true);
@@ -156,47 +164,34 @@ export default function CatalogoPage() {
   const totalInsumos = insumos.length;
   const totalCarnes = insumos.filter((i) => i.es_carne).length;
 
-  const handleRendimientoChange = (valStr: string) => {
-    setFormRendimientoTeorico(valStr);
-    const rend = parseFloat(valStr);
-    if (!isNaN(rend) && rend > 0) {
-      const pesoKg = 1 / rend;
-      setFormPesoEstandar(pesoKg.toFixed(3));
-    }
-  };
-
-  const handlePesoEstandarChange = (valStr: string) => {
-    setFormPesoEstandar(valStr);
-    const peso = parseFloat(valStr);
-    if (!isNaN(peso) && peso > 0) {
-      const rend = 1 / peso;
-      setFormRendimientoTeorico(rend.toFixed(2));
-    }
-  };
-
+  // Sincronizar automáticamente unidad según el tipo de medida
   const handleTipoMedidaChange = (t: TipoMedida) => {
     setFormTipoMedida(t);
     if (t === 'UNIDADES') {
       setFormUnidad('Und');
-      setFormPesoEstandar('0');
-      setFormRendimientoTeorico('');
       setFormEsCarne(false);
     } else if (t === 'PAQUETES') {
       setFormUnidad('Paquete');
-      setFormPesoEstandar('0');
-      setFormRendimientoTeorico('');
       setFormEsCarne(false);
     } else if (t === 'KGS') {
       setFormUnidad('Kg');
-      setFormPesoEstandar('0');
-      setFormRendimientoTeorico('');
     } else if (t === 'KGS_Y_UNIDADES') {
       setFormUnidad('Kg');
       setFormEsCarne(true);
-      if (!formPesoEstandar || parseFloat(formPesoEstandar) === 0) {
-        setFormPesoEstandar('0.333');
-        setFormRendimientoTeorico('3');
+      if (!formPesoGramos || parseFloat(formPesoGramos) <= 0) {
+        setFormPesoGramos('333');
       }
+    }
+  };
+
+  // Al cambiar categoría, sugerir el tipo de medida inteligente
+  const handleCategoriaChange = (cat: string) => {
+    setFormCategoria(cat);
+    const isMeatCategory = CATEGORIAS_CARNICAS.includes(cat);
+    setFormEsCarne(isMeatCategory);
+    if (isMeatCategory && formTipoMedida !== 'KGS_Y_UNIDADES' && formTipoMedida !== 'KGS') {
+      setFormTipoMedida('KGS_Y_UNIDADES');
+      setFormUnidad('Kg');
     }
   };
 
@@ -208,8 +203,7 @@ export default function CatalogoPage() {
     setFormCategoria('CARNE DE RES');
     setFormTipoMedida('KGS_Y_UNIDADES');
     setFormUnidad('Kg');
-    setFormRendimientoTeorico('3');
-    setFormPesoEstandar('0.333');
+    setFormPesoGramos('333');
     setFormCostoUnitario('20000');
     setFormStockMinimo('10');
     setFormEsCarne(true);
@@ -224,9 +218,8 @@ export default function CatalogoPage() {
     setFormCategoria(item.categoria || 'CARNE DE RES');
     setFormTipoMedida(item.tipo_medida || 'KGS_Y_UNIDADES');
     setFormUnidad(item.unidad_medida || 'Kg');
-    const peso = item.peso_estandar_porcion_kg || 0;
-    setFormPesoEstandar(String(peso));
-    setFormRendimientoTeorico(peso > 0 ? (1 / peso).toFixed(2) : '');
+    const pesoKg = item.peso_estandar_porcion_kg || 0;
+    setFormPesoGramos(pesoKg > 0 ? String(Math.round(pesoKg * 1000)) : '333');
     setFormCostoUnitario(String(item.costo_unitario_kg || 0));
     setFormStockMinimo(String(item.stock_minimo_kg || 0));
     setFormEsCarne(item.es_carne);
@@ -240,6 +233,8 @@ export default function CatalogoPage() {
 
     setSaving(true);
     try {
+      const pesoKg = formTipoMedida === 'KGS_Y_UNIDADES' ? (parseFloat(formPesoGramos) || 333) / 1000 : 0;
+
       const payload = {
         id: selectedItem?.id,
         codigo: formCodigo.trim(),
@@ -247,10 +242,10 @@ export default function CatalogoPage() {
         categoria: formCategoria,
         unidad_medida: formUnidad,
         tipo_medida: formTipoMedida,
-        peso_estandar_porcion_kg: formTipoMedida === 'KGS_Y_UNIDADES' ? (parseFloat(formPesoEstandar) || 0.35) : 0,
+        peso_estandar_porcion_kg: Number(pesoKg.toFixed(3)),
         costo_unitario_kg: parseFloat(formCostoUnitario) || 0,
         stock_minimo_kg: parseFloat(formStockMinimo) || 0,
-        es_carne: formEsCarne,
+        es_carne: formEsCarne || formTipoMedida === 'KGS_Y_UNIDADES' || CATEGORIAS_CARNICAS.includes(formCategoria),
         activo: true,
         observaciones: formObservaciones.trim(),
       };
@@ -298,6 +293,15 @@ export default function CatalogoPage() {
       <ArrowDown className="w-3 h-3 text-slate-900 font-bold" />
     );
   };
+
+  // Cálculo en vivo de rendimiento teórico
+  const liveRendimiento = useMemo(() => {
+    const grams = parseFloat(formPesoGramos);
+    if (!isNaN(grams) && grams > 0) {
+      return (1000 / grams).toFixed(2);
+    }
+    return '0.00';
+  }, [formPesoGramos]);
 
   if (loading) {
     return (
@@ -687,16 +691,18 @@ export default function CatalogoPage() {
       </div>
 
       {/* ------------------------------------------------------------ */}
-      {/* MODAL CREAR / EDITAR (Limpio y Sobrio)                        */}
+      {/* MODAL CREAR / EDITAR (Depurado, Sin Redundancias y Fondo Blanco) */}
       {/* ------------------------------------------------------------ */}
       <Modal
         isOpen={modalMode !== null}
         onClose={() => setModalMode(null)}
-        title={modalMode === 'CREATE' ? 'Crear Nuevo Insumo' : `Editar Insumo: ${selectedItem?.nombre}`}
+        title={modalMode === 'CREATE' ? 'Crear Nuevo Insumo' : `Editar: ${selectedItem?.nombre}`}
         icon={<Beef className="w-4 h-4 text-slate-700" />}
-        maxWidth="max-w-lg"
+        maxWidth="max-w-md"
       >
-        <form onSubmit={handleSave} className="space-y-3.5 text-xs">
+        <form onSubmit={handleSave} className="space-y-3 text-xs bg-white">
+          
+          {/* Fila 1: Código y Nombre */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">Código</label>
@@ -705,7 +711,7 @@ export default function CatalogoPage() {
                 value={formCodigo}
                 onChange={(e) => setFormCodigo(e.target.value)}
                 placeholder="Ej. CAR-001"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-mono"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-mono bg-white"
               />
             </div>
 
@@ -717,36 +723,18 @@ export default function CatalogoPage() {
                 value={formNombre}
                 onChange={(e) => setFormNombre(e.target.value)}
                 placeholder="Ej. Punta de anca importada"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-medium"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-medium bg-white"
               />
             </div>
           </div>
 
-          {/* Medida de Medición */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-md space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-slate-900 font-semibold text-xs">
-                Tipo de Medición Obligatoria *
-              </label>
-            </div>
-            <select
-              value={formTipoMedida}
-              onChange={(e) => handleTipoMedidaChange(e.target.value as TipoMedida)}
-              className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-medium text-xs cursor-pointer outline-none"
-            >
-              <option value="KGS_Y_UNIDADES">Kgs y Unidades (Carnes con porcionado: Entero Kg + Porciones Und)</option>
-              <option value="UNIDADES">Solo Unidades (Huevos, chorizos, tamales - NUNCA en Kg)</option>
-              <option value="PAQUETES">Paquetes (Papas a la francesa, verduras congeladas)</option>
-              <option value="KGS">Solo Kilos (Carnes sin porcionar, visceras, abarrotes a granel)</option>
-            </select>
-          </div>
-
+          {/* Fila 2: Categoría y Medición Principal */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">Categoría</label>
               <select
                 value={formCategoria}
-                onChange={(e) => setFormCategoria(e.target.value)}
+                onChange={(e) => handleCategoriaChange(e.target.value)}
                 className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-800 bg-white outline-none cursor-pointer"
               >
                 {CATEGORIAS_PREDEFINIDAS.map((c) => (
@@ -758,66 +746,59 @@ export default function CatalogoPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Unidad de Presentación</label>
+              <label className="block text-slate-700 font-semibold mb-1">Medición en Sistema *</label>
               <select
-                value={formUnidad}
-                onChange={(e) => setFormUnidad(e.target.value)}
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-800 bg-white outline-none cursor-pointer"
+                value={formTipoMedida}
+                onChange={(e) => handleTipoMedidaChange(e.target.value as TipoMedida)}
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-medium text-xs cursor-pointer outline-none"
               >
-                <option value="Kg">Kilogramos (Kg)</option>
-                <option value="Und">Unidades (Und)</option>
-                <option value="Paquete">Paquete</option>
-                <option value="Gramo">Gramos (g)</option>
-                <option value="Litro">Litros (L)</option>
+                <option value="KGS_Y_UNIDADES">Kgs y Unidades (Carnes porcionadas)</option>
+                <option value="UNIDADES">Solo Unidades (Huevos, chorizos, tamales)</option>
+                <option value="PAQUETES">Paquetes (Papas francesas, verduras)</option>
+                <option value="KGS">Solo Kilos (Sin porcionar / granel)</option>
               </select>
             </div>
           </div>
 
+          {/* Bloque Condicional: Porcionado & Rendimiento (Solo para KGS_Y_UNIDADES) */}
           {formTipoMedida === 'KGS_Y_UNIDADES' && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-md space-y-2 animate-fade-in">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-md space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-900 text-xs">
-                  Rendimiento Teórico y Gramaje por Porción
+                  Porcionado y Gramaje Estándar
                 </span>
-                <span className="text-[11px] text-slate-500 font-mono">1 Kg = Rendimiento × Peso</span>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  Rinde ~<strong className="text-slate-900">{liveRendimiento}</strong> porc / Kg
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-slate-700 font-medium mb-1">
-                    Rendimiento (Porciones x 1 Kg)
-                  </label>
+              <div>
+                <label className="block text-slate-600 mb-1 text-[11px]">
+                  Peso promedio por porción (en gramos)
+                </label>
+                <div className="relative">
                   <input
                     type="number"
-                    step="0.1"
-                    value={formRendimientoTeorico}
-                    onChange={(e) => handleRendimientoChange(e.target.value)}
-                    placeholder="Ej: 3 (rinde 3 porciones x Kg)"
-                    className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-mono outline-none"
+                    step="1"
+                    min="1"
+                    value={formPesoGramos}
+                    onChange={(e) => setFormPesoGramos(e.target.value)}
+                    placeholder="Ej: 333"
+                    className="w-full h-8 pl-2.5 pr-12 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-mono outline-none"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-medium mb-1">
-                    Peso Estándar por Porción (Kg)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={formPesoEstandar}
-                    onChange={(e) => handlePesoEstandarChange(e.target.value)}
-                    placeholder="Ej: 0.333 Kg (333 gramos)"
-                    className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-mono outline-none"
-                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-mono pointer-events-none">
+                    gramos
+                  </span>
                 </div>
               </div>
             </div>
           )}
 
+          {/* Fila 3: Costo Base y Stock Mínimo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                Costo Base ($ COP / {formTipoMedida === 'UNIDADES' ? 'Und' : formTipoMedida === 'PAQUETES' ? 'Paquete' : 'Kg'})
+                Costo Base ($ COP / {formUnidad})
               </label>
               <input
                 type="number"
@@ -825,13 +806,13 @@ export default function CatalogoPage() {
                 value={formCostoUnitario}
                 onChange={(e) => setFormCostoUnitario(e.target.value)}
                 placeholder="Ej. 24000"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none bg-white"
               />
             </div>
 
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                Stock Mínimo ({formTipoMedida === 'UNIDADES' ? 'Und' : formTipoMedida === 'PAQUETES' ? 'Paquetes' : 'Kg'})
+                Stock Mínimo ({formUnidad})
               </label>
               <input
                 type="number"
@@ -839,29 +820,17 @@ export default function CatalogoPage() {
                 value={formStockMinimo}
                 onChange={(e) => setFormStockMinimo(e.target.value)}
                 placeholder="Ej. 10"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none bg-white"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="esCarneCheck"
-              checked={formEsCarne}
-              onChange={(e) => setFormEsCarne(e.target.checked)}
-              className="w-3.5 h-3.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer"
-            />
-            <label htmlFor="esCarneCheck" className="text-slate-700 font-medium select-none cursor-pointer">
-              Es una carne / proteína cárnica sujeta a control de porcionado y mermas
-            </label>
-          </div>
-
+          {/* Botones de Acción */}
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setModalMode(null)}
-              className="px-3.5 py-1.5 rounded-md text-slate-700 bg-slate-100 hover:bg-slate-200 font-medium text-xs cursor-pointer"
+              className="px-3.5 py-1.5 rounded-md text-slate-700 bg-slate-100 hover:bg-slate-200 font-medium text-xs cursor-pointer transition-colors"
             >
               Cancelar
             </button>
