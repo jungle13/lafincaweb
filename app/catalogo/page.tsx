@@ -691,51 +691,57 @@ export default function CatalogoPage() {
       </div>
 
       {/* ------------------------------------------------------------ */}
-      {/* MODAL CREAR / EDITAR (Depurado, Sin Redundancias y Fondo Blanco) */}
+      {/* MODAL CREAR / EDITAR (Espacioso, Estético y Minimalista)     */}
       {/* ------------------------------------------------------------ */}
       <Modal
         isOpen={modalMode !== null}
         onClose={() => setModalMode(null)}
         title={modalMode === 'CREATE' ? 'Crear Nuevo Insumo' : `Editar: ${selectedItem?.nombre}`}
-        icon={<Beef className="w-4 h-4 text-slate-700" />}
-        maxWidth="max-w-md"
+        icon={<Beef className="w-5 h-5 text-slate-700" />}
+        maxWidth="max-w-2xl"
       >
-        <form onSubmit={handleSave} className="space-y-3 text-xs bg-white">
+        <form onSubmit={handleSave} className="space-y-6 bg-white py-2">
           
-          {/* Fila 1: Código y Nombre */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {/* Fila 1: Código y Nombre con espacio holgado */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Código</label>
+              <label className="block text-slate-700 font-semibold mb-2 text-xs uppercase tracking-wider">
+                Código
+              </label>
               <input
                 type="text"
                 value={formCodigo}
                 onChange={(e) => setFormCodigo(e.target.value)}
                 placeholder="Ej. CAR-001"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-mono bg-white"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 outline-none text-slate-800 font-mono text-sm bg-white transition-all shadow-2xs"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-slate-700 font-semibold mb-1">Nombre del Insumo / Corte *</label>
+              <label className="block text-slate-700 font-semibold mb-2 text-xs uppercase tracking-wider">
+                Nombre del Insumo / Corte *
+              </label>
               <input
                 type="text"
                 required
                 value={formNombre}
                 onChange={(e) => setFormNombre(e.target.value)}
                 placeholder="Ej. Punta de anca importada"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-medium bg-white"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 outline-none text-slate-800 font-medium text-sm bg-white transition-all shadow-2xs"
               />
             </div>
           </div>
 
           {/* Fila 2: Categoría y Medición Principal */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Categoría</label>
+              <label className="block text-slate-700 font-semibold mb-2 text-xs uppercase tracking-wider">
+                Categoría
+              </label>
               <select
                 value={formCategoria}
                 onChange={(e) => handleCategoriaChange(e.target.value)}
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-800 bg-white outline-none cursor-pointer"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 text-slate-800 bg-white outline-none cursor-pointer text-sm transition-all shadow-2xs"
               >
                 {CATEGORIAS_PREDEFINIDAS.map((c) => (
                   <option key={c} value={c}>
@@ -746,11 +752,13 @@ export default function CatalogoPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Medición en Sistema *</label>
+              <label className="block text-slate-700 font-semibold mb-2 text-xs uppercase tracking-wider">
+                Medición en Sistema *
+              </label>
               <select
                 value={formTipoMedida}
                 onChange={(e) => handleTipoMedidaChange(e.target.value as TipoMedida)}
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-medium text-xs cursor-pointer outline-none"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 text-slate-900 bg-white font-medium text-sm cursor-pointer outline-none transition-all shadow-2xs truncate"
               >
                 <option value="KGS_Y_UNIDADES">Kgs y Unidades (Carnes porcionadas)</option>
                 <option value="UNIDADES">Solo Unidades (Huevos, chorizos, tamales)</option>
@@ -762,19 +770,19 @@ export default function CatalogoPage() {
 
           {/* Bloque Condicional: Porcionado & Rendimiento (Solo para KGS_Y_UNIDADES) */}
           {formTipoMedida === 'KGS_Y_UNIDADES' && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-md space-y-2">
+            <div className="p-5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-900 text-xs">
+                <span className="font-semibold text-slate-900 text-xs uppercase tracking-wider">
                   Porcionado y Gramaje Estándar
                 </span>
-                <span className="text-[11px] text-slate-500 font-mono">
-                  Rinde ~<strong className="text-slate-900">{liveRendimiento}</strong> porc / Kg
+                <span className="text-xs text-slate-600 font-mono bg-white px-2.5 py-1 rounded-md border border-slate-200">
+                  Rinde ~<strong className="text-slate-900 font-bold">{liveRendimiento}</strong> porciones / Kg
                 </span>
               </div>
 
               <div>
-                <label className="block text-slate-600 mb-1 text-[11px]">
-                  Peso promedio por porción (en gramos)
+                <label className="block text-slate-600 mb-1.5 text-xs font-medium">
+                  Peso promedio por porción individual (en gramos)
                 </label>
                 <div className="relative">
                   <input
@@ -784,9 +792,9 @@ export default function CatalogoPage() {
                     value={formPesoGramos}
                     onChange={(e) => setFormPesoGramos(e.target.value)}
                     placeholder="Ej: 333"
-                    className="w-full h-8 pl-2.5 pr-12 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-mono outline-none"
+                    className="w-full h-11 pl-3.5 pr-20 rounded-lg border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 text-slate-900 bg-white font-mono text-sm outline-none transition-all shadow-2xs"
                   />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-mono pointer-events-none">
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono pointer-events-none">
                     gramos
                   </span>
                 </div>
@@ -795,9 +803,9 @@ export default function CatalogoPage() {
           )}
 
           {/* Fila 3: Costo Base y Stock Mínimo */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">
+              <label className="block text-slate-700 font-semibold mb-2 text-xs uppercase tracking-wider">
                 Costo Base ($ COP / {formUnidad})
               </label>
               <input
@@ -806,12 +814,12 @@ export default function CatalogoPage() {
                 value={formCostoUnitario}
                 onChange={(e) => setFormCostoUnitario(e.target.value)}
                 placeholder="Ej. 24000"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none bg-white"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 text-slate-900 font-mono text-sm outline-none bg-white transition-all shadow-2xs"
               />
             </div>
 
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">
+              <label className="block text-slate-700 font-semibold mb-2 text-xs uppercase tracking-wider">
                 Stock Mínimo ({formUnidad})
               </label>
               <input
@@ -820,26 +828,26 @@ export default function CatalogoPage() {
                 value={formStockMinimo}
                 onChange={(e) => setFormStockMinimo(e.target.value)}
                 placeholder="Ej. 10"
-                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none bg-white"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 text-slate-900 font-mono text-sm outline-none bg-white transition-all shadow-2xs"
               />
             </div>
           </div>
 
-          {/* Botones de Acción */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          {/* Botones de Acción con mayor presencia y holgura */}
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setModalMode(null)}
-              className="px-3.5 py-1.5 rounded-md text-slate-700 bg-slate-100 hover:bg-slate-200 font-medium text-xs cursor-pointer transition-colors"
+              className="h-11 px-5 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 font-medium text-xs md:text-sm cursor-pointer transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-3.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 active:scale-98 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+              className="h-11 px-6 rounded-lg bg-slate-900 hover:bg-slate-800 active:scale-98 text-white font-semibold text-xs md:text-sm flex items-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
             >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               <span>{modalMode === 'CREATE' ? 'Crear Insumo' : 'Guardar Cambios'}</span>
             </button>
           </div>
