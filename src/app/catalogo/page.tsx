@@ -50,6 +50,19 @@ const CATEGORIAS_PREDEFINIDAS = [
   'SERVICIOS'
 ];
 
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  'CARNE DE RES': 'Carne de Res',
+  'CARNE DE CERDO': 'Carne de Cerdo',
+  'CARNE POLLO': 'Carne Pollo',
+  'PESCADOS Y MARISCOS': 'Pescados y Mariscos',
+  'EMBUTIDOS': 'Embutidos',
+  'VERDURAS': 'Verduras',
+  'GRANOS Y ABARROTES': 'Granos y Abarrotes',
+  'DESECHABLES': 'Desechables',
+  'BEBIDAS': 'Bebidas',
+  'SERVICIOS': 'Servicios',
+};
+
 const CATEGORIAS_CARNICAS = [
   'CARNE DE RES',
   'CARNE DE CERDO',
@@ -163,6 +176,16 @@ export default function CatalogoPage() {
 
   const totalInsumos = insumos.length;
   const totalCarnes = insumos.filter((i) => i.es_carne).length;
+
+  // Conteo dinámico estandarizado por cada categoría
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    insumos.forEach((item) => {
+      const cat = item.categoria || '';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [insumos]);
 
   // Sincronizar automáticamente unidad según el tipo de medida
   const handleTipoMedidaChange = (t: TipoMedida) => {
@@ -364,13 +387,16 @@ export default function CatalogoPage() {
       </div>
 
       {/* ------------------------------------------------------------ */}
-      {/* FILTROS DE CATEGORÍA MINIMALISTAS                            */}
+      {/* FILTROS DE CATEGORÍA MINIMALISTAS Y ESTANDARIZADOS          */}
       {/* ------------------------------------------------------------ */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-nowrap select-none">
         {[
           { key: 'ALL', label: `Todos (${totalInsumos})` },
           { key: 'CARNES', label: `Carnes (${totalCarnes})` },
-          ...CATEGORIAS_PREDEFINIDAS.map(c => ({ key: c, label: c }))
+          ...CATEGORIAS_PREDEFINIDAS.map((c) => ({
+            key: c,
+            label: `${CATEGORY_DISPLAY_NAMES[c] || c} (${categoryCounts[c] || 0})`
+          }))
         ].map((cat) => {
           const isSelected = selectedCat === cat.key;
           return (
@@ -527,8 +553,8 @@ export default function CatalogoPage() {
 
                       {/* Categoría */}
                       <td className="py-2 px-3 whitespace-nowrap">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          {item.categoria}
+                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          {CATEGORY_DISPLAY_NAMES[item.categoria] || item.categoria}
                         </span>
                       </td>
 
@@ -644,7 +670,9 @@ export default function CatalogoPage() {
                   </button>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="font-mono text-[10px] text-slate-400">{item.codigo}</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">{item.categoria}</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">
+                      {CATEGORY_DISPLAY_NAMES[item.categoria] || item.categoria}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -745,7 +773,7 @@ export default function CatalogoPage() {
               >
                 {CATEGORIAS_PREDEFINIDAS.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {CATEGORY_DISPLAY_NAMES[c] || c}
                   </option>
                 ))}
               </select>
