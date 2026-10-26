@@ -1,0 +1,3832 @@
+{
+  "21": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 8
+    },
+    {
+      "codigo": "65",
+      "nombre": "Aguacate porc",
+      "cantidad": 2
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "3",
+      "nombre": "Asada",
+      "cantidad": 12
+    },
+    {
+      "codigo": "40",
+      "nombre": "Baby beef 400 gr apr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "131",
+      "nombre": "Banano unidad",
+      "cantidad": 3
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 24
+    },
+    {
+      "codigo": "54",
+      "nombre": "Cafe en leche",
+      "cantidad": 2
+    },
+    {
+      "codigo": "6",
+      "nombre": "Calentado especial",
+      "cantidad": 3
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 16
+    },
+    {
+      "codigo": "87",
+      "nombre": "Cazuela frijol",
+      "cantidad": 1
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 17
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 3
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 3
+    },
+    {
+      "codigo": "43",
+      "nombre": "Choricerdo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "14",
+      "nombre": "Chuleta de cerdo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "27",
+      "nombre": "Chuleta de pollo",
+      "cantidad": 10
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 1
+    },
+    {
+      "codigo": "122",
+      "nombre": "Coca cola 350",
+      "cantidad": 8
+    },
+    {
+      "codigo": "42",
+      "nombre": "Costilla ahumada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 5
+    },
+    {
+      "codigo": "11",
+      "nombre": "Costilla horno",
+      "cantidad": 13
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 18
+    },
+    {
+      "codigo": "26",
+      "nombre": "Filete ejecutivo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 5
+    },
+    {
+      "codigo": "94",
+      "nombre": "Frijolada",
+      "cantidad": 15
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 24
+    },
+    {
+      "codigo": "217",
+      "nombre": "Frijolada especial",
+      "cantidad": 1
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 7
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 5
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 3
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 10
+    },
+    {
+      "codigo": "318",
+      "nombre": "Gaseosa litro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 1
+    },
+    {
+      "codigo": "123",
+      "nombre": "H2o saborizada",
+      "cantidad": 4
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 8
+    },
+    {
+      "codigo": "201",
+      "nombre": "Jarra limo-coco 1 lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 5
+    },
+    {
+      "codigo": "502",
+      "nombre": "Jugo jarra leche 1lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "75",
+      "nombre": "Jugo leche vaso",
+      "cantidad": 1
+    },
+    {
+      "codigo": "16",
+      "nombre": "Lengua",
+      "cantidad": 24
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "204",
+      "nombre": "Limonada coco",
+      "cantidad": 2
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 3
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 3
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 11
+    },
+    {
+      "codigo": "112",
+      "nombre": "Mega chicharrn 700 g",
+      "cantidad": 3
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 3
+    },
+    {
+      "codigo": "317",
+      "nombre": "Mix cereal           bls",
+      "cantidad": 1
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 3
+    },
+    {
+      "codigo": "19",
+      "nombre": "Pericos con arroz",
+      "cantidad": 1
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 2
+    },
+    {
+      "codigo": "168",
+      "nombre": "Por cost cerdo",
+      "cantidad": 10
+    },
+    {
+      "codigo": "81",
+      "nombre": "Porc arepa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 12
+    },
+    {
+      "codigo": "163",
+      "nombre": "Porc chuleta pollo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "85",
+      "nombre": "Porc ensalada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "157",
+      "nombre": "Porc lengua peque",
+      "cantidad": 7
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 4
+    },
+    {
+      "codigo": "82",
+      "nombre": "Porc morrillo peque",
+      "cantidad": 11
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 6
+    },
+    {
+      "codigo": "78",
+      "nombre": "Porc res",
+      "cantidad": 7
+    },
+    {
+      "codigo": "137",
+      "nombre": "Porcion pollo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 1
+    },
+    {
+      "codigo": "10",
+      "nombre": "Rellena casra",
+      "cantidad": 4
+    },
+    {
+      "codigo": "120",
+      "nombre": "Salmon espec",
+      "cantidad": 2
+    },
+    {
+      "codigo": "129",
+      "nombre": "Salmon salsa camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 12
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 11
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "96",
+      "nombre": "Tilapia grande 450 g",
+      "cantidad": 1
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 4
+    }
+  ],
+  "22": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 15
+    },
+    {
+      "codigo": "40",
+      "nombre": "Baby beef 400 gr apr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 10
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 1
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 18
+    },
+    {
+      "codigo": "311",
+      "nombre": "Cazuela de camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "87",
+      "nombre": "Cazuela frijol",
+      "cantidad": 2
+    },
+    {
+      "codigo": "13",
+      "nombre": "Cerdo ejecutivo",
+      "cantidad": 25
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 3
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 1
+    },
+    {
+      "codigo": "71",
+      "nombre": "Cerveza club",
+      "cantidad": 5
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 2
+    },
+    {
+      "codigo": "43",
+      "nombre": "Choricerdo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "37",
+      "nombre": "Choripollo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 2
+    },
+    {
+      "codigo": "15",
+      "nombre": "Costilla de res",
+      "cantidad": 35
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 13
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 2
+    },
+    {
+      "codigo": "26",
+      "nombre": "Filete ejecutivo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 3
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 3
+    },
+    {
+      "codigo": "94",
+      "nombre": "Frijolada",
+      "cantidad": 5
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 23
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 4
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 6
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 3
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 11
+    },
+    {
+      "codigo": "318",
+      "nombre": "Gaseosa litro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 6
+    },
+    {
+      "codigo": "123",
+      "nombre": "H2o saborizada",
+      "cantidad": 2
+    },
+    {
+      "codigo": "314",
+      "nombre": "Hojuelas",
+      "cantidad": 1
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 10
+    },
+    {
+      "codigo": "212",
+      "nombre": "Jarra limonada 2 lit",
+      "cantidad": 2
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 1
+    },
+    {
+      "codigo": "134",
+      "nombre": "Jugo jarra agua 1 li",
+      "cantidad": 1
+    },
+    {
+      "codigo": "501",
+      "nombre": "Jugo jarra agua 2 lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "75",
+      "nombre": "Jugo leche vaso",
+      "cantidad": 1
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "204",
+      "nombre": "Limonada coco",
+      "cantidad": 2
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 4
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 5
+    },
+    {
+      "codigo": "46",
+      "nombre": "Lomo cerdo espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 1
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 3
+    },
+    {
+      "codigo": "317",
+      "nombre": "Mix cereal           bls",
+      "cantidad": 3
+    },
+    {
+      "codigo": "18",
+      "nombre": "Morrillo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 2
+    },
+    {
+      "codigo": "19",
+      "nombre": "Pericos con arroz",
+      "cantidad": 1
+    },
+    {
+      "codigo": "20",
+      "nombre": "Pericos solos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "145",
+      "nombre": "Pollo sudado",
+      "cantidad": 7
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 3
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 12
+    },
+    {
+      "codigo": "80",
+      "nombre": "Porc cerdo peque",
+      "cantidad": 10
+    },
+    {
+      "codigo": "169",
+      "nombre": "Porc cost res",
+      "cantidad": 28
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 4
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 2
+    },
+    {
+      "codigo": "137",
+      "nombre": "Porcion pollo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "219",
+      "nombre": "Prom chuleta cerdo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "140",
+      "nombre": "Prom churrasco",
+      "cantidad": 2
+    },
+    {
+      "codigo": "221",
+      "nombre": "Prom costill ahumada",
+      "cantidad": 3
+    },
+    {
+      "codigo": "223",
+      "nombre": "Promo cazuela",
+      "cantidad": 5
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 3
+    },
+    {
+      "codigo": "10",
+      "nombre": "Rellena casra",
+      "cantidad": 2
+    },
+    {
+      "codigo": "120",
+      "nombre": "Salmon espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "129",
+      "nombre": "Salmon salsa camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 6
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 12
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "68",
+      "nombre": "Tilapia salsa camaro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 4
+    }
+  ],
+  "23": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 26
+    },
+    {
+      "codigo": "65",
+      "nombre": "Aguacate porc",
+      "cantidad": 1
+    },
+    {
+      "codigo": "3",
+      "nombre": "Asada",
+      "cantidad": 4
+    },
+    {
+      "codigo": "40",
+      "nombre": "Baby beef 400 gr apr",
+      "cantidad": 3
+    },
+    {
+      "codigo": "131",
+      "nombre": "Banano unidad",
+      "cantidad": 1
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 16
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 1
+    },
+    {
+      "codigo": "54",
+      "nombre": "Cafe en leche",
+      "cantidad": 1
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 13
+    },
+    {
+      "codigo": "87",
+      "nombre": "Cazuela frijol",
+      "cantidad": 2
+    },
+    {
+      "codigo": "13",
+      "nombre": "Cerdo ejecutivo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 2
+    },
+    {
+      "codigo": "264",
+      "nombre": "Cerv coronita",
+      "cantidad": 1
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 2
+    },
+    {
+      "codigo": "71",
+      "nombre": "Cerveza club",
+      "cantidad": 2
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 2
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "122",
+      "nombre": "Coca cola 350",
+      "cantidad": 2
+    },
+    {
+      "codigo": "247",
+      "nombre": "Costeñita",
+      "cantidad": 2
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 8
+    },
+    {
+      "codigo": "15",
+      "nombre": "Costilla de res",
+      "cantidad": 1
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 16
+    },
+    {
+      "codigo": "4",
+      "nombre": "Desmechada",
+      "cantidad": 27
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 3
+    },
+    {
+      "codigo": "26",
+      "nombre": "Filete ejecutivo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "94",
+      "nombre": "Frijolada",
+      "cantidad": 19
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 35
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 3
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 1
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 3
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 11
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 11
+    },
+    {
+      "codigo": "201",
+      "nombre": "Jarra limo-coco 1 lt",
+      "cantidad": 2
+    },
+    {
+      "codigo": "212",
+      "nombre": "Jarra limonada 2 lit",
+      "cantidad": 5
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 5
+    },
+    {
+      "codigo": "134",
+      "nombre": "Jugo jarra agua 1 li",
+      "cantidad": 1
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "204",
+      "nombre": "Limonada coco",
+      "cantidad": 1
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 4
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 2
+    },
+    {
+      "codigo": "46",
+      "nombre": "Lomo cerdo espec",
+      "cantidad": 2
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 9
+    },
+    {
+      "codigo": "112",
+      "nombre": "Mega chicharrn 700 g",
+      "cantidad": 1
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 6
+    },
+    {
+      "codigo": "101",
+      "nombre": "Mr tea",
+      "cantidad": 1
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 4
+    },
+    {
+      "codigo": "21",
+      "nombre": "Perico con arepa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "19",
+      "nombre": "Pericos con arroz",
+      "cantidad": 1
+    },
+    {
+      "codigo": "20",
+      "nombre": "Pericos solos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "145",
+      "nombre": "Pollo sudado",
+      "cantidad": 12
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 3
+    },
+    {
+      "codigo": "81",
+      "nombre": "Porc arepa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 13
+    },
+    {
+      "codigo": "114",
+      "nombre": "Porc desmechada",
+      "cantidad": 9
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 8
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 7
+    },
+    {
+      "codigo": "78",
+      "nombre": "Porc res",
+      "cantidad": 2
+    },
+    {
+      "codigo": "137",
+      "nombre": "Porcion pollo",
+      "cantidad": 8
+    },
+    {
+      "codigo": "219",
+      "nombre": "Prom chuleta cerdo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "220",
+      "nombre": "Prom chuleta pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "140",
+      "nombre": "Prom churrasco",
+      "cantidad": 1
+    },
+    {
+      "codigo": "221",
+      "nombre": "Prom costill ahumada",
+      "cantidad": 3
+    },
+    {
+      "codigo": "225",
+      "nombre": "Prom lomo cerdo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "226",
+      "nombre": "Prom punta de anca",
+      "cantidad": 1
+    },
+    {
+      "codigo": "222",
+      "nombre": "Prom tilapia",
+      "cantidad": 1
+    },
+    {
+      "codigo": "223",
+      "nombre": "Promo cazuela",
+      "cantidad": 2
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 2
+    },
+    {
+      "codigo": "129",
+      "nombre": "Salmon salsa camaron",
+      "cantidad": 3
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 6
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 13
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 2
+    },
+    {
+      "codigo": "39",
+      "nombre": "Vive 100 grde",
+      "cantidad": 2
+    }
+  ],
+  "24": [
+    {
+      "codigo": "316",
+      "nombre": "Actigest",
+      "cantidad": 1
+    },
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 11
+    },
+    {
+      "codigo": "65",
+      "nombre": "Aguacate porc",
+      "cantidad": 3
+    },
+    {
+      "codigo": "1",
+      "nombre": "Albondigas",
+      "cantidad": 24
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "40",
+      "nombre": "Baby beef 400 gr apr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "131",
+      "nombre": "Banano unidad",
+      "cantidad": 1
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 5
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 4
+    },
+    {
+      "codigo": "2",
+      "nombre": "Bistec higado",
+      "cantidad": 1
+    },
+    {
+      "codigo": "54",
+      "nombre": "Cafe en leche",
+      "cantidad": 1
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 6
+    },
+    {
+      "codigo": "13",
+      "nombre": "Cerdo ejecutivo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 4
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 1
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 4
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "122",
+      "nombre": "Coca cola 350",
+      "cantidad": 2
+    },
+    {
+      "codigo": "42",
+      "nombre": "Costilla ahumada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 3
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 12
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 6
+    },
+    {
+      "codigo": "26",
+      "nombre": "Filete ejecutivo",
+      "cantidad": 21
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 11
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 2
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 4
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 8
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 2
+    },
+    {
+      "codigo": "123",
+      "nombre": "H2o saborizada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 19
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 5
+    },
+    {
+      "codigo": "306",
+      "nombre": "Jugo del valle",
+      "cantidad": 1
+    },
+    {
+      "codigo": "134",
+      "nombre": "Jugo jarra agua 1 li",
+      "cantidad": 1
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 4
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 2
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 1
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 2
+    },
+    {
+      "codigo": "101",
+      "nombre": "Mr tea",
+      "cantidad": 3
+    },
+    {
+      "codigo": "93",
+      "nombre": "Paisa economico",
+      "cantidad": 57
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 3
+    },
+    {
+      "codigo": "19",
+      "nombre": "Pericos con arroz",
+      "cantidad": 2
+    },
+    {
+      "codigo": "20",
+      "nombre": "Pericos solos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 3
+    },
+    {
+      "codigo": "99",
+      "nombre": "Por ensalada tocebla grs",
+      "cantidad": 1
+    },
+    {
+      "codigo": "162",
+      "nombre": "Porc albondiga",
+      "cantidad": 15
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 17
+    },
+    {
+      "codigo": "63",
+      "nombre": "Porc maduro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 9
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 5
+    },
+    {
+      "codigo": "137",
+      "nombre": "Porcion pollo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "220",
+      "nombre": "Prom chuleta pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "224",
+      "nombre": "Prom filete pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "226",
+      "nombre": "Prom punta de anca",
+      "cantidad": 1
+    },
+    {
+      "codigo": "223",
+      "nombre": "Promo cazuela",
+      "cantidad": 1
+    },
+    {
+      "codigo": "229",
+      "nombre": "Promo chuleta mix",
+      "cantidad": 1
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 4
+    },
+    {
+      "codigo": "129",
+      "nombre": "Salmon salsa camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 5
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 22
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 8
+    },
+    {
+      "codigo": "255",
+      "nombre": "Trucha",
+      "cantidad": 1
+    }
+  ],
+  "25": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 10
+    },
+    {
+      "codigo": "132",
+      "nombre": "Aguacate entero      kl",
+      "cantidad": 1
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 11
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 3
+    },
+    {
+      "codigo": "54",
+      "nombre": "Cafe en leche",
+      "cantidad": 2
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 3
+    },
+    {
+      "codigo": "135",
+      "nombre": "Calentado chorizo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "6",
+      "nombre": "Calentado especial",
+      "cantidad": 5
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 11
+    },
+    {
+      "codigo": "311",
+      "nombre": "Cazuela de camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "264",
+      "nombre": "Cerv coronita",
+      "cantidad": 4
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 1
+    },
+    {
+      "codigo": "71",
+      "nombre": "Cerveza club",
+      "cantidad": 2
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 5
+    },
+    {
+      "codigo": "52",
+      "nombre": "Chocolate leche",
+      "cantidad": 2
+    },
+    {
+      "codigo": "43",
+      "nombre": "Choricerdo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 1
+    },
+    {
+      "codigo": "122",
+      "nombre": "Coca cola 350",
+      "cantidad": 1
+    },
+    {
+      "codigo": "247",
+      "nombre": "Costeñita",
+      "cantidad": 1
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 8
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 14
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 2
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 3
+    },
+    {
+      "codigo": "94",
+      "nombre": "Frijolada",
+      "cantidad": 9
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 24
+    },
+    {
+      "codigo": "217",
+      "nombre": "Frijolada especial",
+      "cantidad": 1
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 12
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 1
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 8
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 8
+    },
+    {
+      "codigo": "318",
+      "nombre": "Gaseosa litro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 3
+    },
+    {
+      "codigo": "314",
+      "nombre": "Hojuelas",
+      "cantidad": 1
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 12
+    },
+    {
+      "codigo": "201",
+      "nombre": "Jarra limo-coco 1 lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "212",
+      "nombre": "Jarra limonada 2 lit",
+      "cantidad": 1
+    },
+    {
+      "codigo": "235",
+      "nombre": "Jugo hit nr",
+      "cantidad": 1
+    },
+    {
+      "codigo": "501",
+      "nombre": "Jugo jarra agua 2 lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "75",
+      "nombre": "Jugo leche vaso",
+      "cantidad": 1
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 3
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 1
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 10
+    },
+    {
+      "codigo": "101",
+      "nombre": "Mr tea",
+      "cantidad": 2
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 4
+    },
+    {
+      "codigo": "20",
+      "nombre": "Pericos solos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "22",
+      "nombre": "Pescado sudado",
+      "cantidad": 11
+    },
+    {
+      "codigo": "239",
+      "nombre": "Pez frito",
+      "cantidad": 12
+    },
+    {
+      "codigo": "266",
+      "nombre": "Pezuña de res",
+      "cantidad": 4
+    },
+    {
+      "codigo": "47",
+      "nombre": "Picada dos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "145",
+      "nombre": "Pollo sudado",
+      "cantidad": 26
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 1
+    },
+    {
+      "codigo": "111",
+      "nombre": "Por chicha jr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "168",
+      "nombre": "Por cost cerdo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "240",
+      "nombre": "Por pez frito",
+      "cantidad": 5
+    },
+    {
+      "codigo": "156",
+      "nombre": "Por.pescado",
+      "cantidad": 7
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 15
+    },
+    {
+      "codigo": "100",
+      "nombre": "Porc lengua gran",
+      "cantidad": 3
+    },
+    {
+      "codigo": "63",
+      "nombre": "Porc maduro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 5
+    },
+    {
+      "codigo": "267",
+      "nombre": "Porc pezuña res",
+      "cantidad": 6
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 8
+    },
+    {
+      "codigo": "78",
+      "nombre": "Porc res",
+      "cantidad": 1
+    },
+    {
+      "codigo": "137",
+      "nombre": "Porcion pollo",
+      "cantidad": 11
+    },
+    {
+      "codigo": "222",
+      "nombre": "Prom tilapia",
+      "cantidad": 1
+    },
+    {
+      "codigo": "223",
+      "nombre": "Promo cazuela",
+      "cantidad": 1
+    },
+    {
+      "codigo": "229",
+      "nombre": "Promo chuleta mix",
+      "cantidad": 2
+    },
+    {
+      "codigo": "230",
+      "nombre": "Promo mix asados",
+      "cantidad": 1
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 1
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 29
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "96",
+      "nombre": "Tilapia grande 450 g",
+      "cantidad": 1
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 4
+    }
+  ],
+  "26": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 12
+    },
+    {
+      "codigo": "65",
+      "nombre": "Aguacate porc",
+      "cantidad": 1
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "313",
+      "nombre": "Avena",
+      "cantidad": 1
+    },
+    {
+      "codigo": "40",
+      "nombre": "Baby beef 400 gr apr",
+      "cantidad": 5
+    },
+    {
+      "codigo": "131",
+      "nombre": "Banano unidad",
+      "cantidad": 2
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 2
+    },
+    {
+      "codigo": "54",
+      "nombre": "Cafe en leche",
+      "cantidad": 1
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "6",
+      "nombre": "Calentado especial",
+      "cantidad": 2
+    },
+    {
+      "codigo": "87",
+      "nombre": "Cazuela frijol",
+      "cantidad": 9
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 10
+    },
+    {
+      "codigo": "264",
+      "nombre": "Cerv coronita",
+      "cantidad": 1
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 9
+    },
+    {
+      "codigo": "71",
+      "nombre": "Cerveza club",
+      "cantidad": 13
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 1
+    },
+    {
+      "codigo": "43",
+      "nombre": "Choricerdo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 3
+    },
+    {
+      "codigo": "122",
+      "nombre": "Coca cola 350",
+      "cantidad": 5
+    },
+    {
+      "codigo": "42",
+      "nombre": "Costilla ahumada",
+      "cantidad": 3
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 19
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 9
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 3
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 8
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 3
+    },
+    {
+      "codigo": "217",
+      "nombre": "Frijolada especial",
+      "cantidad": 1
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 5
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 7
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 9
+    },
+    {
+      "codigo": "318",
+      "nombre": "Gaseosa litro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 1
+    },
+    {
+      "codigo": "305",
+      "nombre": "Guarapo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 6
+    },
+    {
+      "codigo": "201",
+      "nombre": "Jarra limo-coco 1 lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "212",
+      "nombre": "Jarra limonada 2 lit",
+      "cantidad": 5
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 7
+    },
+    {
+      "codigo": "235",
+      "nombre": "Jugo hit nr",
+      "cantidad": 3
+    },
+    {
+      "codigo": "134",
+      "nombre": "Jugo jarra agua 1 li",
+      "cantidad": 4
+    },
+    {
+      "codigo": "501",
+      "nombre": "Jugo jarra agua 2 lt",
+      "cantidad": 2
+    },
+    {
+      "codigo": "75",
+      "nombre": "Jugo leche vaso",
+      "cantidad": 5
+    },
+    {
+      "codigo": "51",
+      "nombre": "Junior ala",
+      "cantidad": 1
+    },
+    {
+      "codigo": "88",
+      "nombre": "Junior gallina",
+      "cantidad": 21
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 6
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 27
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 2
+    },
+    {
+      "codigo": "46",
+      "nombre": "Lomo cerdo espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 5
+    },
+    {
+      "codigo": "112",
+      "nombre": "Mega chicharrn 700 g",
+      "cantidad": 2
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 2
+    },
+    {
+      "codigo": "101",
+      "nombre": "Mr tea",
+      "cantidad": 3
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 15
+    },
+    {
+      "codigo": "21",
+      "nombre": "Perico con arepa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "20",
+      "nombre": "Pericos solos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 2
+    },
+    {
+      "codigo": "111",
+      "nombre": "Por chicha jr",
+      "cantidad": 1
+    },
+    {
+      "codigo": "81",
+      "nombre": "Porc arepa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 13
+    },
+    {
+      "codigo": "91",
+      "nombre": "Porc gallina peque",
+      "cantidad": 3
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 5
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 7
+    },
+    {
+      "codigo": "219",
+      "nombre": "Prom chuleta cerdo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "220",
+      "nombre": "Prom chuleta pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "221",
+      "nombre": "Prom costill ahumada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "224",
+      "nombre": "Prom filete pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "226",
+      "nombre": "Prom punta de anca",
+      "cantidad": 1
+    },
+    {
+      "codigo": "223",
+      "nombre": "Promo cazuela",
+      "cantidad": 4
+    },
+    {
+      "codigo": "229",
+      "nombre": "Promo chuleta mix",
+      "cantidad": 1
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 3
+    },
+    {
+      "codigo": "120",
+      "nombre": "Salmon espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "129",
+      "nombre": "Salmon salsa camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "116",
+      "nombre": "Sancocho dom",
+      "cantidad": 27
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 11
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 1
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 14
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "113",
+      "nombre": "Tamal",
+      "cantidad": 27
+    },
+    {
+      "codigo": "256",
+      "nombre": "Tamal ejecutivo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "315",
+      "nombre": "Tangelo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "96",
+      "nombre": "Tilapia grande 450 g",
+      "cantidad": 5
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 6
+    },
+    {
+      "codigo": "255",
+      "nombre": "Trucha",
+      "cantidad": 1
+    },
+    {
+      "codigo": "39",
+      "nombre": "Vive 100 grde",
+      "cantidad": 1
+    }
+  ],
+  "27": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 26
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 8
+    },
+    {
+      "codigo": "313",
+      "nombre": "Avena",
+      "cantidad": 1
+    },
+    {
+      "codigo": "40",
+      "nombre": "Baby beef 400 gr apr",
+      "cantidad": 8
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 1
+    },
+    {
+      "codigo": "54",
+      "nombre": "Cafe en leche",
+      "cantidad": 2
+    },
+    {
+      "codigo": "5",
+      "nombre": "Calentado ce",
+      "cantidad": 1
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 9
+    },
+    {
+      "codigo": "135",
+      "nombre": "Calentado chorizo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "6",
+      "nombre": "Calentado especial",
+      "cantidad": 7
+    },
+    {
+      "codigo": "311",
+      "nombre": "Cazuela de camaron",
+      "cantidad": 3
+    },
+    {
+      "codigo": "87",
+      "nombre": "Cazuela frijol",
+      "cantidad": 21
+    },
+    {
+      "codigo": "206",
+      "nombre": "Cazuela mariscos",
+      "cantidad": 4
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 8
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 6
+    },
+    {
+      "codigo": "71",
+      "nombre": "Cerveza club",
+      "cantidad": 3
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 8
+    },
+    {
+      "codigo": "52",
+      "nombre": "Chocolate leche",
+      "cantidad": 5
+    },
+    {
+      "codigo": "43",
+      "nombre": "Choricerdo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 7
+    },
+    {
+      "codigo": "122",
+      "nombre": "Coca cola 350",
+      "cantidad": 8
+    },
+    {
+      "codigo": "42",
+      "nombre": "Costilla ahumada",
+      "cantidad": 8
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 21
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 44
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 4
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 4
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 12
+    },
+    {
+      "codigo": "66",
+      "nombre": "Gaseosa 3 lit",
+      "cantidad": 2
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 11
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 32
+    },
+    {
+      "codigo": "318",
+      "nombre": "Gaseosa litro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 2
+    },
+    {
+      "codigo": "305",
+      "nombre": "Guarapo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "123",
+      "nombre": "H2o saborizada",
+      "cantidad": 4
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "201",
+      "nombre": "Jarra limo-coco 1 lt",
+      "cantidad": 4
+    },
+    {
+      "codigo": "202",
+      "nombre": "Jarra limo-coco 2 lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "212",
+      "nombre": "Jarra limonada 2 lit",
+      "cantidad": 11
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 8
+    },
+    {
+      "codigo": "235",
+      "nombre": "Jugo hit nr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "134",
+      "nombre": "Jugo jarra agua 1 li",
+      "cantidad": 5
+    },
+    {
+      "codigo": "501",
+      "nombre": "Jugo jarra agua 2 lt",
+      "cantidad": 2
+    },
+    {
+      "codigo": "502",
+      "nombre": "Jugo jarra leche 1lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "107",
+      "nombre": "Jugo jarra leche 2 l",
+      "cantidad": 2
+    },
+    {
+      "codigo": "75",
+      "nombre": "Jugo leche vaso",
+      "cantidad": 5
+    },
+    {
+      "codigo": "51",
+      "nombre": "Junior ala",
+      "cantidad": 14
+    },
+    {
+      "codigo": "88",
+      "nombre": "Junior gallina",
+      "cantidad": 23
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 10
+    },
+    {
+      "codigo": "205",
+      "nombre": "Limonada cerezada 16",
+      "cantidad": 2
+    },
+    {
+      "codigo": "204",
+      "nombre": "Limonada coco",
+      "cantidad": 9
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 39
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 9
+    },
+    {
+      "codigo": "46",
+      "nombre": "Lomo cerdo espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 19
+    },
+    {
+      "codigo": "112",
+      "nombre": "Mega chicharrn 700 g",
+      "cantidad": 5
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 1
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 41
+    },
+    {
+      "codigo": "21",
+      "nombre": "Perico con arepa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "19",
+      "nombre": "Pericos con arroz",
+      "cantidad": 5
+    },
+    {
+      "codigo": "20",
+      "nombre": "Pericos solos",
+      "cantidad": 3
+    },
+    {
+      "codigo": "47",
+      "nombre": "Picada dos",
+      "cantidad": 3
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 2
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 10
+    },
+    {
+      "codigo": "85",
+      "nombre": "Porc ensalada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "63",
+      "nombre": "Porc maduro",
+      "cantidad": 3
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 7
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 7
+    },
+    {
+      "codigo": "78",
+      "nombre": "Porc res",
+      "cantidad": 3
+    },
+    {
+      "codigo": "219",
+      "nombre": "Prom chuleta cerdo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "220",
+      "nombre": "Prom chuleta pollo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "140",
+      "nombre": "Prom churrasco",
+      "cantidad": 2
+    },
+    {
+      "codigo": "221",
+      "nombre": "Prom costill ahumada",
+      "cantidad": 2
+    },
+    {
+      "codigo": "224",
+      "nombre": "Prom filete pollo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "225",
+      "nombre": "Prom lomo cerdo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "226",
+      "nombre": "Prom punta de anca",
+      "cantidad": 3
+    },
+    {
+      "codigo": "222",
+      "nombre": "Prom tilapia",
+      "cantidad": 2
+    },
+    {
+      "codigo": "223",
+      "nombre": "Promo cazuela",
+      "cantidad": 6
+    },
+    {
+      "codigo": "229",
+      "nombre": "Promo chuleta mix",
+      "cantidad": 3
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 5
+    },
+    {
+      "codigo": "10",
+      "nombre": "Rellena casra",
+      "cantidad": 2
+    },
+    {
+      "codigo": "120",
+      "nombre": "Salmon espec",
+      "cantidad": 3
+    },
+    {
+      "codigo": "129",
+      "nombre": "Salmon salsa camaron",
+      "cantidad": 9
+    },
+    {
+      "codigo": "116",
+      "nombre": "Sancocho dom",
+      "cantidad": 33
+    },
+    {
+      "codigo": "128",
+      "nombre": "Seviche camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 17
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 5
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 2
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 23
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 13
+    },
+    {
+      "codigo": "113",
+      "nombre": "Tamal",
+      "cantidad": 51
+    },
+    {
+      "codigo": "315",
+      "nombre": "Tangelo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "96",
+      "nombre": "Tilapia grande 450 g",
+      "cantidad": 11
+    },
+    {
+      "codigo": "68",
+      "nombre": "Tilapia salsa camaro",
+      "cantidad": 4
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 8
+    },
+    {
+      "codigo": "255",
+      "nombre": "Trucha",
+      "cantidad": 1
+    },
+    {
+      "codigo": "67",
+      "nombre": "Trucha salsa camaron",
+      "cantidad": 2
+    }
+  ],
+  "28": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 8
+    },
+    {
+      "codigo": "65",
+      "nombre": "Aguacate porc",
+      "cantidad": 1
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "131",
+      "nombre": "Banano unidad",
+      "cantidad": 2
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 11
+    },
+    {
+      "codigo": "5",
+      "nombre": "Calentado ce",
+      "cantidad": 3
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 17
+    },
+    {
+      "codigo": "87",
+      "nombre": "Cazuela frijol",
+      "cantidad": 5
+    },
+    {
+      "codigo": "206",
+      "nombre": "Cazuela mariscos",
+      "cantidad": 2
+    },
+    {
+      "codigo": "13",
+      "nombre": "Cerdo ejecutivo",
+      "cantidad": 28
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 3
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 2
+    },
+    {
+      "codigo": "71",
+      "nombre": "Cerveza club",
+      "cantidad": 1
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 7
+    },
+    {
+      "codigo": "167",
+      "nombre": "Chorizo paisa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 1
+    },
+    {
+      "codigo": "42",
+      "nombre": "Costilla ahumada",
+      "cantidad": 3
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 10
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 1
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 8
+    },
+    {
+      "codigo": "94",
+      "nombre": "Frijolada",
+      "cantidad": 11
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 38
+    },
+    {
+      "codigo": "217",
+      "nombre": "Frijolada especial",
+      "cantidad": 2
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 8
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 1
+    },
+    {
+      "codigo": "66",
+      "nombre": "Gaseosa 3 lit",
+      "cantidad": 1
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 5
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 7
+    },
+    {
+      "codigo": "318",
+      "nombre": "Gaseosa litro",
+      "cantidad": 1
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 1
+    },
+    {
+      "codigo": "123",
+      "nombre": "H2o saborizada",
+      "cantidad": 3
+    },
+    {
+      "codigo": "314",
+      "nombre": "Hojuelas",
+      "cantidad": 1
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 5
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 3
+    },
+    {
+      "codigo": "306",
+      "nombre": "Jugo del valle",
+      "cantidad": 1
+    },
+    {
+      "codigo": "75",
+      "nombre": "Jugo leche vaso",
+      "cantidad": 2
+    },
+    {
+      "codigo": "88",
+      "nombre": "Junior gallina",
+      "cantidad": 2
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 5
+    },
+    {
+      "codigo": "204",
+      "nombre": "Limonada coco",
+      "cantidad": 2
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 6
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 1
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 5
+    },
+    {
+      "codigo": "112",
+      "nombre": "Mega chicharrn 700 g",
+      "cantidad": 1
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 3
+    },
+    {
+      "codigo": "35",
+      "nombre": "Milo frio - caliente",
+      "cantidad": 2
+    },
+    {
+      "codigo": "101",
+      "nombre": "Mr tea",
+      "cantidad": 2
+    },
+    {
+      "codigo": "93",
+      "nombre": "Paisa economico",
+      "cantidad": 7
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 5
+    },
+    {
+      "codigo": "21",
+      "nombre": "Perico con arepa",
+      "cantidad": 2
+    },
+    {
+      "codigo": "20",
+      "nombre": "Pericos solos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 4
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 8
+    },
+    {
+      "codigo": "80",
+      "nombre": "Porc cerdo peque",
+      "cantidad": 13
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 3
+    },
+    {
+      "codigo": "82",
+      "nombre": "Porc morrillo peque",
+      "cantidad": 2
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 2
+    },
+    {
+      "codigo": "78",
+      "nombre": "Porc res",
+      "cantidad": 1
+    },
+    {
+      "codigo": "84",
+      "nombre": "Porc sobre peque",
+      "cantidad": 11
+    },
+    {
+      "codigo": "140",
+      "nombre": "Prom churrasco",
+      "cantidad": 1
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 1
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 4
+    },
+    {
+      "codigo": "28",
+      "nombre": "Sobrebarriga",
+      "cantidad": 36
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 4
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 26
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "96",
+      "nombre": "Tilapia grande 450 g",
+      "cantidad": 3
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 2
+    }
+  ],
+  "29": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 17
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "207",
+      "nombre": "Arroz mixto",
+      "cantidad": 22
+    },
+    {
+      "codigo": "92",
+      "nombre": "Arroz pollo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "131",
+      "nombre": "Banano unidad",
+      "cantidad": 2
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 10
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 3
+    },
+    {
+      "codigo": "25",
+      "nombre": "Bolsa leche          bls",
+      "cantidad": 6
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "6",
+      "nombre": "Calentado especial",
+      "cantidad": 2
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 3
+    },
+    {
+      "codigo": "311",
+      "nombre": "Cazuela de camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 8
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 4
+    },
+    {
+      "codigo": "122",
+      "nombre": "Coca cola 350",
+      "cantidad": 3
+    },
+    {
+      "codigo": "42",
+      "nombre": "Costilla ahumada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "15",
+      "nombre": "Costilla de res",
+      "cantidad": 38
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 18
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 4
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "94",
+      "nombre": "Frijolada",
+      "cantidad": 14
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 18
+    },
+    {
+      "codigo": "217",
+      "nombre": "Frijolada especial",
+      "cantidad": 3
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 8
+    },
+    {
+      "codigo": "34",
+      "nombre": "Gaseosa 1500",
+      "cantidad": 1
+    },
+    {
+      "codigo": "66",
+      "nombre": "Gaseosa 3 lit",
+      "cantidad": 1
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 4
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 7
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 2
+    },
+    {
+      "codigo": "305",
+      "nombre": "Guarapo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "123",
+      "nombre": "H2o saborizada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "314",
+      "nombre": "Hojuelas",
+      "cantidad": 1
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 37
+    },
+    {
+      "codigo": "201",
+      "nombre": "Jarra limo-coco 1 lt",
+      "cantidad": 1
+    },
+    {
+      "codigo": "212",
+      "nombre": "Jarra limonada 2 lit",
+      "cantidad": 1
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 1
+    },
+    {
+      "codigo": "205",
+      "nombre": "Limonada cerezada 16",
+      "cantidad": 2
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 4
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 3
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 3
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 5
+    },
+    {
+      "codigo": "18",
+      "nombre": "Morrillo",
+      "cantidad": 17
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 2
+    },
+    {
+      "codigo": "77",
+      "nombre": "Pony malta peq",
+      "cantidad": 1
+    },
+    {
+      "codigo": "81",
+      "nombre": "Porc arepa",
+      "cantidad": 1
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 14
+    },
+    {
+      "codigo": "169",
+      "nombre": "Porc cost res",
+      "cantidad": 21
+    },
+    {
+      "codigo": "85",
+      "nombre": "Porc ensalada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "100",
+      "nombre": "Porc lengua gran",
+      "cantidad": 4
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 1
+    },
+    {
+      "codigo": "82",
+      "nombre": "Porc morrillo peque",
+      "cantidad": 9
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 3
+    },
+    {
+      "codigo": "170",
+      "nombre": "Porc.higado",
+      "cantidad": 4
+    },
+    {
+      "codigo": "220",
+      "nombre": "Prom chuleta pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "140",
+      "nombre": "Prom churrasco",
+      "cantidad": 1
+    },
+    {
+      "codigo": "221",
+      "nombre": "Prom costill ahumada",
+      "cantidad": 1
+    },
+    {
+      "codigo": "226",
+      "nombre": "Prom punta de anca",
+      "cantidad": 1
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 4
+    },
+    {
+      "codigo": "120",
+      "nombre": "Salmon espec",
+      "cantidad": 2
+    },
+    {
+      "codigo": "129",
+      "nombre": "Salmon salsa camaron",
+      "cantidad": 1
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 2
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 15
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "96",
+      "nombre": "Tilapia grande 450 g",
+      "cantidad": 1
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 11
+    },
+    {
+      "codigo": "255",
+      "nombre": "Trucha",
+      "cantidad": 3
+    },
+    {
+      "codigo": "67",
+      "nombre": "Trucha salsa camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "39",
+      "nombre": "Vive 100 grde",
+      "cantidad": 1
+    }
+  ],
+  "30": [
+    {
+      "codigo": "73",
+      "nombre": "Agua tarro",
+      "cantidad": 12
+    },
+    {
+      "codigo": "12",
+      "nombre": "Arroz con camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "40",
+      "nombre": "Baby beef 400 gr apr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "131",
+      "nombre": "Banano unidad",
+      "cantidad": 1
+    },
+    {
+      "codigo": "104",
+      "nombre": "Bandeja sola",
+      "cantidad": 19
+    },
+    {
+      "codigo": "95",
+      "nombre": "Baño",
+      "cantidad": 5
+    },
+    {
+      "codigo": "54",
+      "nombre": "Cafe en leche",
+      "cantidad": 2
+    },
+    {
+      "codigo": "136",
+      "nombre": "Calentado chicharron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "135",
+      "nombre": "Calentado chorizo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "6",
+      "nombre": "Calentado especial",
+      "cantidad": 4
+    },
+    {
+      "codigo": "8",
+      "nombre": "Carne molida",
+      "cantidad": 16
+    },
+    {
+      "codigo": "311",
+      "nombre": "Cazuela de camaron",
+      "cantidad": 2
+    },
+    {
+      "codigo": "246",
+      "nombre": "Cerv corona - stella",
+      "cantidad": 2
+    },
+    {
+      "codigo": "70",
+      "nombre": "Cerv poker - aguila",
+      "cantidad": 2
+    },
+    {
+      "codigo": "83",
+      "nombre": "Chichacharron grand",
+      "cantidad": 4
+    },
+    {
+      "codigo": "52",
+      "nombre": "Chocolate leche",
+      "cantidad": 2
+    },
+    {
+      "codigo": "41",
+      "nombre": "Churrasco 400 gr apr",
+      "cantidad": 2
+    },
+    {
+      "codigo": "247",
+      "nombre": "Costeñita",
+      "cantidad": 3
+    },
+    {
+      "codigo": "44",
+      "nombre": "Costilla c san luis",
+      "cantidad": 12
+    },
+    {
+      "codigo": "11",
+      "nombre": "Costilla horno",
+      "cantidad": 22
+    },
+    {
+      "codigo": "110",
+      "nombre": "Desechables",
+      "cantidad": 8
+    },
+    {
+      "codigo": "102",
+      "nombre": "Entrada tost ahogado",
+      "cantidad": 1
+    },
+    {
+      "codigo": "26",
+      "nombre": "Filete ejecutivo",
+      "cantidad": 19
+    },
+    {
+      "codigo": "45",
+      "nombre": "Filete pechuga espec",
+      "cantidad": 5
+    },
+    {
+      "codigo": "30",
+      "nombre": "Francesa",
+      "cantidad": 3
+    },
+    {
+      "codigo": "94",
+      "nombre": "Frijolada",
+      "cantidad": 9
+    },
+    {
+      "codigo": "233",
+      "nombre": "Frijolada chicha jun",
+      "cantidad": 49
+    },
+    {
+      "codigo": "217",
+      "nombre": "Frijolada especial",
+      "cantidad": 1
+    },
+    {
+      "codigo": "218",
+      "nombre": "Frijolada molida",
+      "cantidad": 5
+    },
+    {
+      "codigo": "66",
+      "nombre": "Gaseosa 3 lit",
+      "cantidad": 1
+    },
+    {
+      "codigo": "121",
+      "nombre": "Gaseosa 350",
+      "cantidad": 2
+    },
+    {
+      "codigo": "208",
+      "nombre": "Gaseosa 400ml",
+      "cantidad": 10
+    },
+    {
+      "codigo": "90",
+      "nombre": "Gatorade",
+      "cantidad": 1
+    },
+    {
+      "codigo": "123",
+      "nombre": "H2o saborizada",
+      "cantidad": 2
+    },
+    {
+      "codigo": "31",
+      "nombre": "Huevo",
+      "cantidad": 17
+    },
+    {
+      "codigo": "212",
+      "nombre": "Jarra limonada 2 lit",
+      "cantidad": 1
+    },
+    {
+      "codigo": "74",
+      "nombre": "Jugo agua vaso",
+      "cantidad": 4
+    },
+    {
+      "codigo": "134",
+      "nombre": "Jugo jarra agua 1 li",
+      "cantidad": 3
+    },
+    {
+      "codigo": "75",
+      "nombre": "Jugo leche vaso",
+      "cantidad": 1
+    },
+    {
+      "codigo": "16",
+      "nombre": "Lengua",
+      "cantidad": 11
+    },
+    {
+      "codigo": "118",
+      "nombre": "Lengua domingo",
+      "cantidad": 3
+    },
+    {
+      "codigo": "205",
+      "nombre": "Limonada cerezada 16",
+      "cantidad": 1
+    },
+    {
+      "codigo": "204",
+      "nombre": "Limonada coco",
+      "cantidad": 1
+    },
+    {
+      "codigo": "109",
+      "nombre": "Limonada natural 1l",
+      "cantidad": 8
+    },
+    {
+      "codigo": "147",
+      "nombre": "Limonada vaso 16 onz",
+      "cantidad": 4
+    },
+    {
+      "codigo": "46",
+      "nombre": "Lomo cerdo espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "72",
+      "nombre": "Mazamorra",
+      "cantidad": 10
+    },
+    {
+      "codigo": "112",
+      "nombre": "Mega chicharrn 700 g",
+      "cantidad": 2
+    },
+    {
+      "codigo": "227",
+      "nombre": "Michelado 1000",
+      "cantidad": 3
+    },
+    {
+      "codigo": "317",
+      "nombre": "Mix cereal           bls",
+      "cantidad": 1
+    },
+    {
+      "codigo": "101",
+      "nombre": "Mr tea",
+      "cantidad": 2
+    },
+    {
+      "codigo": "93",
+      "nombre": "Paisa economico",
+      "cantidad": 1
+    },
+    {
+      "codigo": "119",
+      "nombre": "Paisa especial",
+      "cantidad": 8
+    },
+    {
+      "codigo": "21",
+      "nombre": "Perico con arepa",
+      "cantidad": 2
+    },
+    {
+      "codigo": "19",
+      "nombre": "Pericos con arroz",
+      "cantidad": 3
+    },
+    {
+      "codigo": "47",
+      "nombre": "Picada dos",
+      "cantidad": 1
+    },
+    {
+      "codigo": "145",
+      "nombre": "Pollo sudado",
+      "cantidad": 1
+    },
+    {
+      "codigo": "111",
+      "nombre": "Por chicha jr",
+      "cantidad": 3
+    },
+    {
+      "codigo": "168",
+      "nombre": "Por cost cerdo",
+      "cantidad": 17
+    },
+    {
+      "codigo": "86",
+      "nombre": "Porc arroz",
+      "cantidad": 18
+    },
+    {
+      "codigo": "80",
+      "nombre": "Porc cerdo peque",
+      "cantidad": 1
+    },
+    {
+      "codigo": "169",
+      "nombre": "Porc cost res",
+      "cantidad": 1
+    },
+    {
+      "codigo": "157",
+      "nombre": "Porc lengua peque",
+      "cantidad": 2
+    },
+    {
+      "codigo": "79",
+      "nombre": "Porc molida",
+      "cantidad": 5
+    },
+    {
+      "codigo": "62",
+      "nombre": "Porc principio",
+      "cantidad": 10
+    },
+    {
+      "codigo": "137",
+      "nombre": "Porcion pollo",
+      "cantidad": 2
+    },
+    {
+      "codigo": "221",
+      "nombre": "Prom costill ahumada",
+      "cantidad": 2
+    },
+    {
+      "codigo": "226",
+      "nombre": "Prom punta de anca",
+      "cantidad": 2
+    },
+    {
+      "codigo": "223",
+      "nombre": "Promo cazuela",
+      "cantidad": 1
+    },
+    {
+      "codigo": "50",
+      "nombre": "Punta de anca 400",
+      "cantidad": 1
+    },
+    {
+      "codigo": "10",
+      "nombre": "Rellena casra",
+      "cantidad": 4
+    },
+    {
+      "codigo": "120",
+      "nombre": "Salmon espec",
+      "cantidad": 1
+    },
+    {
+      "codigo": "117",
+      "nombre": "Sobre domingo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "36",
+      "nombre": "Soda postobon",
+      "cantidad": 5
+    },
+    {
+      "codigo": "61",
+      "nombre": "Sopa sola",
+      "cantidad": 10
+    },
+    {
+      "codigo": "215",
+      "nombre": "Super de cerdo",
+      "cantidad": 5
+    },
+    {
+      "codigo": "214",
+      "nombre": "Super de pollo",
+      "cantidad": 1
+    },
+    {
+      "codigo": "96",
+      "nombre": "Tilapia grande 450 g",
+      "cantidad": 1
+    },
+    {
+      "codigo": "33",
+      "nombre": "Tinto",
+      "cantidad": 6
+    },
+    {
+      "codigo": "39",
+      "nombre": "Vive 100 grde",
+      "cantidad": 2
+    }
+  ]
+}

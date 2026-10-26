@@ -5,6 +5,7 @@ import { Trash2 } from 'lucide-react';
 import { PlatoReceta } from '@/lib/recetasData';
 import DishSmartSearchInput from '@/components/inputs/DishSmartSearchInput';
 import DishSoldCard, { DishSoldCardData } from './DishSoldCard';
+import { VentaPlatoItem } from './VentasDiaSidebar';
 
 export interface InsumoAuditItem {
   id: string;
@@ -24,15 +25,18 @@ interface AuditoriaInsumoRowProps {
   onAddDish: (proteinaId: string, plato: PlatoReceta, qty: number) => void;
   onRemoveDish: (proteinaId: string, dishId: string) => void;
   onDeleteRow: (proteinaId: string) => void;
+  onDropVenta?: (proteinaId: string, venta: VentaPlatoItem) => void;
 }
 
 export default function AuditoriaInsumoRow({
   item,
   onAddDish,
   onRemoveDish,
-  onDeleteRow
+  onDeleteRow,
+  onDropVenta
 }: AuditoriaInsumoRowProps) {
   const [isSearching, setIsSearching] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const totalDispPorciones = item.totalDisponiblePorciones !== undefined
     ? item.totalDisponiblePorciones
@@ -117,11 +121,43 @@ export default function AuditoriaInsumoRow({
           />
         </div>
 
-        {/* LADO DERECHO: Rejilla de 2 Columnas de Platos Asignados */}
-        <div className="flex-1 p-4 md:p-5 flex flex-col justify-center bg-white rounded-r-lg">
-          {item.platos.length === 0 ? (
-            <div className="h-full min-h-[90px] border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 p-4">
-              No hay platos asignados aún. Usa el buscador de la izquierda para vincular platos vendidos.
+        {/* LADO DERECHO: Rejilla de 2 Columnas de Platos Asignados + ZONA DROP */}
+        <div 
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            if (!isDragOver) setIsDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+            setIsDragOver(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragOver(false);
+            const raw = e.dataTransfer.getData('application/json');
+            if (raw) {
+              try {
+                const venta = JSON.parse(raw);
+                onDropVenta?.(item.id, venta);
+              } catch (err) {
+                console.error(err);
+              }
+            }
+          }}
+          className={`flex-1 p-4 md:p-5 flex flex-col justify-center rounded-r-lg transition-all ${
+            isDragOver 
+              ? 'bg-emerald-50/80 border-2 border-dashed border-emerald-500 ring-2 ring-emerald-200' 
+              : 'bg-white'
+          }`}
+        >
+          {isDragOver ? (
+            <div className="h-full min-h-[90px] flex items-center justify-center text-xs font-semibold text-emerald-700 bg-white/80 border border-emerald-300 rounded-lg p-4 animate-pulse">
+              ➕ Soltar aquí para asignar plato a {item.insumo}
+            </div>
+          ) : item.platos.length === 0 ? (
+            <div className="h-full min-h-[90px] border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 p-4 text-center">
+              No hay platos asignados aún. Arrastra platos desde la lista izquierda o usa el buscador para vincular.
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 items-start">

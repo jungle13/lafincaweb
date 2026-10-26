@@ -7,14 +7,17 @@ import {
   FileSpreadsheet,
   Plus, 
   BookOpen, 
-  ArrowLeft
+  ArrowLeft,
+  Receipt
 } from 'lucide-react';
-import { PlatoReceta, getPlatoDeductions } from '@/lib/recetasData';
+import { PlatoReceta, getPlatoDeductions, RECETAS_PLATOS_POS } from '@/lib/recetasData';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
 import MonthSidebar, { MonthItem } from '@/components/sheets/MonthSidebar';
 import NewSheetDateModal from '@/components/sheets/NewSheetDateModal';
 import AuditoriaInsumoRow, { InsumoAuditItem } from '@/components/auditoria/AuditoriaInsumoRow';
 import AddInsumoModal from '@/components/auditoria/AddInsumoModal';
+import VentasDiaSidebar, { VentaPlatoItem } from '@/components/auditoria/VentasDiaSidebar';
+import ventasSampleData from '@/data/ventas_octubre_sample.json';
 
 // Modelos de Datos para la Vista de Auditoría
 export interface AuditoriaDiaSheet {
@@ -226,6 +229,9 @@ export default function AuditoriaCocinaPage() {
   const [searchFilter, setSearchFilter] = useState('');
   const [rowSearchFilter, setRowSearchFilter] = useState('');
 
+  // Estado del Panel de Ventas del Día
+  const [showVentasSidebar, setShowVentasSidebar] = useState(false);
+
   // Modales
   const [isNewSheetModalOpen, setIsNewSheetModalOpen] = useState(false);
   const [isAddInsumoModalOpen, setIsAddInsumoModalOpen] = useState(false);
@@ -234,6 +240,32 @@ export default function AuditoriaCocinaPage() {
   const activeSheet = useMemo(() => {
     return sheets.find(s => s.id === activeTabId);
   }, [sheets, activeTabId]);
+
+  // Ventas del día de la hoja activa
+  const activeSheetVentas: VentaPlatoItem[] = useMemo(() => {
+    if (!activeSheet) return [];
+    const dayNum = activeSheet.dateStr.split('-')[2];
+    const rawSales = (ventasSampleData as Record<string, VentaPlatoItem[]>)[dayNum];
+    if (rawSales && rawSales.length > 0) return rawSales;
+
+    // Fallback: extraer platos registrados en los insumos monitoreados de la hoja
+    const map = new Map<string, VentaPlatoItem>();
+    activeSheet.items.forEach(it => {
+      it.platos.forEach(p => {
+        const prev = map.get(p.codigoPos);
+        if (prev) {
+          prev.cantidad += p.cantidad;
+        } else {
+          map.set(p.codigoPos, {
+            codigo: p.codigoPos,
+            nombre: p.nombrePlato,
+            cantidad: p.cantidad
+          });
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [activeSheet]);
 
   // Lista de meses
   const availableMonths: MonthItem[] = useMemo(() => {
@@ -318,18 +350,84 @@ export default function AuditoriaCocinaPage() {
     setActiveTabId(newId);
   };
 
+  // Cálculo inteligente de insumos usados según la receta y la proteína de destino
+  const calculateDeductionsForInsumo = (
+    plato: PlatoReceta | undefined,
+    insumoItem: InsumoAuditItem,
+    qty: number
+  ): { porciones: number; kilos: number } => {
+    const normInsumo = insumoItem.insumo.toLowerCase();
+
+    // 1. Caso especial: Huevos (si el insumo monitoreado es HUEVOS AA)
+    if (normInsumo.includes('huevo')) {
+      const isTwoEggsDish = plato?.codigoPos === '19' || plato?.codigoPos === '20' || plato?.codigoPos === '7' ||
+        plato?.nombre.toLowerCase().includes('perico') || plato?.nombre.toLowerCase().includes('huevos al gusto') ||
+        plato?.nombre.toLowerCase().includes('cacerola');
+      
+      const factor = isTwoEggsDish ? 2 : (plato?.porcionesCount || 1);
+      const porc = factor * qty;
+      return {
+        porciones: porc,
+        kilos: Number(((porc * (insumoItem.pesoPorcionGramos || 55)) / 1000).toFixed(2))
+      };
+    }
+
+    // 2. Si no hay receta en catálogo maestro
+    if (!plato) {
+      const porc = qty;
+      return {
+        porciones: porc,
+        kilos: Number(((porc * insumoItem.pesoPorcionGramos) / 1000).toFixed(2))
+      };
+    }
+
+    // 3. Si tiene deducciones técnicas en la matriz maestra
+    const deductions = getPlatoDeductions(plato.codigoPos, qty);
+    if (deductions && deductions.length > 0) {
+      const matched = deductions.find(d => {
+        const dInsumo = d.insumo.toLowerCase();
+        const dBloque = d.bloqueKey.toLowerCase();
+        return normInsumo.includes(dInsumo) || dInsumo.includes(normInsumo) ||
+               normInsumo.includes(dBloque) || dBloque.includes(normInsumo) ||
+               (normInsumo.includes('chicharr') && (dInsumo.includes('chicharr') || dInsumo.includes('tocino'))) ||
+               (normInsumo.includes('francesa') && (dInsumo.includes('francesa') || dInsumo.includes('papa'))) ||
+               (normInsumo.includes('costilla') && dInsumo.includes('costilla')) ||
+               (normInsumo.includes('lengua') && dInsumo.includes('lengua')) ||
+               (normInsumo.includes('tilapia') && dInsumo.includes('tilapia'));
+      });
+
+      if (matched) {
+        return {
+          porciones: matched.porciones,
+          kilos: matched.kilos
+        };
+      }
+
+      // Deducción directa
+      const first = deductions[0];
+      return {
+        porciones: first.porciones,
+        kilos: first.kilos
+      };
+    }
+
+    // Fallback estándar por defecto
+    const porc = (plato.porcionesCount || 1) * qty;
+    return {
+      porciones: porc,
+      kilos: Number(((porc * insumoItem.pesoPorcionGramos) / 1000).toFixed(2))
+    };
+  };
+
   // Agregar plato a un insumo mediante el buscador inteligente
   const handleAddDish = (proteinaId: string, platoReceta: PlatoReceta, qty: number) => {
     if (!activeSheet) return;
     const safeQty = Math.max(1, qty || 1);
 
-    const deductions = getPlatoDeductions(platoReceta.codigoPos, safeQty);
-    const mainDeduction = deductions[0] || {
-      porciones: platoReceta.porcionesCount * safeQty,
-      gramos: platoReceta.gramajeCrudoG * safeQty,
-      kilos: (platoReceta.gramajeCrudoG * safeQty) / 1000,
-      costo: platoReceta.costoInsumo * safeQty
-    };
+    const targetInsumo = activeSheet.items.find(it => it.id === proteinaId);
+    if (!targetInsumo) return;
+
+    const deduction = calculateDeductionsForInsumo(platoReceta, targetInsumo, safeQty);
 
     const updatedItems = activeSheet.items.map(p => {
       if (p.id !== proteinaId) return p;
@@ -337,14 +435,13 @@ export default function AuditoriaCocinaPage() {
       if (existingIdx >= 0) {
         const existing = p.platos[existingIdx];
         const newTotalQty = existing.cantidad + safeQty;
-        const reDeductions = getPlatoDeductions(platoReceta.codigoPos, newTotalQty);
-        const reMain = reDeductions[0];
+        const reDeduction = calculateDeductionsForInsumo(platoReceta, targetInsumo, newTotalQty);
 
         const updatedDish = {
           ...existing,
           cantidad: newTotalQty,
-          porcionesDeducidas: reMain.porciones,
-          kgDeducidos: reMain.kilos
+          porcionesDeducidas: reDeduction.porciones,
+          kgDeducidos: reDeduction.kilos
         };
         const nextPlatos = [...p.platos];
         nextPlatos[existingIdx] = updatedDish;
@@ -360,8 +457,63 @@ export default function AuditoriaCocinaPage() {
             codigoPos: platoReceta.codigoPos,
             nombrePlato: platoReceta.nombre,
             cantidad: safeQty,
-            porcionesDeducidas: mainDeduction.porciones,
-            kgDeducidos: mainDeduction.kilos
+            porcionesDeducidas: deduction.porciones,
+            kgDeducidos: deduction.kilos
+          }
+        ]
+      };
+    });
+
+    setSheets(sheets.map(s => s.id === activeSheet.id ? { ...s, items: updatedItems } : s));
+  };
+
+  // Asignar plato arrastrado desde el panel lateral izquierdo
+  const handleDropVenta = (proteinaId: string, venta: VentaPlatoItem) => {
+    if (!activeSheet) return;
+
+    const targetInsumo = activeSheet.items.find(it => it.id === proteinaId);
+    if (!targetInsumo) return;
+
+    // Buscar si existe en el catálogo maestro de recetas
+    const platoReceta = RECETAS_PLATOS_POS.find(r => r.codigoPos === venta.codigo) ||
+      RECETAS_PLATOS_POS.find(r => r.nombre.toLowerCase().trim() === venta.nombre.toLowerCase().trim());
+
+    const deduction = calculateDeductionsForInsumo(platoReceta, targetInsumo, venta.cantidad);
+
+    const updatedItems = activeSheet.items.map(p => {
+      if (p.id !== proteinaId) return p;
+
+      // Verificar si ya está asignado este plato en esta proteína
+      const existingIdx = p.platos.findIndex(d => 
+        d.codigoPos === venta.codigo || 
+        d.nombrePlato.toLowerCase() === venta.nombre.toLowerCase()
+      );
+
+      if (existingIdx >= 0) {
+        // Si ya estaba vinculado, actualizamos con la cantidad arrastrada
+        const updatedDish = {
+          ...p.platos[existingIdx],
+          cantidad: venta.cantidad,
+          porcionesDeducidas: deduction.porciones,
+          kgDeducidos: deduction.kilos
+        };
+        const nextPlatos = [...p.platos];
+        nextPlatos[existingIdx] = updatedDish;
+        return { ...p, platos: nextPlatos };
+      }
+
+      // Nuevo plato vinculado en esta proteína
+      return {
+        ...p,
+        platos: [
+          ...p.platos,
+          {
+            id: `dish-drop-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            codigoPos: venta.codigo,
+            nombrePlato: venta.nombre,
+            cantidad: venta.cantidad,
+            porcionesDeducidas: deduction.porciones,
+            kgDeducidos: deduction.kilos
           }
         ]
       };
@@ -464,7 +616,25 @@ export default function AuditoriaCocinaPage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
+            <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0 flex-wrap">
+              {/* Botón para Mostrar / Ocultar Ventas del Día */}
+              <button
+                type="button"
+                onClick={() => setShowVentasSidebar(!showVentasSidebar)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-all shadow-2xs cursor-pointer ${
+                  showVentasSidebar
+                    ? 'bg-slate-100 border-slate-300 text-slate-900 ring-1 ring-slate-300'
+                    : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                }`}
+                title={showVentasSidebar ? "Ocultar panel de ventas del día" : "Ver listado de ventas del día registradas en POS"}
+              >
+                <Receipt className="w-3.5 h-3.5 text-slate-500" />
+                <span>{showVentasSidebar ? 'Ocultar Ventas' : 'Ventas del Día'}</span>
+                <span className="text-[10px] font-mono font-bold bg-slate-200/80 text-slate-700 px-1.5 py-0.2 rounded">
+                  {activeSheetVentas.length}
+                </span>
+              </button>
+
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 <input
@@ -472,7 +642,7 @@ export default function AuditoriaCocinaPage() {
                   value={rowSearchFilter}
                   onChange={(e) => setRowSearchFilter(e.target.value)}
                   placeholder="Filtrar insumo o plato..."
-                  className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-400 w-48 sm:w-56"
+                  className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-400 w-44 sm:w-52"
                 />
               </div>
 
@@ -489,12 +659,12 @@ export default function AuditoriaCocinaPage() {
         )}
       </div>
 
-      {/* 2. ÁREA PRINCIPAL CON SCROLL INDEPENDIENTE */}
-      <div className="flex-1 overflow-y-auto min-h-0 bg-white">
+      {/* 2. ÁREA PRINCIPAL */}
+      <div className="flex-1 min-h-0 bg-white flex flex-col overflow-hidden">
         {activeTabId === null || !activeSheet ? (
           
           /* VISTA 1: LISTADO MASTER DE HOJAS CON SIDEBAR */
-          <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white">
+          <div className="flex-1 overflow-y-auto flex flex-col md:flex-row min-h-0 bg-white">
             <MonthSidebar
               months={availableMonths}
               selectedMonth={selectedMonth}
@@ -611,23 +781,36 @@ export default function AuditoriaCocinaPage() {
           </div>
         ) : (
           
-          /* VISTA 2: FILAS MODULARES DE AUDITORÍA */
-          <div className="p-4 md:p-6 pb-24 md:pb-12 w-full max-w-[1700px] mx-auto space-y-4">
-            {filteredActiveItems.length === 0 ? (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center text-xs text-slate-500">
-                No se encontraron insumos con el filtro aplicado.
-              </div>
-            ) : null}
-
-            {filteredActiveItems.map(item => (
-              <AuditoriaInsumoRow
-                key={item.id}
-                item={item}
-                onAddDish={handleAddDish}
-                onRemoveDish={handleRemoveDish}
-                onDeleteRow={handleDeleteRow}
+          /* VISTA 2: FILAS MODULARES DE AUDITORÍA CON PANEL LATERAL DE VENTAS */
+          <div className="flex-1 flex flex-row items-stretch h-full min-h-0 overflow-hidden">
+            {/* Panel Lateral Izquierdo: Listado de Ventas del Día (Ocultable / Simplificado) */}
+            {showVentasSidebar && (
+              <VentasDiaSidebar
+                ventas={activeSheetVentas}
+                dateStr={activeSheet.dateStr}
+                onClose={() => setShowVentasSidebar(false)}
               />
-            ))}
+            )}
+
+            {/* Contenido Principal Scrollable de Filas Modulares */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-12 space-y-4">
+              {filteredActiveItems.length === 0 ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center text-xs text-slate-500">
+                  No se encontraron insumos con el filtro aplicado.
+                </div>
+              ) : null}
+
+              {filteredActiveItems.map(item => (
+                <AuditoriaInsumoRow
+                  key={item.id}
+                  item={item}
+                  onAddDish={handleAddDish}
+                  onRemoveDish={handleRemoveDish}
+                  onDeleteRow={handleDeleteRow}
+                  onDropVenta={handleDropVenta}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
