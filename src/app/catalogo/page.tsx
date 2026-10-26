@@ -11,8 +11,6 @@ import {
   X, 
   Loader2, 
   HelpCircle,
-  Scale,
-  Sparkles,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -157,7 +155,6 @@ export default function CatalogoPage() {
 
   const totalInsumos = insumos.length;
   const totalCarnes = insumos.filter((i) => i.es_carne).length;
-  const totalAbarrotes = totalInsumos - totalCarnes;
 
   const handleRendimientoChange = (valStr: string) => {
     setFormRendimientoTeorico(valStr);
@@ -296,80 +293,65 @@ export default function CatalogoPage() {
       return <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-40 group-hover:opacity-100" />;
     }
     return sortAsc ? (
-      <ArrowUp className="w-3 h-3 text-orange-600 font-bold" />
+      <ArrowUp className="w-3 h-3 text-slate-900 font-bold" />
     ) : (
-      <ArrowDown className="w-3 h-3 text-orange-600 font-bold" />
+      <ArrowDown className="w-3 h-3 text-slate-900 font-bold" />
     );
   };
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-7 h-7 animate-spin text-slate-600" />
         <p className="text-xs font-normal">Cargando Catálogo de Carnes e Insumos...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full space-y-4 animate-fade-in font-normal">
-      {/* 📊 Métricas Superiores Planas */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-1">
-          <span className="text-[11px] text-slate-500 font-normal uppercase tracking-wider block">Total Catálogo</span>
-          <span className="text-lg font-medium text-slate-900">{totalInsumos} insumos</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-1">
-          <span className="text-[11px] text-slate-500 font-normal uppercase tracking-wider block">Carnes Maestras</span>
-          <span className="text-lg font-medium text-orange-600">{totalCarnes} cortes</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-1 col-span-2 sm:col-span-1">
-          <span className="text-[11px] text-slate-500 font-normal uppercase tracking-wider block">Insumos y Abarrotes</span>
-          <span className="text-lg font-medium text-blue-600">{totalAbarrotes} ítems</span>
-        </div>
-      </div>
-
-      {/* 🔍 Barra Superior: Título, Botón Crear y Buscador */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2 border-b border-slate-100">
-        <div>
-          <h2 className="text-base font-medium text-slate-900 tracking-tight flex items-center gap-2">
-            <Beef className="w-4 h-4 text-orange-500" />
-            <span>Catálogo de Carnes e Insumos</span>
-          </h2>
-          <p className="text-xs text-slate-400 font-normal">
-            Administración de materias primas, gramajes por porción, rendimientos teóricos y costos
-          </p>
+    <div className="w-full max-w-[1600px] mx-auto space-y-3 font-normal animate-fade-in text-xs">
+      
+      {/* ------------------------------------------------------------ */}
+      {/* BARRA SUPERIOR SOBRIA (Estilo GitHub / Costeo Diario)         */}
+      {/* ------------------------------------------------------------ */}
+      <div className="bg-white border border-slate-200 rounded-lg p-3 px-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <Beef className="w-4 h-4 text-slate-700" />
+          <h1 className="text-sm font-bold text-slate-900 tracking-tight">
+            Catálogo de Carnes e Insumos
+          </h1>
+          <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium border border-slate-200 font-mono">
+            {filteredInsumos.length} {filteredInsumos.length === 1 ? 'insumo' : 'insumos'}
+          </span>
         </div>
 
+        {/* Acciones: Buscador, Exportar y Nuevo Insumo */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          {/* Buscador */}
           <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar carne por nombre o código..."
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-slate-300 outline-none focus:border-orange-500 text-slate-800 placeholder-slate-400 font-normal"
+              placeholder="Buscar por nombre o código..."
+              className="w-full h-8 pl-8 pr-2.5 text-xs bg-slate-50/60 hover:bg-white focus:bg-white rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 placeholder-slate-400 transition-colors"
             />
           </div>
 
-          {/* Botón Exportar PDF */}
           <button
             type="button"
             onClick={() => setIsExportModalOpen(true)}
-            className="px-3 h-8 bg-white hover:bg-slate-50 active:scale-95 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap cursor-pointer"
-            title="Exportar Catálogo de Insumos a PDF bien organizado"
+            className="px-2.5 h-8 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 border border-slate-200 rounded-md text-xs font-medium flex items-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap cursor-pointer"
+            title="Exportar Catálogo de Insumos a PDF"
           >
-            <FileDown className="w-3.5 h-3.5 text-orange-600" />
+            <FileDown className="w-3.5 h-3.5 text-slate-600" />
             <span>Exportar PDF</span>
           </button>
 
-          {/* Botón Crear */}
           <button
             type="button"
             onClick={openCreateModal}
-            className="px-3.5 h-8 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap cursor-pointer"
+            className="px-3 h-8 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Nuevo Insumo</span>
@@ -377,142 +359,143 @@ export default function CatalogoPage() {
         </div>
       </div>
 
-      {/* 🏷️ Filtros de Categoría */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-pan-x py-1 flex-nowrap sm:flex-wrap">
-        {['ALL', 'CARNES', ...CATEGORIAS_PREDEFINIDAS].map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setSelectedCat(cat)}
-            className={`flex-shrink-0 px-3.5 py-1.5 min-h-[36px] sm:min-h-[28px] rounded-lg text-xs font-normal transition-all border touch-manipulation active:scale-95 cursor-pointer whitespace-nowrap ${
-              selectedCat === cat
-                ? 'bg-slate-900 border-slate-900 text-white shadow-sm font-medium'
-                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            {cat === 'ALL' ? 'Todas' : cat === 'CARNES' ? '🥩 Todas las Carnes' : cat}
-          </button>
-        ))}
+      {/* ------------------------------------------------------------ */}
+      {/* FILTROS DE CATEGORÍA MINIMALISTAS                            */}
+      {/* ------------------------------------------------------------ */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-nowrap select-none">
+        {[
+          { key: 'ALL', label: `Todos (${totalInsumos})` },
+          { key: 'CARNES', label: `Carnes (${totalCarnes})` },
+          ...CATEGORIAS_PREDEFINIDAS.map(c => ({ key: c, label: c }))
+        ].map((cat) => {
+          const isSelected = selectedCat === cat.key;
+          return (
+            <button
+              key={cat.key}
+              type="button"
+              onClick={() => setSelectedCat(cat.key)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all whitespace-nowrap cursor-pointer border ${
+                isSelected
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              {cat.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* 💻 TABLA DE ESCRITORIO CON HEADER PEGAJOSO Y ORDENAMIENTO */}
-      <div className="hidden md:block w-full border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden font-normal">
-        <div className="relative max-h-[calc(100vh-250px)] overflow-y-auto overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse font-normal">
-            <thead className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm text-slate-600 font-medium border-b border-slate-200 text-[11px] uppercase tracking-wider shadow-sm">
+      {/* ------------------------------------------------------------ */}
+      {/* TABLA PRINCIPAL SOBRIA (Estilo GitHub)                       */}
+      {/* ------------------------------------------------------------ */}
+      <div className="hidden md:block w-full border border-slate-200 rounded-lg bg-white shadow-2xs overflow-hidden">
+        <div className="relative max-h-[calc(100vh-210px)] overflow-y-auto overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase tracking-wider select-none shadow-2xs">
               <tr>
-                {/* Código */}
                 <th 
                   onClick={() => handleSort('codigo')}
-                  className="py-3 px-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>CÓDIGO</span>
+                    <span>Código</span>
                     {renderSortIcon('codigo')}
                   </div>
                 </th>
 
-                {/* Materia Prima */}
                 <th 
                   onClick={() => handleSort('nombre')}
-                  className="py-3 px-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>MATERIA PRIMA / CORTE</span>
+                    <span>Materia Prima / Corte</span>
                     {renderSortIcon('nombre')}
                   </div>
                 </th>
 
-                {/* Categoría */}
                 <th 
                   onClick={() => handleSort('categoria')}
-                  className="py-3 px-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>CATEGORÍA</span>
+                    <span>Categoría</span>
                     {renderSortIcon('categoria')}
                   </div>
                 </th>
 
-                {/* Unidad */}
                 <th 
                   onClick={() => handleSort('unidad_medida')}
-                  className="py-3 px-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>UNIDAD</span>
+                    <span>Unidad</span>
                     {renderSortIcon('unidad_medida')}
                   </div>
                 </th>
 
-                {/* Tipo Medida */}
                 <th 
                   onClick={() => handleSort('tipo_medida')}
-                  className="py-3 px-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>MEDIDA SISTEMA</span>
+                    <span>Medida Sistema</span>
                     {renderSortIcon('tipo_medida')}
                   </div>
                 </th>
 
-                {/* Peso Estándar */}
                 <th 
                   onClick={() => handleSort('peso_estandar_porcion_kg')}
-                  className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center justify-end gap-1.5">
-                    <span>PESO ESTÁNDAR PORCIÓN</span>
+                    <span>Peso Estándar</span>
                     {renderSortIcon('peso_estandar_porcion_kg')}
                   </div>
                 </th>
 
-                {/* Rendimiento */}
                 <th 
                   onClick={() => handleSort('rendimiento')}
-                  className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center justify-end gap-1.5">
-                    <span className="inline-flex items-center gap-1" title="Porciones teóricas que rinde 1 Kg de carne (1 / Peso Porción)">
-                      <span>RENDIMIENTO TEÓRICO</span>
+                    <span className="inline-flex items-center gap-1" title="Porciones teóricas que rinde 1 Kg (1 / Peso)">
+                      <span>Rendimiento</span>
                       <HelpCircle className="w-3 h-3 text-slate-400" />
                     </span>
                     {renderSortIcon('rendimiento')}
                   </div>
                 </th>
 
-                {/* Costo */}
                 <th 
                   onClick={() => handleSort('costo_unitario_kg')}
-                  className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center justify-end gap-1.5">
-                    <span>COSTO BASE / KG</span>
+                    <span>Costo Base / Kg</span>
                     {renderSortIcon('costo_unitario_kg')}
                   </div>
                 </th>
 
-                {/* Stock Mínimo */}
                 <th 
                   onClick={() => handleSort('stock_minimo_kg')}
-                  className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100/80 transition-colors select-none group whitespace-nowrap"
+                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100/70 transition-colors group whitespace-nowrap"
                 >
                   <div className="flex items-center justify-end gap-1.5">
-                    <span>STOCK MÍNIMO</span>
+                    <span>Stock Mínimo</span>
                     {renderSortIcon('stock_minimo_kg')}
                   </div>
                 </th>
 
-                {/* Acciones */}
-                <th className="py-3 px-3 text-center whitespace-nowrap">ACCIONES</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap">Acciones</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-normal">
+            <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
               {sortedInsumos.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400 font-normal">
-                    No se encontraron materias primas en el catálogo con el filtro actual.
+                  <td colSpan={10} className="py-10 text-center text-slate-400">
+                    No se encontraron insumos con el filtro seleccionado.
                   </td>
                 </tr>
               ) : (
@@ -521,95 +504,99 @@ export default function CatalogoPage() {
                   const rendimiento = item.peso_estandar_porcion_kg > 0 ? (1 / item.peso_estandar_porcion_kg).toFixed(2) : '-';
 
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr key={item.id} className="hover:bg-slate-50/70 transition-colors group">
                       {/* Código */}
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-400">
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-400">
                         {item.codigo || item.id.slice(0, 8)}
                       </td>
 
-                      {/* Nombre */}
-                      <td className="py-2.5 px-3">
-                        <span className="font-medium text-slate-900 text-xs md:text-sm block">
+                      {/* Nombre Clicable para editar */}
+                      <td className="py-2 px-3">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(item)}
+                          className="font-semibold text-slate-900 hover:text-orange-600 transition-colors cursor-pointer text-left"
+                        >
                           {item.nombre}
-                        </span>
+                        </button>
                       </td>
 
                       {/* Categoría */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                      <td className="py-2 px-3 whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
                           {item.categoria}
                         </span>
                       </td>
 
                       {/* Unidad */}
-                      <td className="py-2.5 px-3 text-slate-500 font-normal">
+                      <td className="py-2 px-3 text-slate-500 font-mono">
                         {item.unidad_medida || 'Kg'}
                       </td>
 
                       {/* Medida Sistema */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
+                      <td className="py-2 px-3 whitespace-nowrap">
                         {item.tipo_medida === 'UNIDADES' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                            🥚 Solo Unidades
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            Solo Unidades
                           </span>
                         )}
                         {item.tipo_medida === 'PAQUETES' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200">
-                            📦 Paquetes
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            Paquetes
                           </span>
                         )}
                         {item.tipo_medida === 'KGS' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                            ⚖️ Solo Kilos
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            Solo Kilos
                           </span>
                         )}
                         {(!item.tipo_medida || item.tipo_medida === 'KGS_Y_UNIDADES') && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
-                            🥩 Kgs y Und
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            Kgs y Und
                           </span>
                         )}
                       </td>
 
                       {/* Peso estándar */}
-                      <td className="py-2.5 px-3 text-right font-normal">
+                      <td className="py-2 px-3 text-right font-mono">
                         {item.tipo_medida === 'KGS_Y_UNIDADES' && item.peso_estandar_porcion_kg > 0 ? (
                           <span className="text-slate-800">
-                            {pesoGramos} g <small className="text-slate-400 font-normal">({item.peso_estandar_porcion_kg.toFixed(3)} Kg)</small>
+                            {pesoGramos} g <span className="text-slate-400 text-[11px]">({item.peso_estandar_porcion_kg.toFixed(3)} Kg)</span>
                           </span>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-slate-300">-</span>
                         )}
                       </td>
 
                       {/* Rendimiento Teórico */}
-                      <td className="py-2.5 px-3 text-right">
+                      <td className="py-2 px-3 text-right font-mono">
                         {item.es_carne ? (
-                          <span className="font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 text-xs">
-                            ~ {rendimiento} porc / Kg
+                          <span className="text-slate-800">
+                            ~{rendimiento} <span className="text-slate-400 text-[11px]">porc/Kg</span>
                           </span>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-slate-300">-</span>
                         )}
                       </td>
 
                       {/* Costo Base */}
-                      <td className="py-2.5 px-3 text-right font-medium text-slate-900">
-                        $ {formatMoney(item.costo_unitario_kg)}
+                      <td className="py-2 px-3 text-right font-mono font-semibold text-slate-900">
+                        ${formatMoney(item.costo_unitario_kg)}
                       </td>
 
                       {/* Stock Mínimo */}
-                      <td className="py-2.5 px-3 text-right text-slate-600 font-normal">
+                      <td className="py-2 px-3 text-right font-mono text-slate-600">
                         {item.stock_minimo_kg} {item.unidad_medida || 'Kg'}
                       </td>
 
                       {/* Acciones */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1">
+                      <td className="py-2 px-3 text-center whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
                             onClick={() => openEditModal(item)}
                             title="Editar Insumo"
-                            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+                            className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
@@ -617,7 +604,7 @@ export default function CatalogoPage() {
                             type="button"
                             onClick={() => handleDelete(item)}
                             title="Eliminar Insumo"
-                            className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                            className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -632,27 +619,35 @@ export default function CatalogoPage() {
         </div>
       </div>
 
-      {/* 📱 VISTA MÓVIL EN TARJETAS */}
-      <div className="grid grid-cols-1 gap-2.5 md:hidden">
+      {/* ------------------------------------------------------------ */}
+      {/* VISTA MÓVIL EN TARJETAS MINIMALISTAS                         */}
+      {/* ------------------------------------------------------------ */}
+      <div className="grid grid-cols-1 gap-2 md:hidden">
         {sortedInsumos.map((item) => {
           const pesoGramos = Math.round((item.peso_estandar_porcion_kg || 0.35) * 1000);
           const rendimiento = item.peso_estandar_porcion_kg > 0 ? (1 / item.peso_estandar_porcion_kg).toFixed(2) : '-';
 
           return (
-            <div key={item.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 text-xs shadow-sm font-normal">
+            <div key={item.id} className="p-3 bg-white border border-slate-200 rounded-lg space-y-2 text-xs shadow-2xs">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="font-medium text-slate-900 text-sm block">{item.nombre}</span>
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(item)}
+                    className="font-semibold text-slate-900 text-left hover:underline text-xs"
+                  >
+                    {item.nombre}
+                  </button>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="font-mono text-[10px] text-slate-400">{item.codigo}</span>
                     <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">{item.categoria}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => openEditModal(item)}
-                    className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200/80 text-slate-600 hover:text-slate-900 active:scale-95 touch-manipulation cursor-pointer"
+                    className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
                     title="Editar Insumo"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -660,7 +655,7 @@ export default function CatalogoPage() {
                   <button
                     type="button"
                     onClick={() => handleDelete(item)}
-                    className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl bg-rose-50 border border-rose-200/80 text-rose-500 hover:text-rose-700 active:scale-95 touch-manipulation cursor-pointer"
+                    className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
                     title="Eliminar Insumo"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -668,21 +663,21 @@ export default function CatalogoPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-[11px]">
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-[11px] font-mono">
                 <div>
-                  <span className="text-slate-400 block">Gramaje porción:</span>
-                  <span className="font-medium text-slate-800">{pesoGramos} g</span>
+                  <span className="text-slate-400 block font-sans">Gramaje porción:</span>
+                  <span className="font-semibold text-slate-800">{pesoGramos} g</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block">Rendimiento:</span>
-                  <span className="font-medium text-purple-700">~ {rendimiento} porc/Kg</span>
+                  <span className="text-slate-400 block font-sans">Rendimiento:</span>
+                  <span className="font-semibold text-slate-800">~{rendimiento} porc/Kg</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block">Costo Base / Kg:</span>
-                  <span className="font-medium text-slate-900">$ {formatMoney(item.costo_unitario_kg)}</span>
+                  <span className="text-slate-400 block font-sans">Costo Base / Kg:</span>
+                  <span className="font-semibold text-slate-900">${formatMoney(item.costo_unitario_kg)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block">Stock Mínimo:</span>
+                  <span className="text-slate-400 block font-sans">Stock Mínimo:</span>
                   <span className="text-slate-700">{item.stock_minimo_kg} {item.unidad_medida}</span>
                 </div>
               </div>
@@ -691,67 +686,68 @@ export default function CatalogoPage() {
         })}
       </div>
 
-      {/* 📝 MODAL CREAR / EDITAR */}
+      {/* ------------------------------------------------------------ */}
+      {/* MODAL CREAR / EDITAR (Limpio y Sobrio)                        */}
+      {/* ------------------------------------------------------------ */}
       <Modal
         isOpen={modalMode !== null}
         onClose={() => setModalMode(null)}
-        title={modalMode === 'CREATE' ? 'Crear Nuevo Insumo / Carne' : `Editar: ${selectedItem?.nombre}`}
-        icon={<Beef className="w-5 h-5 text-orange-500" />}
-        maxWidth="max-w-xl"
+        title={modalMode === 'CREATE' ? 'Crear Nuevo Insumo' : `Editar Insumo: ${selectedItem?.nombre}`}
+        icon={<Beef className="w-4 h-4 text-slate-700" />}
+        maxWidth="max-w-lg"
       >
-        <form onSubmit={handleSave} className="space-y-4 text-xs font-normal">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <form onSubmit={handleSave} className="space-y-3.5 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
-              <label className="block text-slate-700 font-medium mb-1">Código</label>
+              <label className="block text-slate-700 font-semibold mb-1">Código</label>
               <input
                 type="text"
                 value={formCodigo}
                 onChange={(e) => setFormCodigo(e.target.value)}
                 placeholder="Ej. CAR-001"
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 font-mono"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-mono"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-slate-700 font-medium mb-1">Nombre del Insumo / Corte *</label>
+              <label className="block text-slate-700 font-semibold mb-1">Nombre del Insumo / Corte *</label>
               <input
                 type="text"
                 required
                 value={formNombre}
                 onChange={(e) => setFormNombre(e.target.value)}
                 placeholder="Ej. Punta de anca importada"
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 font-medium"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 font-medium"
               />
             </div>
           </div>
 
-          {/* 🎯 MEDIDA DE MEDICIÓN OBLIGATORIA */}
-          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1.5">
+          {/* Medida de Medición */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-md space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="block text-amber-950 font-semibold text-xs">
-                Tipo / Medida de Medición Obligatoria *
+              <label className="block text-slate-900 font-semibold text-xs">
+                Tipo de Medición Obligatoria *
               </label>
-              <span className="text-[11px] text-amber-800 font-medium">Define cómo se muestra y opera en todo el sistema</span>
             </div>
             <select
               value={formTipoMedida}
               onChange={(e) => handleTipoMedidaChange(e.target.value as TipoMedida)}
-              className="w-full h-8 px-2.5 rounded-lg border border-amber-300 focus:border-amber-600 text-amber-950 bg-white font-medium text-xs cursor-pointer"
+              className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-medium text-xs cursor-pointer outline-none"
             >
-              <option value="KGS_Y_UNIDADES">🥩 Kgs y Unidades (Carnes con porcionado: Entero Kg + Porciones Und)</option>
-              <option value="UNIDADES">🥚 Solo Unidades (Huevos, chorizos, tamales, empanadas - NUNCA en Kg)</option>
-              <option value="PAQUETES">📦 Paquetes (Papas a la francesa, verduras congeladas)</option>
-              <option value="KGS">⚖️ Solo Kilos (Carnes sin porcionar, visceras, abarrotes a granel)</option>
+              <option value="KGS_Y_UNIDADES">Kgs y Unidades (Carnes con porcionado: Entero Kg + Porciones Und)</option>
+              <option value="UNIDADES">Solo Unidades (Huevos, chorizos, tamales - NUNCA en Kg)</option>
+              <option value="PAQUETES">Paquetes (Papas a la francesa, verduras congeladas)</option>
+              <option value="KGS">Solo Kilos (Carnes sin porcionar, visceras, abarrotes a granel)</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
-              <label className="block text-slate-700 font-medium mb-1">Categoría</label>
+              <label className="block text-slate-700 font-semibold mb-1">Categoría</label>
               <select
                 value={formCategoria}
                 onChange={(e) => setFormCategoria(e.target.value)}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 bg-white"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-800 bg-white outline-none cursor-pointer"
               >
                 {CATEGORIAS_PREDEFINIDAS.map((c) => (
                   <option key={c} value={c}>
@@ -762,11 +758,11 @@ export default function CatalogoPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-medium mb-1">Unidad de Presentación</label>
+              <label className="block text-slate-700 font-semibold mb-1">Unidad de Presentación</label>
               <select
                 value={formUnidad}
                 onChange={(e) => setFormUnidad(e.target.value)}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 bg-white"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-800 bg-white outline-none cursor-pointer"
               >
                 <option value="Kg">Kilogramos (Kg)</option>
                 <option value="Und">Unidades (Und)</option>
@@ -778,17 +774,17 @@ export default function CatalogoPage() {
           </div>
 
           {formTipoMedida === 'KGS_Y_UNIDADES' && (
-            <div className="p-3 bg-purple-50/60 border border-purple-200/70 rounded-xl space-y-2 animate-fade-in">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-md space-y-2 animate-fade-in">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-purple-900 text-xs flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Rendimiento Teórico y Gramaje por Porción
+                <span className="font-semibold text-slate-900 text-xs">
+                  Rendimiento Teórico y Gramaje por Porción
                 </span>
-                <span className="text-[11px] text-purple-700 font-medium">1 Kg = Rendimiento × Peso</span>
+                <span className="text-[11px] text-slate-500 font-mono">1 Kg = Rendimiento × Peso</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-purple-950 font-medium mb-1">
+                  <label className="block text-slate-700 font-medium mb-1">
                     Rendimiento (Porciones x 1 Kg)
                   </label>
                   <input
@@ -797,12 +793,12 @@ export default function CatalogoPage() {
                     value={formRendimientoTeorico}
                     onChange={(e) => handleRendimientoChange(e.target.value)}
                     placeholder="Ej: 3 (rinde 3 porciones x Kg)"
-                    className="w-full h-8 px-2.5 rounded-lg border border-purple-300 focus:border-purple-600 text-purple-950 bg-white font-medium"
+                    className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-mono outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-purple-950 font-medium mb-1">
+                  <label className="block text-slate-700 font-medium mb-1">
                     Peso Estándar por Porción (Kg)
                   </label>
                   <input
@@ -811,16 +807,16 @@ export default function CatalogoPage() {
                     value={formPesoEstandar}
                     onChange={(e) => handlePesoEstandarChange(e.target.value)}
                     placeholder="Ej: 0.333 Kg (333 gramos)"
-                    className="w-full h-8 px-2.5 rounded-lg border border-purple-300 focus:border-purple-600 text-purple-950 bg-white font-medium"
+                    className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 bg-white font-mono outline-none"
                   />
                 </div>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
-              <label className="block text-slate-700 font-medium mb-1">
+              <label className="block text-slate-700 font-semibold mb-1">
                 Costo Base ($ COP / {formTipoMedida === 'UNIDADES' ? 'Und' : formTipoMedida === 'PAQUETES' ? 'Paquete' : 'Kg'})
               </label>
               <input
@@ -829,13 +825,13 @@ export default function CatalogoPage() {
                 value={formCostoUnitario}
                 onChange={(e) => setFormCostoUnitario(e.target.value)}
                 placeholder="Ej. 24000"
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800 font-medium"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-700 font-medium mb-1">
-                Stock Mínimo de Seguridad ({formTipoMedida === 'UNIDADES' ? 'Und' : formTipoMedida === 'PAQUETES' ? 'Paquetes' : 'Kg'})
+              <label className="block text-slate-700 font-semibold mb-1">
+                Stock Mínimo ({formTipoMedida === 'UNIDADES' ? 'Und' : formTipoMedida === 'PAQUETES' ? 'Paquetes' : 'Kg'})
               </label>
               <input
                 type="number"
@@ -843,7 +839,7 @@ export default function CatalogoPage() {
                 value={formStockMinimo}
                 onChange={(e) => setFormStockMinimo(e.target.value)}
                 placeholder="Ej. 10"
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-300 focus:border-orange-500 text-slate-800"
+                className="w-full h-8 px-2.5 rounded-md border border-slate-200 focus:border-slate-400 text-slate-900 font-mono outline-none"
               />
             </div>
           </div>
@@ -854,7 +850,7 @@ export default function CatalogoPage() {
               id="esCarneCheck"
               checked={formEsCarne}
               onChange={(e) => setFormEsCarne(e.target.checked)}
-              className="w-4 h-4 text-orange-600 rounded border-slate-300 focus:ring-orange-500"
+              className="w-3.5 h-3.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer"
             />
             <label htmlFor="esCarneCheck" className="text-slate-700 font-medium select-none cursor-pointer">
               Es una carne / proteína cárnica sujeta a control de porcionado y mermas
@@ -865,14 +861,14 @@ export default function CatalogoPage() {
             <button
               type="button"
               onClick={() => setModalMode(null)}
-              className="px-4 py-2 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 font-medium text-xs"
+              className="px-3.5 py-1.5 rounded-md text-slate-700 bg-slate-100 hover:bg-slate-200 font-medium text-xs cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+              className="px-3.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 active:scale-98 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               <span>{modalMode === 'CREATE' ? 'Crear Insumo' : 'Guardar Cambios'}</span>
@@ -881,7 +877,7 @@ export default function CatalogoPage() {
         </form>
       </Modal>
 
-      {/* 📄 Modal de Exportación a PDF y Excel del Catálogo */}
+      {/* Modal de Exportación a PDF y Excel */}
       <ExportCatalogoPdfModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
