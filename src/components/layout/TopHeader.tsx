@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Menu, User } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
+import OperationalNotificationBell from '@/components/notifications/OperationalNotificationBell';
 
 const VIEW_TITLES: Record<string, string> = {
   '/': 'Terminal del Bodeguero',
@@ -55,13 +56,20 @@ export default function TopHeader() {
         </h1>
       </div>
 
-      {/* Nombre de Usuario e Icono Minimalista Alineado a la Derecha */}
-      <div className="flex items-center gap-2.5 shrink-0 select-none">
-        <span className="text-xs font-medium text-slate-700 hidden sm:inline">
-          Usuario Administrador
-        </span>
-        <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-          <User className="w-4 h-4 text-slate-600" />
+      {/* Lado Derecho: Campanita de Notificaciones Operativas + Perfil de Usuario */}
+      <div className="flex items-center gap-2 md:gap-3 shrink-0 select-none">
+        {/* Campanita de Notificaciones del Día */}
+        <OperationalNotificationBell />
+
+        <div className="h-5 w-px bg-slate-200 hidden sm:block" />
+
+        <div className="flex items-center gap-2.5">
+          <span className="text-xs font-medium text-slate-700 hidden sm:inline">
+            Usuario Administrador
+          </span>
+          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+            <User className="w-4 h-4 text-slate-600" />
+          </div>
         </div>
       </div>
     </header>

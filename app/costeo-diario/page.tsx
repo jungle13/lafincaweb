@@ -1339,6 +1339,20 @@ export default function CosteoDiarioPage() {
   const [parsedConteosList, setParsedConteosList] = useState<ParsedConteoItem[]>([]);
   const [conteosSuccessToast, setConteosSuccessToast] = useState('');
 
+  // Atender enlaces profundos desde notificaciones operativas (?section=...)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const section = params.get('section');
+      if (
+        section &&
+        ['TRASLADOS', 'COCINA_APERTURA', 'DEVOLUCIONES', 'COCINA_CIERRE', 'BODEGA_APERTURA', 'BODEGA_CIERRE'].includes(section)
+      ) {
+        setActiveOperationalView(section as any);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetch('/api/catalogo')
       .then(r => r.json())
