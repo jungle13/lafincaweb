@@ -4,15 +4,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { 
-  Truck, 
-  Boxes, 
-  LayoutDashboard, 
   ShoppingCart, 
-  DollarSign,
   Beef,
-  CalendarRange,
-  Wrench,
-  ClipboardList,
   PackageSearch,
   FileSpreadsheet,
   ClipboardCheck,
@@ -20,20 +13,42 @@ import {
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
-const NAV_ITEMS = [
-  { label: 'Costeo Diario Cocina', href: '/costeo-diario', icon: FileSpreadsheet },
-  { label: 'Auditoría Cocina', href: '/auditoria-cocina', icon: ClipboardCheck },
-  { label: 'Recetas', href: '/recetas', icon: BookOpen },
-  { label: 'Terminal Bodeguero', href: '/bodeguero', icon: Truck },
-  { label: 'Inventario de Carnes', href: '/inventario', icon: Boxes },
-  { label: 'Conteo Físico', href: '/inventario/conteos', icon: ClipboardList, isSubmenu: true },
-  { label: 'Ajustes e Inconsistencias', href: '/ajustes', icon: Wrench },
-  { label: 'Catálogo de Carnes', href: '/catalogo', icon: Beef },
-  { label: 'Insumos y Costos', href: '/insumos', icon: PackageSearch },
-  { label: 'Control de Periodos', href: '/periodos', icon: CalendarRange },
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Compras', href: '/compras', icon: ShoppingCart },
-  { label: 'Ventas', href: '/ventas', icon: DollarSign },
+interface NavSection {
+  title: string;
+  items: {
+    label: string;
+    href: string;
+    icon: any;
+  }[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'INVENTARIO & BODEGA',
+    items: [
+      { label: 'Entradas por Compra', href: '/compras', icon: ShoppingCart },
+    ],
+  },
+  {
+    title: 'OPERACIONES DE COCINA',
+    items: [
+      { label: 'Costeo Diario Cocina', href: '/costeo-diario', icon: FileSpreadsheet },
+    ],
+  },
+  {
+    title: 'AUDITORÍA & CONTROL',
+    items: [
+      { label: 'Auditoría Cocina', href: '/auditoria-cocina', icon: ClipboardCheck },
+    ],
+  },
+  {
+    title: 'CONFIGURACIÓN CATÁLOGO',
+    items: [
+      { label: 'Recetas', href: '/recetas', icon: BookOpen },
+      { label: 'Catálogo de Carnes', href: '/catalogo', icon: Beef },
+      { label: 'Insumos y Costos', href: '/insumos', icon: PackageSearch },
+    ],
+  },
 ];
 
 export default function Sidebar() {
@@ -54,7 +69,7 @@ export default function Sidebar() {
       <aside
         className={`fixed md:sticky top-0 h-screen z-50 flex flex-col bg-[#050811] text-slate-300 border-r border-slate-900/80 transition-all duration-300 shrink-0 ${
           mobileOpen ? 'translate-x-0 w-[240px]' : '-translate-x-full md:translate-x-0'
-        } ${collapsed ? 'md:w-[72px]' : 'md:w-[205px]'}`}
+        } ${collapsed ? 'md:w-[72px]' : 'md:w-[220px]'}`}
       >
         {/* Brand Header with Wooden Board Logo */}
         <div className="p-3 flex items-center justify-between border-b border-slate-900/80 min-h-[85px]">
@@ -81,35 +96,45 @@ export default function Sidebar() {
           )}
         </div>
 
-        {/* Nav Menu */}
-        <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item, idx) => {
-            const Icon = item.icon;
-            const isExact = pathname === item.href || (item.href === '/bodeguero' && pathname === '/');
+        {/* Nav Menu Organizado por Secciones */}
+        <nav className="flex-1 py-3 px-2 space-y-3 overflow-y-auto">
+          {NAV_SECTIONS.map((section, sIdx) => (
+            <div key={sIdx} className="space-y-1">
+              {!collapsed || mobileOpen ? (
+                <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none">
+                  {section.title}
+                </div>
+              ) : (
+                sIdx > 0 && <div className="my-2 border-t border-slate-900/80" />
+              )}
 
-            return (
-              <Link
-                key={idx}
-                href={item.href}
-                onClick={() => {
-                  if (mobileOpen) closeMobile();
-                }}
-                title={collapsed && !mobileOpen ? item.label : undefined}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
-                  item.isSubmenu && (!collapsed || mobileOpen) ? 'ml-6 border-l border-slate-700/50' : ''
-                } ${
-                  collapsed && !mobileOpen ? 'justify-center !px-2' : ''
-                } ${
-                  isExact
-                    ? 'bg-orange-500/15 text-orange-400 font-semibold border-l-[3px] border-orange-500 rounded-l-none'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
-                }`}
-              >
-                <Icon className={`w-4 h-4 shrink-0 ${isExact ? 'text-orange-400' : 'text-slate-400'}`} />
-                {(!collapsed || mobileOpen) && <span className="truncate">{item.label}</span>}
-              </Link>
-            );
-          })}
+              {section.items.map((item, idx) => {
+                const Icon = item.icon;
+                const isExact = pathname === item.href;
+
+                return (
+                  <Link
+                    key={idx}
+                    href={item.href}
+                    onClick={() => {
+                      if (mobileOpen) closeMobile();
+                    }}
+                    title={collapsed && !mobileOpen ? item.label : undefined}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                      collapsed && !mobileOpen ? 'justify-center !px-2' : ''
+                    } ${
+                      isExact
+                        ? 'bg-orange-500/15 text-orange-400 font-semibold border-l-[3px] border-orange-500 rounded-l-none'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 ${isExact ? 'text-orange-400' : 'text-slate-400'}`} />
+                    {(!collapsed || mobileOpen) && <span className="truncate">{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Footer */}
