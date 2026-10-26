@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { 
   ShoppingCart, 
@@ -73,17 +72,16 @@ export default function Sidebar() {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header compacto: Logo a la izquierda sin márgenes excesivos y botón 'X' a la derecha */}
+        {/* Header compacto: Logo vectorizado a la izquierda y botón 'X' a la derecha */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-slate-900/80 shrink-0">
-          <div className="relative w-28 h-8">
-            <Image
-              src="/Logo.png"
+          <Link href="/" onClick={closeSidebar} className="flex items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Logo_Letras_Vectorizadas.svg"
               alt="La Finca Choclos y Asados"
-              fill
-              priority
-              className="object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+              className="h-8 max-w-[190px] w-auto object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
             />
-          </div>
+          </Link>
 
           <button
             type="button"

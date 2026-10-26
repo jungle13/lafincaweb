@@ -17,6 +17,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'La Finca - Dashboard Administrativo & Control de Bodega',
   description: 'Sistema administrativo y operativo de carnes y movimientos en tiempo real',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 };
 
 export const viewport: Viewport = {
