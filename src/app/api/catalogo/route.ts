@@ -4,17 +4,18 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// 1. GET: Listar todos los insumos del catálogo
+// 1. GET: Listar todos los insumos del catálogo maestro oficial
 export async function GET() {
   try {
-    const { data, error } = await supabase
+    const { data: dbCatalog, error } = await supabase
       .from('catalogo_insumos')
       .select('*')
       .order('categoria', { ascending: true })
       .order('nombre', { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json({ success: true, data: data || [] }, {
+
+    return NextResponse.json({ success: true, data: dbCatalog || [] }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       }

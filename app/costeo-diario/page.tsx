@@ -1358,17 +1358,7 @@ export default function CosteoDiarioPage() {
       .then(r => r.json())
       .then(data => {
         if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
-          // Fusionar insumos del servidor con insumos base para garantizar que siempre estén disponibles arroz, vasos, verduras, etc.
-          const merged = [...data.data];
-          const existing = new Set(data.data.map((d: any) => normalizeStrHelper(d.nombre || d.insumo || '')));
-          DEFAULT_CATALOG_ITEMS.forEach(def => {
-            const k = normalizeStrHelper(def.nombre);
-            if (!existing.has(k)) {
-              merged.push(def);
-              existing.add(k);
-            }
-          });
-          setCatalogItems(merged);
+          setCatalogItems(data.data);
         }
       })
       .catch(() => {});
