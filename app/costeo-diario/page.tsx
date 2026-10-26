@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   FileSpreadsheet,
   ClipboardList, 
@@ -24,7 +24,10 @@ import {
   History,
   Package,
   RotateCcw,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles,
+  Columns2,
+  Info
 } from 'lucide-react';
 
 interface InsumoRegistro {
@@ -1315,6 +1318,9 @@ export default function CosteoDiarioPage() {
   const [incluirCocinaApertura, setIncluirCocinaApertura] = useState(true);
   const [incluirDevoluciones, setIncluirDevoluciones] = useState(false);
 
+  // Modo exclusivo para Cocina Cierre: AUTO (Cierre Automático), MANUAL (Conteo Físico), SPLIT (Comparativo)
+  const [cierreViewMode, setCierreViewMode] = useState<'AUTO' | 'MANUAL' | 'SPLIT'>('AUTO');
+
   // Catálogo inteligente y buscador en tiempo real
   const [catalogItems, setCatalogItems] = useState<any[]>(DEFAULT_CATALOG_ITEMS);
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<any | null>(null);
@@ -1626,6 +1632,19 @@ export default function CosteoDiarioPage() {
   // Current Active Sheet
   const activeSheet = sheets.find(s => s.id === activeTabId);
 
+  // Verificar si se ha diligenciado inventario de Cocina Apertura
+  const hasAperturaDiligenciada = useMemo(() => {
+    if (!activeSheet) return false;
+    return activeSheet.categories.some(cat =>
+      cat.items.some(it => {
+        const regs = it.registros && it.registros.length > 0
+          ? it.registros
+          : (it.isInitialInventory ? [{ tipo: 'INVENTARIO_INICIAL_COCINA', cantidad: it.qty }] : []);
+        return regs.some(r => r.tipo === 'INVENTARIO_INICIAL_COCINA' && r.cantidad > 0);
+      })
+    );
+  }, [activeSheet]);
+
   // Obtener registros y métricas de un insumo según la vista activa y switches
   const getItemMetricsForView = (item: InsumoItem) => {
     const regs: InsumoRegistro[] = item.registros && item.registros.length > 0 ? item.registros : [
@@ -1652,7 +1671,89 @@ export default function CosteoDiarioPage() {
     } else if (activeOperationalView === 'DEVOLUCIONES') {
       filteredRegs = regs.filter(r => r.tipo === 'DEVOLUCION_COCINA');
     } else if (activeOperationalView === 'COCINA_CIERRE') {
-      filteredRegs = regs.filter(r => r.tipo === 'COCINA_CIERRE');
+      // 1. Apertura Cocina
+      const aperturaQty = regs.filter(r => r.tipo === 'INVENTARIO_INICIAL_COCINA').reduce((sum, r) => sum + r.cantidad, 0);
+      // 2. Traslados Bodega a Cocina
+      const trasladosQty = regs.filter(r => r.tipo === 'BODEGA_A_COCINA').reduce((sum, r) => sum + r.cantidad, 0);
+      // 3. Devoluciones Cocina a Bodega
+      const devolucionesQty = regs.filter(r => r.tipo === 'DEVOLUCION_COCINA').reduce((sum, r) => sum + r.cantidad, 0);
+
+      // Cierre Automático = Apertura + Traslados - Devoluciones
+      const autoQty = Number(Math.max(0, aperturaQty + trasladosQty - devolucionesQty).toFixed(2));
+      const autoTotal = Math.round(autoQty * item.unitPrice);
+      const hasAutoEntries = hasAperturaDiligenciada && (aperturaQty + trasladosQty + devolucionesQty) > 0;
+
+      // Cierre Manual ingresado físicamente
+      const manualRegs = regs.filter(r => r.tipo === 'COCINA_CIERRE');
+      const manualQty = Number(manualRegs.reduce((sum, r) => sum + r.cantidad, 0).toFixed(2));
+      const manualTotal = Math.round(manualQty * item.unitPrice);
+      const hasManualEntries = manualRegs.length > 0;
+
+      // Diferencia (Físico Manual vs Teórico Auto)
+      const diffQty = Number((manualQty - autoQty).toFixed(2));
+      const diffTotal = manualTotal - autoTotal;
+
+      if (cierreViewMode === 'AUTO') {
+        return {
+          filteredRegs: [],
+          manualRegs,
+          qty: autoQty,
+          total: autoTotal,
+          hasEntries: hasAutoEntries,
+          isAuto: true,
+          aperturaQty,
+          trasladosQty,
+          devolucionesQty,
+          autoQty,
+          autoTotal,
+          manualQty,
+          manualTotal,
+          hasManualEntries,
+          diffQty,
+          diffTotal
+        };
+      }
+
+      if (cierreViewMode === 'MANUAL') {
+        return {
+          filteredRegs: manualRegs,
+          manualRegs,
+          qty: manualQty,
+          total: manualTotal,
+          hasEntries: hasManualEntries,
+          isAuto: false,
+          aperturaQty,
+          trasladosQty,
+          devolucionesQty,
+          autoQty,
+          autoTotal,
+          manualQty,
+          manualTotal,
+          hasManualEntries,
+          diffQty,
+          diffTotal
+        };
+      }
+
+      // Modo 'SPLIT' (Comparativo Lado a Lado)
+      return {
+        filteredRegs: manualRegs,
+        manualRegs,
+        qty: autoQty,
+        total: autoTotal,
+        hasEntries: hasAutoEntries || hasManualEntries,
+        isAuto: true,
+        aperturaQty,
+        trasladosQty,
+        devolucionesQty,
+        autoQty,
+        autoTotal,
+        manualQty,
+        manualTotal,
+        hasManualEntries,
+        diffQty,
+        diffTotal
+      };
     } else if (activeOperationalView === 'BODEGA_APERTURA') {
       filteredRegs = regs.filter(r => r.tipo === 'BODEGA_APERTURA');
     } else if (activeOperationalView === 'BODEGA_CIERRE') {
@@ -1682,9 +1783,21 @@ export default function CosteoDiarioPage() {
 
     return {
       filteredRegs,
+      manualRegs: [] as InsumoRegistro[],
       qty: Number(Math.max(0, totalQty).toFixed(2)),
       total: Math.max(0, totalCost),
-      hasEntries: filteredRegs.length > 0
+      hasEntries: filteredRegs.length > 0,
+      isAuto: false,
+      aperturaQty: 0,
+      trasladosQty: 0,
+      devolucionesQty: 0,
+      autoQty: 0,
+      autoTotal: 0,
+      manualQty: 0,
+      manualTotal: 0,
+      hasManualEntries: false,
+      diffQty: 0,
+      diffTotal: 0
     };
   };
 
@@ -2506,7 +2619,75 @@ Trucha 8`;
                     </label>
                   </div>
                 )}
+
+                {/* Badges / TAGs y Botón Split exclusivos de la vista Cocina Cierre */}
+                {activeOperationalView === 'COCINA_CIERRE' && (
+                  <div className="flex items-center gap-2 text-xs select-none flex-wrap">
+                    <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setCierreViewMode('AUTO')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          cierreViewMode === 'AUTO'
+                            ? 'bg-white text-blue-700 shadow-2xs font-bold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Calcular automáticamente: Apertura + Traslados - Devoluciones"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Cierre Automático</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCierreViewMode('MANUAL')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          cierreViewMode === 'MANUAL'
+                            ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Ver o registrar inventario físico manual"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Cierre Manual</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCierreViewMode('SPLIT')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          cierreViewMode === 'SPLIT'
+                            ? 'bg-white text-emerald-800 shadow-2xs font-bold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Comparar en la misma pantalla: Automático vs Manual y diferencias"
+                      >
+                        <Columns2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Comparar (Split)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Mensaje Informativo: El sistema solo calcula automáticamente si se diligenció Cocina Apertura */}
+              {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode !== 'MANUAL' && !hasAperturaDiligenciada && (
+                <div className="bg-amber-50/80 border border-amber-200/90 rounded-lg p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-amber-900 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      El sistema solo calculará automáticamente el cierre cuando se diligencie como mínimo el inventario de <strong>Cocina Apertura</strong>.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveOperationalView('COCINA_APERTURA')}
+                    className="self-start sm:self-auto shrink-0 font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer text-xs"
+                  >
+                    Ir a Cocina Apertura →
+                  </button>
+                </div>
+              )}
 
               {/* LISTADO DE CATEGORÍAS */}
               {activeSheet.categories.map((cat) => {
@@ -2550,22 +2731,117 @@ Trucha 8`;
                         </span>
                       </div>
                       <div className="text-xs font-semibold text-slate-700">
-                        Subtotal: <span className="font-bold text-slate-900">${catViewTotal.toLocaleString('es-CO')}</span>
+                        {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'SPLIT' ? (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span>Auto: <strong className="text-blue-700 font-mono">${cat.items.reduce((acc, it) => acc + getItemMetricsForView(it).autoTotal, 0).toLocaleString('es-CO')}</strong></span>
+                            <span className="text-slate-300">|</span>
+                            <span>Manual: <strong className="text-slate-900 font-mono">${cat.items.reduce((acc, it) => acc + getItemMetricsForView(it).manualTotal, 0).toLocaleString('es-CO')}</strong></span>
+                          </div>
+                        ) : (
+                          <>Subtotal: <span className="font-bold text-slate-900">${catViewTotal.toLocaleString('es-CO')}</span></>
+                        )}
                       </div>
                     </div>
 
                     {/* Encabezado de Columnas */}
-                    <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-white border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      <div className="col-span-6">Insumo / Producto</div>
-                      <div className="col-span-2 text-right">Cantidad</div>
-                      <div className="col-span-2 text-right">Costo Factura</div>
-                      <div className="col-span-2 text-right">Subtotal</div>
-                    </div>
+                    {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'SPLIT' ? (
+                      <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <div className="col-span-4">Insumo / Fórmula</div>
+                        <div className="col-span-2 text-right">Cierre Auto (Teórico)</div>
+                        <div className="col-span-2 text-right">Cierre Manual (Físico)</div>
+                        <div className="col-span-2 text-right">Diferencia</div>
+                        <div className="col-span-2 text-right">Impacto $</div>
+                      </div>
+                    ) : (
+                      <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-white border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <div className="col-span-6">Insumo / Producto</div>
+                        <div className="col-span-2 text-right">
+                          {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO' ? 'Cantidad Cierre Auto' : 'Cantidad'}
+                        </div>
+                        <div className="col-span-2 text-right">Costo Factura</div>
+                        <div className="col-span-2 text-right">Subtotal</div>
+                      </div>
+                    )}
 
                     {/* Filas de Insumos */}
                     <div className="divide-y divide-slate-100">
                       {displayItems.map((item) => {
                         const metrics = getItemMetricsForView(item);
+
+                        if (activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'SPLIT') {
+                          return (
+                            <div
+                              key={item.id}
+                              className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 px-4 hover:bg-slate-50 items-center transition-colors text-xs"
+                            >
+                              <div className="sm:col-span-4 flex flex-col min-w-0 pr-1">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="font-semibold text-slate-900 truncate">{item.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                    className="text-[10px] text-slate-400 hover:text-slate-700 underline cursor-pointer shrink-0"
+                                  >
+                                    {metrics.manualRegs.length > 0 ? `${metrics.manualRegs.length} reg. físico` : '+ Registrar físico'}
+                                  </button>
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                                  Fórmula: Ap ({metrics.aperturaQty}) + Tras ({metrics.trasladosQty}) - Dev ({metrics.devolucionesQty})
+                                </div>
+                              </div>
+
+                              <div className="sm:col-span-2 sm:text-right font-mono font-medium text-blue-700">
+                                {metrics.autoQty} {item.unit}
+                                <div className="text-[10px] text-slate-400 font-normal">${metrics.autoTotal.toLocaleString('es-CO')}</div>
+                              </div>
+
+                              <div className="sm:col-span-2 sm:text-right font-mono font-medium text-slate-900">
+                                {metrics.hasManualEntries ? (
+                                  <>
+                                    <span>{metrics.manualQty} {item.unit}</span>
+                                    <div className="text-[10px] text-slate-400 font-normal">${metrics.manualTotal.toLocaleString('es-CO')}</div>
+                                  </>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">Sin conteo</span>
+                                )}
+                              </div>
+
+                              <div className="sm:col-span-2 sm:text-right font-mono font-bold">
+                                {!metrics.hasManualEntries ? (
+                                  <span className="text-slate-300">-</span>
+                                ) : metrics.diffQty === 0 ? (
+                                  <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[11px]">
+                                    ✓ Cuadrado
+                                  </span>
+                                ) : metrics.diffQty < 0 ? (
+                                  <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 text-[11px]">
+                                    ⚠️ {metrics.diffQty} {item.unit}
+                                  </span>
+                                ) : (
+                                  <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
+                                    +{metrics.diffQty} {item.unit}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="sm:col-span-2 sm:text-right font-mono font-bold">
+                                {!metrics.hasManualEntries ? (
+                                  <span className="text-slate-300">-</span>
+                                ) : metrics.diffTotal === 0 ? (
+                                  <span className="text-emerald-700">$0</span>
+                                ) : metrics.diffTotal < 0 ? (
+                                  <span className="text-rose-600">
+                                    -${Math.abs(metrics.diffTotal).toLocaleString('es-CO')}
+                                  </span>
+                                ) : (
+                                  <span className="text-blue-700">
+                                    +${metrics.diffTotal.toLocaleString('es-CO')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }
 
                         return (
                           <div
@@ -2578,12 +2854,18 @@ Trucha 8`;
                                 type="button"
                                 onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
                                 className="text-left font-semibold text-slate-900 hover:text-orange-600 flex items-center gap-2 transition-colors group cursor-pointer truncate"
-                                title="Click para ver desglose de bajadas e ingresar más cantidades"
+                                title="Click para ver desglose de registros e ingresar más cantidades"
                               >
                                 <span className="group-hover:underline truncate">{item.name}</span>
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 group-hover:bg-orange-50 group-hover:text-orange-700 transition-colors shrink-0">
-                                  {metrics.filteredRegs.length} {metrics.filteredRegs.length === 1 ? 'registro' : 'registros'}
-                                </span>
+                                {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO' ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                                    Auto: Ap {metrics.aperturaQty} + Tras {metrics.trasladosQty} - Dev {metrics.devolucionesQty}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 group-hover:bg-orange-50 group-hover:text-orange-700 transition-colors shrink-0">
+                                    {metrics.filteredRegs.length} {metrics.filteredRegs.length === 1 ? 'registro' : 'registros'}
+                                  </span>
+                                )}
                               </button>
                               {item.isInitialInventory && activeOperationalView === 'TRASLADOS' && incluirCocinaApertura && (
                                 <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200 shrink-0">
@@ -2607,13 +2889,17 @@ Trucha 8`;
                               <span className="font-semibold text-slate-900 font-mono">
                                 ${metrics.total.toLocaleString('es-CO')}
                               </span>
-                              <button
-                                onClick={() => handleDeleteItem(cat.id, item.id)}
-                                className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors"
-                                title="Eliminar insumo"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO' ? (
+                                <span className="w-5" />
+                              ) : (
+                                <button
+                                  onClick={() => handleDeleteItem(cat.id, item.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+                                  title="Eliminar insumo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -2828,11 +3114,18 @@ Trucha 8`;
                             const defUnits = getAllowedUnitsForInsumo();
                             setAvailableUnits(defUnits);
                             setNewInsumoUnit(defUnits[0].value);
+                            if (activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO') {
+                              setCierreViewMode('MANUAL');
+                            }
                           }}
                           className="w-full p-2.5 px-4 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center gap-1.5 transition-colors border-t border-slate-100 text-left cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Añadir insumo a {cat.name}...</span>
+                          <span>
+                            {activeOperationalView === 'COCINA_CIERRE'
+                              ? `+ Añadir conteo manual de cierre a ${cat.name}...`
+                              : `Añadir insumo a ${cat.name}...`}
+                          </span>
                         </button>
                       )}
                     </div>
