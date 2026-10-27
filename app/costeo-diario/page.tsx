@@ -1198,33 +1198,58 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
       explicitUnit = 'Gramos';
     } else if (/\b(lbs|lb|libras|libra)\b/i.test(originalLine)) {
       explicitUnit = 'Libras';
+    } else if (/\b(atados|atado|ato)\b/i.test(originalLine)) {
+      explicitUnit = 'Atado';
+    } else if (/\b(bultos|bulto)\b/i.test(originalLine)) {
+      explicitUnit = 'Bulto';
+    } else if (/\b(bolsas|bolsa)\b/i.test(originalLine)) {
+      explicitUnit = 'Bolsa';
+    } else if (/\b(paquetes|paquete|paq)\b/i.test(originalLine)) {
+      explicitUnit = 'Paq';
+    } else if (/\b(panal|panales)\b/i.test(originalLine)) {
+      explicitUnit = 'Panal';
     }
 
-    // 2. Limpiar línea para extraer números
+    // 2. Limpiar línea para extraer números (reconociendo comas y puntos decimales)
     const clean = originalLine
-      .replace(/\b(kls|kl|kg|kilos|kilo|unds|und|unidades|unidad|porc|porciones|porcion|lts|lt|litros|litro|gr|gramos|lbs|lb|libras|libra)\.?\b/gi, '')
+      .replace(/[)\]\s]+$/, '')
+      .replace(/\b(kls|kl|kg|kilos|kilo|unds|und|unidades|unidad|porc|porciones|porcion|lts|lt|litros|litro|gr|gramos|lbs|lb|libras|libra|atados|atado|ato|bultos|bulto|bolsas|bolsa|paquetes|paquete|paq|panal|panales)\.?\b/gi, '')
+      .replace(/[)\]\s]+$/, '')
       .trim();
 
     let qty = 0;
     let rawQtyStr = '';
     let itemPart = clean;
 
-    const matchEndFormula = clean.match(/(\d+(?:\.\d+)?(?:\s*[\+]\s*\d+(?:\.\d+)?)*)\s*[\.]?$/);
-    if (matchEndFormula) {
-      rawQtyStr = matchEndFormula[1].trim();
-      itemPart = clean.slice(0, matchEndFormula.index).trim();
-      itemPart = itemPart.replace(/[-:]\s*$/, '').trim();
-
-      const parts = rawQtyStr.split('+').map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
-      qty = parts.reduce((a, b) => a + b, 0);
+    // Soportar comas y puntos como separadores decimales: ej: 32,5 o 32.5 o fórmulas como 16,9 + 15,6
+    const matchEquals = clean.match(/=\s*(\d+(?:[.,]\d+)?)\s*$/);
+    if (matchEquals) {
+      qty = parseFloat(matchEquals[1].replace(',', '.'));
+      rawQtyStr = matchEquals[1].trim();
+      itemPart = clean.slice(0, matchEquals.index).replace(/[\d+.,\s]+$/, '').replace(/[-:(]\s*$/, '').trim();
     } else {
-      const matchAnyNum = clean.match(/(\d+(?:\.\d+)?)/);
-      if (matchAnyNum) {
-        qty = parseFloat(matchAnyNum[1]);
-        rawQtyStr = String(qty);
-        itemPart = clean.replace(matchAnyNum[0], '').replace(/[-:]\s*$/, '').trim();
+      const matchEndFormula = clean.match(/(\d+(?:[.,]\d+)?(?:\s*[\+]\s*\d+(?:[.,]\d+)?)*)\s*[\.]?$/);
+      if (matchEndFormula) {
+        rawQtyStr = matchEndFormula[1].trim();
+        itemPart = clean.slice(0, matchEndFormula.index).trim();
+        itemPart = itemPart.replace(/[-:(]\s*$/, '').trim();
+
+        const parts = rawQtyStr
+          .split('+')
+          .map(p => parseFloat(p.trim().replace(',', '.')))
+          .filter(n => !isNaN(n));
+        qty = parts.reduce((a, b) => a + b, 0);
+      } else {
+        const matchAnyNum = clean.match(/(\d+(?:[.,]\d+)?)/);
+        if (matchAnyNum) {
+          qty = parseFloat(matchAnyNum[1].replace(',', '.'));
+          rawQtyStr = String(qty);
+          itemPart = clean.replace(matchAnyNum[0], '').replace(/[-:(]\s*$/, '').trim();
+        }
       }
     }
+
+    itemPart = itemPart.replace(/[()\[\]]\s*$/, '').trim();
 
     // 4. Coincidencia difusa con catálogo general (carnes, verduras, granos, desechables, etc.)
     const { item: matchedItem, score: matchScore } = findBestCatalogMatch(itemPart, catalogList);
@@ -2168,7 +2193,7 @@ Trucha 8`;
     handleParseConteos(sample);
   };
 
-  const handleUpdateParsedItemQty = (itemId: string, newQty: number) => {
+  const handleUpdateParsedItemQty = (itemId: string, newQty: number, newQtyStr?: string) => {
     setParsedConteosList(prev => prev.map(item => {
       if (item.id !== itemId) return item;
       const calc = computeConteoItemEquivAndTotal(
@@ -2182,7 +2207,7 @@ Trucha 8`;
       return {
         ...item,
         rawQty: newQty,
-        rawQtyStr: String(newQty),
+        rawQtyStr: newQtyStr !== undefined ? newQtyStr : String(newQty),
         weightKg: calc.weightKg,
         baseUnit: calc.baseUnit,
         presentation: calc.presentation,
@@ -4141,13 +4166,18 @@ Trucha 8`;
                           </select>
                         </div>
 
-                        {/* Columna 3: Cantidad (Input centrado de tamaño fijo, sin distorsiones por textos dinámicos) */}
+                        {/* Columna 3: Cantidad (Input centrado que soporta coma y punto decimal) */}
                         <div className="flex items-center justify-center">
                           <input
-                            type="number"
-                            step="any"
-                            value={item.rawQty}
-                            onChange={(e) => handleUpdateParsedItemQty(item.id, parseFloat(e.target.value) || 0)}
+                            type="text"
+                            inputMode="decimal"
+                            value={item.rawQtyStr !== undefined ? item.rawQtyStr : item.rawQty}
+                            onChange={(e) => {
+                              const textVal = e.target.value;
+                              const sanitized = textVal.replace(/[^0-9.,+]/g, '');
+                              const num = parseFloat(sanitized.replace(',', '.')) || 0;
+                              handleUpdateParsedItemQty(item.id, num, sanitized);
+                            }}
                             className="w-20 px-2 py-1 bg-white border border-slate-300 rounded text-center text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-500 shadow-2xs hover:border-slate-400 transition-colors"
                           />
                         </div>
