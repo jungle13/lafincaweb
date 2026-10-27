@@ -1353,6 +1353,25 @@ export default function CosteoDiarioPage() {
     }
   }, []);
 
+  const [isLoadingSheets, setIsLoadingSheets] = useState(true);
+
+  // Cargar hojas reales desde Supabase (/api/costeo-diario)
+  useEffect(() => {
+    fetch('/api/costeo-diario')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
+          setSheets(data.sheets);
+          // Auto-abrir la hoja más reciente (o primera de la lista ordenada desc)
+          const latest = data.sheets[0];
+          setOpenTabs([latest.id]);
+          setActiveTabId(latest.id);
+        }
+      })
+      .catch(err => console.error('Error fetching costeo sheets:', err))
+      .finally(() => setIsLoadingSheets(false));
+  }, []);
+
   useEffect(() => {
     fetch('/api/catalogo')
       .then(r => r.json())
@@ -1585,6 +1604,27 @@ export default function CosteoDiarioPage() {
       ...activeDrawerInsumo,
       item: updatedItem
     });
+
+    // Persistir movimiento en base de datos real
+    fetch('/api/costeo-diario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fecha: activeSheet.dateStr,
+        titulo: activeSheet.title,
+        pos_sales: activeSheet.posSales,
+        movimiento: {
+          tipo: 'BODEGA_A_COCINA',
+          nombre_insumo: activeDrawerInsumo.item.name,
+          categoria: activeDrawerInsumo.categoryName,
+          cantidad: finalQty,
+          unidad: activeDrawerInsumo.item.unit,
+          costo_unitario: unitPrice,
+          total: regTotal,
+          observaciones: drawerObs.trim() || undefined
+        }
+      })
+    }).catch(err => console.error('Error guardando movimiento en API:', err));
 
     // Limpiar campo de cantidad y notas para el siguiente ingreso
     setDrawerQtyFormula('');

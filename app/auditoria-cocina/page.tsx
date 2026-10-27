@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Search, 
@@ -228,6 +228,23 @@ export default function AuditoriaCocinaPage() {
   const [selectedMonth, setSelectedMonth] = useState('2026-10');
   const [searchFilter, setSearchFilter] = useState('');
   const [rowSearchFilter, setRowSearchFilter] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Sincronizar hojas de auditoría en tiempo real desde Supabase (/api/auditoria-cocina)
+  useEffect(() => {
+    fetch('/api/auditoria-cocina')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
+          setSheets(data.sheets);
+          const first = data.sheets[0];
+          setOpenTabs([first.id]);
+          setActiveTabId(first.id);
+        }
+      })
+      .catch(err => console.error('Error fetching auditoria sheets:', err))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   // Estado del Panel de Ventas del Día
   const [showVentasSidebar, setShowVentasSidebar] = useState(false);
