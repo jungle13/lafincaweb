@@ -101,22 +101,6 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    // Sincronizar con tabla platos para módulo de Recetas
-    await supabase.from('platos').upsert({
-      codigo: cleanCodigo,
-      nombre: nombre.trim(),
-      precio_venta: totalVal,
-      categoria: categoria.trim(),
-      subcategoria: subcategoria.trim(),
-      precio_neto: netoVal,
-      impoconsumo: impVal,
-      iva: 0.0,
-      precio_total: totalVal,
-      es_receta: Boolean(es_receta),
-      unidad: unidad.trim(),
-      activo: Boolean(activo)
-    }, { onConflict: 'codigo' });
-
     return NextResponse.json({ success: true, data: created });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -174,24 +158,6 @@ export async function PUT(request: Request) {
       .single();
 
     if (error) throw error;
-
-    // Sincronizar con tabla platos
-    if (updated?.codigo) {
-      await supabase.from('platos').upsert({
-        codigo: updated.codigo,
-        nombre: updated.nombre,
-        precio_venta: updated.precio_total,
-        categoria: updated.categoria,
-        subcategoria: updated.subcategoria,
-        precio_neto: updated.precio_neto,
-        impoconsumo: updated.impoconsumo,
-        iva: updated.iva,
-        precio_total: updated.precio_total,
-        es_receta: updated.es_receta,
-        unidad: updated.unidad,
-        activo: updated.activo
-      }, { onConflict: 'codigo' });
-    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (err: any) {

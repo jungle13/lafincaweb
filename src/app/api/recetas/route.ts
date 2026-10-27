@@ -11,9 +11,9 @@ export async function GET(request: Request) {
     const search = searchParams.get('search');
     const subcategoria = searchParams.get('subcategoria');
 
-    // 1. Platos que tienen receta
+    // 1. Productos para la venta que tienen receta
     let platosQuery = supabase
-      .from('platos')
+      .from('productos_venta')
       .select('id, codigo, nombre, categoria, subcategoria, precio_neto, impoconsumo, precio_total, es_receta, activo')
       .eq('es_receta', true)
       .order('subcategoria', { ascending: true })
@@ -234,7 +234,6 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: true });
     } else if (plato_id) {
       await supabase.from('recetas_detalle').delete().eq('plato_id', plato_id);
-      await supabase.from('platos').update({ es_receta: false }).eq('id', plato_id);
       await supabase.from('productos_venta').update({ es_receta: false }).eq('id', plato_id);
       return NextResponse.json({ success: true });
     }

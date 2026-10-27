@@ -177,7 +177,7 @@ const RECETAS_MAPPING = {
 async function seed() {
   console.log('--- Iniciando vinculación de recetas oficiales ---');
 
-  const { data: platos, error: errPlatos } = await supabase.from('platos').select('id, codigo, nombre, es_receta');
+  const { data: platos, error: errPlatos } = await supabase.from('productos_venta').select('id, codigo, nombre, es_receta');
   if (errPlatos) throw errPlatos;
 
   const { data: insumos, error: errIns } = await supabase.from('catalogo_insumos').select('id, codigo, nombre, costo_unitario_kg');
