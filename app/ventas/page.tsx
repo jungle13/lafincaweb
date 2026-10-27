@@ -28,15 +28,15 @@ import {
 } from '@/services/ventasService';
 import { usePeriodo } from '@/context/PeriodoContext';
 
-type TabView = 'DIARIO' | 'PRODUCTOS' | 'TRANSACCIONES' | 'RENTABILIDAD' | 'CUADRE';
+type TabView = 'TRANSACCIONES' | 'DIARIO' | 'PRODUCTOS' | 'RENTABILIDAD' | 'CUADRE';
 
 export default function VentasPage() {
   const { currentPeriodo, selectedPeriodoId } = usePeriodo();
-  const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-09';
-  const periodoNombre = currentPeriodo?.nombre || 'Septiembre 2026';
+  const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
+  const periodoNombre = currentPeriodo?.nombre || 'Octubre 2026';
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabView>('DIARIO');
+  const [activeTab, setActiveTab] = useState<TabView>('TRANSACCIONES');
 
   const [kpis, setKpis] = useState<VentasKPIs>({
     granTotalVentas: 0,
@@ -103,21 +103,24 @@ export default function VentasPage() {
 
   return (
     <div className="space-y-4 w-full px-2 sm:px-4 md:px-6 font-normal">
-      {/* 🏷️ Encabezado Principal */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight">
-                Módulo de Ventas & Comandas
+      {/* 🏷️ Encabezado Principal Tipo Git */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-slate-900 text-white rounded-md">
+            <DollarSign className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                Salidas por Venta
               </h1>
-              <p className="text-xs text-slate-500">
-                Auditoría diaria de facturación, platos servidos y margen operativo &bull; <strong>{periodoNombre}</strong>
-              </p>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-medium">
+                {periodoNombre}
+              </span>
             </div>
+            <p className="text-xs text-slate-500">
+              Registro diario de ventas y comandas &bull; Fuente POS Gamma
+            </p>
           </div>
         </div>
 
@@ -127,10 +130,10 @@ export default function VentasPage() {
             type="button"
             onClick={loadAllData}
             disabled={loading}
-            className="p-2 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+            className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer border border-slate-200"
             title="Recargar datos de ventas"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
           <VentasExportButtons
@@ -145,111 +148,89 @@ export default function VentasPage() {
       {/* 📊 Tarjetas de KPIs Gerenciales */}
       <VentasKPIHeader kpis={kpis} periodoNombre={periodoNombre} />
 
-      {/* 🗂️ Pestañas Principales del Módulo de Ventas */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-2xs">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 touch-pan-x">
-          {/* Tab 1: Resumen Diario */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('DIARIO')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs font-medium border transition-all whitespace-nowrap cursor-pointer touch-manipulation active:scale-95 ${
-              activeTab === 'DIARIO'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs font-bold'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Calendar className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'DIARIO' ? 'text-white' : 'text-emerald-600'}`} />
-            <span className="hidden sm:inline">Resumen Diario (Día a Día)</span>
-            <span className="inline sm:hidden">Diario</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-              activeTab === 'DIARIO' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {diarias.length}
-            </span>
-          </button>
+      {/* 🗂️ Pestañas del Módulo */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 select-none">
+        <button
+          type="button"
+          onClick={() => setActiveTab('TRANSACCIONES')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'TRANSACCIONES'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <ListOrdered className="w-3.5 h-3.5" />
+          <span>Transacciones Detalladas</span>
+        </button>
 
-          {/* Tab 2: Ranking de Menú */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('PRODUCTOS')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs font-medium border transition-all whitespace-nowrap cursor-pointer touch-manipulation active:scale-95 ${
-              activeTab === 'PRODUCTOS'
-                ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-bold'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Award className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'PRODUCTOS' ? 'text-white' : 'text-amber-500'}`} />
-            <span className="hidden sm:inline">Ranking de Menú & Platos</span>
-            <span className="inline sm:hidden">Ranking Platos</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-              activeTab === 'PRODUCTOS' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {ranking.length}
-            </span>
-          </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('DIARIO')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'DIARIO'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>Resumen Diario</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+            activeTab === 'DIARIO' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {diarias.length}
+          </span>
+        </button>
 
-          {/* Tab 3: Transacciones Detalladas */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('TRANSACCIONES')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs font-medium border transition-all whitespace-nowrap cursor-pointer touch-manipulation active:scale-95 ${
-              activeTab === 'TRANSACCIONES'
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs font-bold'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <ListOrdered className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'TRANSACCIONES' ? 'text-white' : 'text-indigo-600'}`} />
-            <span className="hidden sm:inline">Transacciones Detalladas</span>
-            <span className="inline sm:hidden">Transacciones</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-              activeTab === 'TRANSACCIONES' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-            }`}>
-              1,597
-            </span>
-          </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('PRODUCTOS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'PRODUCTOS'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5" />
+          <span>Ranking de Menú</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+            activeTab === 'PRODUCTOS' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {ranking.length}
+          </span>
+        </button>
 
-          {/* Tab 4: Rentabilidad y Margen */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('RENTABILIDAD')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs font-medium border transition-all whitespace-nowrap cursor-pointer touch-manipulation active:scale-95 ${
-              activeTab === 'RENTABILIDAD'
-                ? 'bg-purple-600 text-white border-purple-600 shadow-xs font-bold'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <PieChart className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'RENTABILIDAD' ? 'text-white' : 'text-purple-600'}`} />
-            <span className="hidden sm:inline">Rentabilidad & Margen (Ventas vs Costos)</span>
-            <span className="inline sm:hidden">Rentabilidad</span>
-          </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('RENTABILIDAD')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'RENTABILIDAD'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <PieChart className="w-3.5 h-3.5" />
+          <span>Rentabilidad & Margen</span>
+        </button>
 
-          {/* Tab 5: Cuadre de Caja vs Reporte X */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('CUADRE')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs font-medium border transition-all whitespace-nowrap cursor-pointer touch-manipulation active:scale-95 ${
-              activeTab === 'CUADRE'
-                ? 'bg-amber-600 text-white border-amber-600 shadow-xs font-bold'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Scale className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'CUADRE' ? 'text-white' : 'text-amber-600'}`} />
-            <span className="hidden sm:inline">Cuadre de Caja vs Reporte X</span>
-            <span className="inline sm:hidden">Cuadre Caja</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-              activeTab === 'CUADRE' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-            }`}>
-              Auditoría
-            </span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('CUADRE')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'CUADRE'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <Scale className="w-3.5 h-3.5" />
+          <span>Cuadre de Caja</span>
+        </button>
       </div>
 
       {/* ⚠️ Alerta de Error con Botón de Reintento */}
       {error && !loading && (
-        <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center justify-between gap-3 text-rose-800 animate-fade-in">
+        <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-lg flex items-center justify-between gap-3 text-rose-800 animate-fade-in">
           <div className="flex items-center gap-2.5">
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <div>
               <p className="text-xs font-bold">Error de conexión</p>
               <p className="text-[11px] text-rose-600">{error}</p>
@@ -258,7 +239,7 @@ export default function VentasPage() {
           <button
             type="button"
             onClick={loadAllData}
-            className="px-3.5 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-semibold hover:bg-rose-700 transition-colors shrink-0 shadow-xs cursor-pointer"
+            className="px-3 py-1 bg-rose-600 text-white rounded-md text-xs font-semibold hover:bg-rose-700 transition-colors shrink-0 cursor-pointer"
           >
             Reintentar
           </button>
@@ -267,10 +248,16 @@ export default function VentasPage() {
 
       {/* 📦 Contenido de la Vista Activa */}
       {loading ? (
-        <div className="py-20 text-center bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-          <Loader2 className="w-7 h-7 text-emerald-600 animate-spin mx-auto" />
+        <div className="py-20 text-center bg-white rounded-lg border border-slate-200 space-y-2">
+          <Loader2 className="w-6 h-6 text-slate-600 animate-spin mx-auto" />
           <p className="text-xs text-slate-500 font-medium">Cargando registros de ventas...</p>
         </div>
+      ) : activeTab === 'TRANSACCIONES' ? (
+        <VentasTransaccionesView
+          periodoId={periodoId}
+          fechasDisponibles={fechasDisponibles}
+          categoriasDisponibles={categorias}
+        />
       ) : activeTab === 'DIARIO' ? (
         <VentasDiariasView diarias={diarias} periodoId={periodoId} />
       ) : activeTab === 'PRODUCTOS' ? (
@@ -278,12 +265,6 @@ export default function VentasPage() {
           ranking={ranking}
           categorias={categorias}
           totalVentas={totalVentasRanking}
-        />
-      ) : activeTab === 'TRANSACCIONES' ? (
-        <VentasTransaccionesView
-          periodoId={periodoId}
-          fechasDisponibles={fechasDisponibles}
-          categoriasDisponibles={categorias}
         />
       ) : activeTab === 'RENTABILIDAD' ? (
         <VentasRentabilidadView rentabilidad={rentabilidad} />

@@ -17,8 +17,9 @@ const VIEW_TITLES: Record<string, string> = {
   '/ajustes': 'Inconsistencias y Ajustes',
   '/periodos': 'Control y Cierre de Periodos',
   '/dashboard': 'Dashboard General',
-  '/compras': 'Registro de Compras',
-  '/ventas': 'Módulo de Ventas',
+  '/compras': 'Entradas por Compra',
+  '/ventas': 'Salidas por Venta',
+  '/productos-venta': 'Productos Para la Venta',
 };
 
 export default function TopHeader() {

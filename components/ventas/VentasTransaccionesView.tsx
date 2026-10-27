@@ -5,11 +5,10 @@ import {
   Search, 
   X, 
   Filter, 
-  Calendar, 
   ChevronLeft, 
   ChevronRight, 
   Loader2, 
-  ListOrdered 
+  TrendingUp 
 } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
 import { VentaDetalle } from '@/services/ventasService';
@@ -70,35 +69,38 @@ export default function VentasTransaccionesView({
   }, [loadData]);
 
   return (
-    <div className="space-y-3 font-normal text-xs">
-      {/* Barra de Filtros */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2.5">
+    <div className="space-y-3 font-normal text-xs animate-fade-in">
+      {/* Barra de Filtros Minimalista */}
+      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2.5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-              <ListOrdered className="w-4 h-4" />
+            <div className="p-1.5 bg-slate-100 text-slate-700 rounded-md">
+              <TrendingUp className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-semibold text-slate-900 text-xs">
-                Transacciones Detalladas ({totalCount.toLocaleString('es-CO')} registros)
+                Listado de Salidas por Venta ({totalCount.toLocaleString('es-CO')} registros)
               </h3>
-              <p className="text-[11px] text-slate-500">Filtrable por fecha, categoría y código</p>
+              <p className="text-[11px] text-slate-500">
+                Alimentado de los reportes diarios de ventas del sistema POS Gamma
+              </p>
             </div>
           </div>
 
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por producto o código..."
-              className="w-full h-8 pl-8 pr-7 text-xs rounded-xl border border-slate-300 outline-none focus:border-indigo-500 bg-white"
+              placeholder="Buscar por código o nombre de producto..."
+              className="w-full h-8 pl-8 pr-7 text-xs rounded-md border border-slate-200 outline-none focus:border-slate-400 bg-white placeholder-slate-400"
             />
             {searchQuery && (
               <button
+                type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -116,9 +118,9 @@ export default function VentasTransaccionesView({
           <select
             value={selectedFecha}
             onChange={(e) => setSelectedFecha(e.target.value)}
-            className="h-7 px-2.5 rounded-lg border border-slate-300 text-slate-700 bg-white outline-none focus:border-indigo-500 text-xs cursor-pointer"
+            className="h-8 px-2.5 rounded-md border border-slate-200 text-slate-700 bg-white outline-none focus:border-slate-400 text-xs cursor-pointer"
           >
-            <option value="ALL">Todas las Fechas (14 días)</option>
+            <option value="ALL">Todas las Fechas ({fechasDisponibles.length} días)</option>
             {fechasDisponibles.map((f) => (
               <option key={f} value={f}>
                 {f}
@@ -130,7 +132,7 @@ export default function VentasTransaccionesView({
           <select
             value={selectedCategoria}
             onChange={(e) => setSelectedCategoria(e.target.value)}
-            className="h-7 px-2.5 rounded-lg border border-slate-300 text-slate-700 bg-white outline-none focus:border-indigo-500 text-xs cursor-pointer"
+            className="h-8 px-2.5 rounded-md border border-slate-200 text-slate-700 bg-white outline-none focus:border-slate-400 text-xs cursor-pointer"
           >
             <option value="ALL">Todas las Categorías</option>
             {categoriasDisponibles.map((c) => (
@@ -143,12 +145,13 @@ export default function VentasTransaccionesView({
           {/* Limpiar Filtros */}
           {(selectedFecha !== 'ALL' || selectedCategoria !== 'ALL' || searchQuery) && (
             <button
+              type="button"
               onClick={() => {
                 setSelectedFecha('ALL');
                 setSelectedCategoria('ALL');
                 setSearchQuery('');
               }}
-              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium ml-auto cursor-pointer"
+              className="text-xs text-slate-600 hover:text-slate-900 font-medium ml-auto cursor-pointer"
             >
               Limpiar filtros
             </button>
@@ -156,100 +159,98 @@ export default function VentasTransaccionesView({
         </div>
       </div>
 
-      {/* Tabla de Transacciones */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+      {/* Tabla de Transacciones Estandarizada */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
         {loading ? (
           <div className="py-16 text-center space-y-2">
-            <Loader2 className="w-6 h-6 text-indigo-600 animate-spin mx-auto" />
-            <p className="text-xs text-slate-400">Cargando transacciones de ventas...</p>
+            <Loader2 className="w-5 h-5 text-slate-600 animate-spin mx-auto" />
+            <p className="text-xs text-slate-400">Cargando salidas por venta...</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50/80 text-[11px] font-semibold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
-                    <th className="py-2.5 px-3">Fecha</th>
-                    <th className="py-2.5 px-3">Archivo POS</th>
-                    <th className="py-2.5 px-3">Código</th>
-                    <th className="py-2.5 px-3">Plato / Producto</th>
-                    <th className="py-2.5 px-3">Categoría</th>
-                    <th className="py-2.5 px-3 text-center">Cantidad</th>
-                    <th className="py-2.5 px-3 text-right">Venta Bruta</th>
-                    <th className="py-2.5 px-3 text-right">Descuento</th>
-                    <th className="py-2.5 px-3 text-right">Venta Neta</th>
-                    <th className="py-2.5 px-3 text-right">Impoconsumo (8%)</th>
-                    <th className="py-2.5 px-3 text-right font-bold text-slate-900">Total</th>
-                    <th className="py-2.5 px-3 text-right">P. Unitario</th>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase tracking-wider select-none shadow-2xs">
+                    <th className="py-2.5 px-3 whitespace-nowrap">Fecha de Venta</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Código</th>
+                    <th className="py-2.5 px-3">Nombre del Producto</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Categoría</th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Cantidad</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Precio Unitario</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Impoconsumo (8%)</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">IVA (0%)</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-slate-900">Total Vendido</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {transacciones.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-2 px-3 whitespace-nowrap font-medium text-slate-900">
-                        {t.fecha}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] text-slate-400">
-                        {t.archivo_origen}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] text-slate-500">
-                        {t.codigo_producto}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap font-semibold text-slate-900">
-                        {t.nombre_producto}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-[10px] text-slate-600">
-                          {t.categoria}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-center font-bold text-slate-800">
-                        {t.cantidad} <span className="text-[10px] text-slate-400 font-normal">{t.unidad}</span>
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-right text-slate-600">
-                        $ {formatMoney(t.venta_bruta)}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-right text-red-600 font-medium">
-                        {t.descuento > 0 ? `-$ ${formatMoney(t.descuento)}` : '$ 0'}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-right font-medium text-blue-700">
-                        $ {formatMoney(t.venta_neta)}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-right text-amber-700">
-                        $ {formatMoney(t.impuesto)}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-right font-bold text-slate-900 text-sm">
-                        $ {formatMoney(t.gran_total)}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-right text-slate-500 text-[11px]">
-                        $ {formatMoney(t.valor_unitario)}
+                <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
+                  {transacciones.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-10 text-center text-slate-400">
+                        No se encontraron registros de venta para este filtro.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    transacciones.map((t) => (
+                      <tr key={t.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] text-slate-500">
+                          {t.fecha}
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] text-slate-400">
+                          {t.codigo_producto}
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap font-semibold text-slate-900">
+                          {t.nombre_producto}
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            {t.categoria}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap text-center font-mono font-bold text-slate-800">
+                          {t.cantidad} <span className="text-[10px] text-slate-400 font-normal">{t.unidad}</span>
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap text-right font-mono text-slate-600">
+                          ${formatMoney(t.valor_unitario)}
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap text-right font-mono text-slate-500">
+                          ${formatMoney(t.impuesto)}
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap text-right font-mono text-slate-400">
+                          $0
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap text-right font-mono font-bold text-slate-900">
+                          ${formatMoney(t.gran_total)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Paginación */}
             <div className="p-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-500 font-mono">
                 Página <strong>{page}</strong> de <strong>{totalPages}</strong> &bull; Mostrando {transacciones.length} de {totalCount} registros
               </span>
 
               <div className="flex items-center gap-1.5">
                 <button
+                  type="button"
                   onClick={() => loadData(Math.max(1, page - 1))}
                   disabled={page <= 1}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer text-xs"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                   <span>Anterior</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => loadData(Math.min(totalPages, page + 1))}
                   disabled={page >= totalPages}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer text-xs"
                 >
                   <span>Siguiente</span>
                   <ChevronRight className="w-3.5 h-3.5" />

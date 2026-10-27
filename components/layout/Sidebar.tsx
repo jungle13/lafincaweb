@@ -9,6 +9,8 @@ import {
   FileSpreadsheet,
   ClipboardCheck,
   BookOpen,
+  TrendingUp,
+  UtensilsCrossed,
   X
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
@@ -27,6 +29,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'INVENTARIO & BODEGA',
     items: [
       { label: 'Entradas por Compra', href: '/compras', icon: ShoppingCart },
+      { label: 'Salidas por Venta', href: '/ventas', icon: TrendingUp },
     ],
   },
   {
@@ -44,6 +47,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'CONFIGURACIÓN CATÁLOGO',
     items: [
+      { label: 'Productos Para la Venta', href: '/productos-venta', icon: UtensilsCrossed },
       { label: 'Recetas', href: '/recetas', icon: BookOpen },
       { label: 'Catálogo de Carnes', href: '/catalogo', icon: Beef },
       { label: 'Insumos y Costos', href: '/insumos', icon: PackageSearch },
