@@ -155,6 +155,17 @@ export async function GET(request: Request) {
           }
         });
 
+        // Si los movimientos del Formato Resumen ya incluían el inventario amanece, deducir para no duplicar
+        if (amanecePorc > 0 && bajadasPorc >= amanecePorc) {
+          const hasAmaneceNote = movItems.some((m: any) => 
+            (m.observaciones && m.observaciones.toLowerCase().includes('cocina')) ||
+            (m.nombre_insumo && m.nombre_insumo.toLowerCase().includes('cocina'))
+          );
+          if (hasAmaneceNote) {
+            bajadasPorc = Math.max(0, bajadasPorc - amanecePorc);
+          }
+        }
+
         // Find cierre real
         let cierreRealPorc = 0;
         const ciItem = dayCierreDetalles.find((d: any) => 

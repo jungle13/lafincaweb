@@ -3,10 +3,84 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+function cleanInsumoDisplayName(raw: string): { cleanName: string; extractedObs: string } {
+  if (!raw) return { cleanName: 'Insumo', extractedObs: '' };
+  let original = raw.trim();
+  let extractedObs = '';
+
+  const parenMatch = original.match(/\((?:Mov|Cocina|Reporte|Soporte|Factura|Cierre|YP|FE|FVE|REM)[\s\S]*?\)/i);
+  if (parenMatch) {
+    extractedObs = parenMatch[0].replace(/^\(|\)$/g, '').trim();
+  }
+
+  let clean = original
+    .replace(/\s*\((?:Mov|Cocina|Reporte|Soporte|Factura|Cierre|YP|FE|FVE|REM)[\s\S]*?\)/gi, '')
+    .replace(/\s*-\s*\d+(?:[.,]\d+)?\s*(?:kg|kls|kilos|unds|und|unidades|bolsas|bolsa|paq|paquetes|tarros|tarro|porc|porciones)\b[\s\S]*/gi, '')
+    .replace(/\s*\[[\s\S]*?\]/g, '')
+    .replace(/[\s-]+$/, '')
+    .trim();
+
+  return { cleanName: clean || original, extractedObs };
+}
+
+function getCanonicalName(rawName: string, catalog: any[]): string {
+  const { cleanName } = cleanInsumoDisplayName(rawName);
+  const n = cleanName.toLowerCase();
+  
+  if (n.includes('huevo')) return 'Huevos frescos AA';
+  if (n.includes('yuca')) return 'Yuca';
+  if (n.includes('platano') && n.includes('maduro')) return 'Plátano maduro';
+  if (n.includes('platano') && n.includes('verde')) return 'Plátano verde';
+  if (n.includes('leche')) return 'Leche entera institucional';
+  if (n.includes('chonto')) return 'Tomate chonto';
+  if (n.includes('cabezona')) return 'Cebolla cabezona';
+  if (n.includes('cebolla larga') || n.includes('junca')) return 'Cebolla larga';
+  if (n.includes('batavia')) return 'Lechuga Batavia';
+  if (n.includes('pimenton')) return 'Pimentón rojo';
+  if (n.includes('zanahoria')) return 'Zanahoria';
+  if (n.includes('limon')) return 'Limón Tahití';
+  if (n.includes('chicharron') || n.includes('tocino')) return 'Tocino / Chicharrón cocina';
+  if (n.includes('chorizo paisa')) return 'Chorizo Paisa tradicional';
+  if (n.includes('chorizo de pollo')) return 'Chorizo de pollo';
+  if (n.includes('chorizo grande') || n.includes('choricerdo')) return 'Chorizo grande / Choricerdo';
+  if (n.includes('ahumada')) return 'Costilla ahumada de cerdo';
+  if (n.includes('san luis')) return 'Costilla San Luis cerdo';
+  if (n.includes('lengua')) return 'Lengua de res';
+  if (n.includes('baby')) return 'Baby beef (Lomo viche)';
+  if (n.includes('churrasco')) return 'Lomo de caracho (Churrasco)';
+  if (n.includes('punta de anca')) return 'Punta de anca res';
+  if (n.includes('sobrebarriga')) return 'Sobrebarriga delgada';
+  if (n.includes('trucha')) return 'Trucha arcoíris entera';
+  if (n.includes('tilapia')) return 'Tilapia roja fresca entera';
+  if (n.includes('salmon')) return 'Salmón premium (Filete)';
+  if (n.includes('camaron')) return 'Camarón precocido de cultivo';
+  if (n.includes('marisco')) return 'Mix de mariscos surtido';
+  if (n.includes('servilleta')) return 'Servilletas dispensador 1 a 1';
+  if (n.includes('toalla')) return 'Toalla de mano Z Natural';
+  if (n.includes('vaso') && n.includes('9')) return 'Vaso plástico 9 oz';
+  if (n.includes('vaso') && n.includes('12')) return 'Vaso plástico Tami 12 oz';
+  if (n.includes('sopero') && n.includes('8')) return 'Contenedor térmico sopero 8 oz';
+  if (n.includes('sopero') && n.includes('16')) return 'Contenedor térmico sopero 16 oz';
+  if (n.includes('arroz')) return 'Arroz blanco institucional';
+  if (n.includes('alguacil')) return 'Pescado Alguacil';
+
+  // Direct match with catalog
+  const direct = catalog.find((c: any) => c.nombre.toLowerCase() === n || cleanName.toLowerCase() === c.nombre.toLowerCase());
+  if (direct) return direct.nombre;
+
+  return cleanName;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get('fecha');
+
+    // Fetch catalog insumos for canonical naming
+    const { data: catalogInsumos } = await supabase
+      .from('catalogo_insumos')
+      .select('id, codigo, nombre, categoria');
+    const catalog = catalogInsumos || [];
 
     // Fetch all costeo_diario days
     let query = supabase
@@ -98,7 +172,13 @@ export async function GET(request: Request) {
         }
 
         const itemsInCat = categoryMap.get(cat)!;
-        let existingItem = itemsInCat.find(it => it.name.toLowerCase() === (mov.nombre_insumo || '').toLowerCase());
+        const canonicalName = getCanonicalName(mov.nombre_insumo, catalog);
+        const { extractedObs } = cleanInsumoDisplayName(mov.nombre_insumo);
+
+        let existingItem = itemsInCat.find(it => it.name.toLowerCase() === canonicalName.toLowerCase());
+
+        const rawQty = Number(mov.cantidad || 0);
+        const unitPrice = Number(mov.costo_unitario || 0);
 
         const reg = {
           id: mov.id,
@@ -107,37 +187,49 @@ export async function GET(request: Request) {
           tipo: mov.tipo_movimiento || 'BODEGA_A_COCINA',
           origen: mov.origen || 'Bodega General',
           destino: mov.destino || 'Cocina Principal',
-          cantidad: Number(mov.cantidad || 0),
+          cantidad: rawQty,
           unidad: mov.unidad || 'Kg',
-          costoUnitario: Number(mov.costo_unitario || 0),
-          total: Number(mov.valor_total_movimiento || 0),
-          observaciones: mov.observaciones || ''
+          costoUnitario: unitPrice,
+          total: Number(mov.valor_total_movimiento || (rawQty * unitPrice)),
+          observaciones: mov.observaciones || extractedObs || undefined
         };
 
         if (existingItem) {
-          existingItem.qty += Number(mov.cantidad || 0);
-          existingItem.total += Number(mov.valor_total_movimiento || 0);
+          existingItem.qty += rawQty;
+          existingItem.total += Number(mov.valor_total_movimiento || (rawQty * unitPrice));
           if (existingItem.registros) existingItem.registros.push(reg);
         } else {
           itemsInCat.push({
             id: `item-${mov.id}`,
-            name: mov.nombre_insumo || 'Insumo sin nombre',
-            qty: Number(mov.cantidad || 0),
+            name: canonicalName,
+            qty: rawQty,
             unit: mov.unidad || 'Kg',
-            unitPrice: Number(mov.costo_unitario || 0),
-            total: Number(mov.valor_total_movimiento || 0),
+            unitPrice: unitPrice,
+            total: Number(mov.valor_total_movimiento || (rawQty * unitPrice)),
             registros: [reg]
           });
         }
       });
 
-      // 2. Also incorporate Amanece into item registros if matching
+      // 2. Incorporate Amanece into item registros without double-counting
       amaneceItems.forEach((am: any) => {
-        const cat = 'Carnes y Proteínas (Saldo Cocina + Traslados)';
-        if (!categoryMap.has(cat)) categoryMap.set(cat, []);
-        const itemsInCat = categoryMap.get(cat)!;
-        const existing = itemsInCat.find(it => it.name.toLowerCase().includes(am.nombre_insumo.toLowerCase()) || am.nombre_insumo.toLowerCase().includes(it.name.toLowerCase()));
-        
+        const canonicalAmName = getCanonicalName(am.nombre_insumo, catalog);
+        const { extractedObs: amObs } = cleanInsumoDisplayName(am.nombre_insumo);
+        const amQty = Number(am.cantidad || 0);
+        const amUnitPrice = Number(am.costo_unitario || 0);
+        const amTotal = Number(am.valor_total || (amQty * amUnitPrice));
+
+        let foundCat = 'Carnes y Proteínas (Saldo Cocina + Traslados)';
+        let existingItem: any = null;
+
+        Array.from(categoryMap.entries()).forEach(([catName, items]: [string, any[]]) => {
+          const match = items.find((it: any) => it.name.toLowerCase() === canonicalAmName.toLowerCase());
+          if (match && !existingItem) {
+            existingItem = match;
+            foundCat = catName;
+          }
+        });
+
         const amReg = {
           id: `am-${am.id}`,
           hora: '07:00 AM',
@@ -145,16 +237,47 @@ export async function GET(request: Request) {
           tipo: 'INVENTARIO_INICIAL_COCINA' as const,
           origen: 'Inventario Cocina (Amanece)',
           destino: 'Cocina Principal',
-          cantidad: Number(am.cantidad || 0),
+          cantidad: amQty,
           unidad: am.unidad || 'Kg',
-          costoUnitario: Number(am.costo_unitario || 0),
-          total: Number(am.valor_total || 0),
-          observaciones: am.observaciones || 'Saldo físico de apertura'
+          costoUnitario: amUnitPrice,
+          total: amTotal,
+          observaciones: am.observaciones || amObs || 'Saldo físico de apertura'
         };
 
-        if (existing) {
-          if (!existing.registros) existing.registros = [];
-          existing.registros.unshift(amReg);
+        if (existingItem) {
+          // Adjust existing traslado registration so that Apertura + Traslado = Total
+          // If total in sheet was Q and Amanece was A:
+          // The real traslado was Math.max(0, Q - A)
+          const totalSheetQty = existingItem.qty;
+          const realTrasladoQty = Number(Math.max(0, totalSheetQty - amQty).toFixed(2));
+          
+          if (existingItem.registros && existingItem.registros.length > 0) {
+            existingItem.registros.forEach((r: any) => {
+              if (r.tipo === 'BODEGA_A_COCINA') {
+                r.cantidad = realTrasladoQty;
+                r.total = Math.round(realTrasladoQty * r.costoUnitario);
+              }
+            });
+            existingItem.registros.unshift(amReg);
+          } else {
+            existingItem.registros = [amReg];
+          }
+          // The item's total quantity remains totalSheetQty (or amQty if larger)
+          existingItem.qty = Math.max(totalSheetQty, amQty);
+          existingItem.total = Math.round(existingItem.qty * existingItem.unitPrice);
+        } else {
+          // If item was not in movimientos, add it as pure Apertura item
+          if (!categoryMap.has(foundCat)) categoryMap.set(foundCat, []);
+          categoryMap.get(foundCat)!.push({
+            id: `am-item-${am.id}`,
+            name: canonicalAmName,
+            qty: amQty,
+            unit: am.unidad || 'Kg',
+            unitPrice: amUnitPrice,
+            total: amTotal,
+            isInitialInventory: true,
+            registros: [amReg]
+          });
         }
       });
 
@@ -203,7 +326,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'La fecha es requerida' }, { status: 400 });
     }
 
-    // 1. If recording a single movement
     if (movimiento) {
       const { data: newMov, error: movErr } = await supabase
         .from('movimientos_inventario')
