@@ -10,6 +10,8 @@ export interface RecetaPlatoItem {
   codigoPos: string;
   nombre: string;
   categoria: string;
+  subcategoria?: string;
+  precioNeto?: number;
   precioVentaPos: number;
   ingredientes: InsumoRecetaData[];
 }
@@ -34,10 +36,11 @@ export default function RecetaPlatoRow({
   const [isSearching, setIsSearching] = useState(false);
 
   // Cálculo de Costo Total del Plato y Margen Bruto
-  const costoTotal = plato.ingredientes.reduce((acc, ing) => acc + ing.costoCalculado, 0);
-  const margenDinero = Math.max(0, plato.precioVentaPos - costoTotal);
-  const margenPorcentaje = plato.precioVentaPos > 0 
-    ? Number(((margenDinero / plato.precioVentaPos) * 100).toFixed(1))
+  const costoTotal = plato.ingredientes.reduce((acc, ing) => acc + (ing.costoCalculado || 0), 0);
+  const baseVenta = plato.precioNeto || plato.precioVentaPos;
+  const margenDinero = Math.max(0, baseVenta - costoTotal);
+  const margenPorcentaje = baseVenta > 0 
+    ? Number(((margenDinero / baseVenta) * 100).toFixed(1))
     : 0;
 
   return (
@@ -53,52 +56,54 @@ export default function RecetaPlatoRow({
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-mono text-xs font-bold text-slate-400">
+                  <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                     #{plato.codigoPos}
                   </span>
                   <h2 className="text-sm font-bold text-slate-900 tracking-tight leading-snug">
                     {plato.nombre}
                   </h2>
                 </div>
-                <span className="text-[10px] text-slate-500 font-medium mt-0.5 inline-block">
-                  {plato.categoria}
-                </span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[10px] text-slate-600 font-semibold bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/80">
+                    {plato.subcategoria || plato.categoria}
+                  </span>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => onDeletePlato(plato.id)}
                 className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer shrink-0"
-                title="Eliminar plato de recetas"
+                title="Desvincular receta de este plato"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Resumen Financiero: Precio Venta POS, Costo Total Insumos, Margen */}
-            <div className="space-y-2 text-xs bg-slate-50/70 border border-slate-200/80 rounded-lg p-3">
+            <div className="space-y-2 text-xs bg-slate-50 border border-slate-200 rounded-lg p-3">
               {/* Precio de Venta al Público en POS */}
               <div className="flex items-center justify-between text-slate-600">
-                <span className="text-slate-500 font-medium">Precio Venta POS:</span>
+                <span className="text-slate-500 font-medium text-[11px]">Precio Venta POS:</span>
                 <span className="font-bold text-slate-900 font-mono text-xs">
                   ${plato.precioVentaPos.toLocaleString('es-CO')}
                 </span>
               </div>
 
-              {/* Costo Total de Insumos (Suma de escandallo) */}
+              {/* Costo Total de Insumos */}
               <div className="flex items-center justify-between text-slate-600 pt-0.5">
-                <span className="text-slate-500 font-medium">Costo Insumos:</span>
+                <span className="text-slate-500 font-medium text-[11px]">Costo Proteínas / Insumos:</span>
                 <span className="font-semibold text-slate-800 font-mono">
                   ${Math.round(costoTotal).toLocaleString('es-CO')}
                 </span>
               </div>
 
               {/* Margen Bruto Estimado */}
-              <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/80">
-                <span className="font-medium text-slate-700">Margen Bruto:</span>
+              <div className="flex items-center justify-between pt-1.5 border-t border-slate-200">
+                <span className="font-medium text-slate-700 text-[11px]">Margen Bruto:</span>
                 <span className="font-mono font-bold text-xs text-emerald-700">
                   {margenPorcentaje}%
-                  <span className="text-[11px] font-normal text-slate-500 ml-1">
+                  <span className="text-[10px] font-normal text-slate-500 ml-1">
                     (${Math.round(margenDinero).toLocaleString('es-CO')})
                   </span>
                 </span>
@@ -106,21 +111,21 @@ export default function RecetaPlatoRow({
             </div>
           </div>
 
-          {/* Buscador Inteligente para Añadir Cualquier Insumo a la Receta */}
+          {/* Buscador para Añadir Cualquier Insumo a la Receta */}
           <InsumoSmartSearchInput
             catalog={catalogInsumos}
             onSelectInsumo={(item, cant, unidad) => onAddInsumo(plato.id, item, cant, unidad)}
-            label="Añadir insumo a la receta:"
-            placeholder="Buscar insumo (ej: Papa, Carne, Arroz, Vasos)..."
+            label="Asociar insumo a la receta:"
+            placeholder="Buscar proteína o insumo (ej: Churrasco, Tocino, Tilapia)..."
             onOpenChange={setIsSearching}
           />
         </div>
 
-        {/* LADO DERECHO: Rejilla en 2 Columnas de Insumos Necesarios */}
+        {/* LADO DERECHO: Rejilla de Insumos / Proteínas Asociadas */}
         <div className="flex-1 p-4 md:p-5 flex flex-col justify-center bg-white rounded-r-lg">
           {plato.ingredientes.length === 0 ? (
             <div className="h-full min-h-[90px] border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 p-4">
-              No hay insumos registrados para esta receta. Usa el buscador de la izquierda para vincular ingredientes.
+              Sin insumos asociados en la base de datos. Usa el buscador de la izquierda para vincular proteínas.
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 items-start">
