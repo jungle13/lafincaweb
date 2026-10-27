@@ -25,13 +25,15 @@ function cleanInsumoDisplayName(raw: string): { cleanName: string; extractedObs:
 
 function getCanonicalName(rawName: string, catalog: any[]): string {
   const { cleanName } = cleanInsumoDisplayName(rawName);
-  const n = cleanName.toLowerCase();
+  const n = cleanName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   
+  if (n.includes('repollo')) return 'Repollo morado';
   if (n.includes('huevo')) return 'Huevos frescos AA';
   if (n.includes('yuca')) return 'Yuca';
   if (n.includes('platano') && n.includes('maduro')) return 'Plátano maduro';
   if (n.includes('platano') && n.includes('verde')) return 'Plátano verde';
-  if (n.includes('leche')) return 'Leche entera institucional';
+  if (n.includes('leche') && !n.includes('mazamorra')) return 'Leche entera institucional';
+  if (n.includes('mazamorra')) return 'Mazamorra con leche / Maíz peto';
   if (n.includes('chonto')) return 'Tomate chonto';
   if (n.includes('cabezona')) return 'Cebolla cabezona';
   if (n.includes('cebolla larga') || n.includes('junca')) return 'Cebolla larga';
@@ -41,13 +43,14 @@ function getCanonicalName(rawName: string, catalog: any[]): string {
   if (n.includes('limon')) return 'Limón Tahití';
   if (n.includes('chicharron') || n.includes('tocino')) return 'Tocino / Chicharrón cocina';
   if (n.includes('chorizo paisa')) return 'Chorizo Paisa tradicional';
-  if (n.includes('chorizo de pollo')) return 'Chorizo de pollo';
+  if (n.includes('chorizo de pollo') || n.includes('chorizo pollo')) return 'Chorizo de pollo';
   if (n.includes('chorizo grande') || n.includes('choricerdo')) return 'Chorizo grande / Choricerdo';
+  if (n.includes('rellena') || n.includes('morcilla')) return 'Rellena / Morcilla tradicional';
   if (n.includes('ahumada')) return 'Costilla ahumada de cerdo';
   if (n.includes('san luis')) return 'Costilla San Luis cerdo';
   if (n.includes('lengua')) return 'Lengua de res';
   if (n.includes('baby')) return 'Baby beef (Lomo viche)';
-  if (n.includes('churrasco')) return 'Lomo de caracho (Churrasco)';
+  if (n.includes('churrasco') || n.includes('caracho')) return 'Lomo de caracho (Churrasco)';
   if (n.includes('punta de anca')) return 'Punta de anca res';
   if (n.includes('sobrebarriga')) return 'Sobrebarriga delgada';
   if (n.includes('trucha')) return 'Trucha arcoíris entera';
@@ -55,6 +58,12 @@ function getCanonicalName(rawName: string, catalog: any[]): string {
   if (n.includes('salmon')) return 'Salmón premium (Filete)';
   if (n.includes('camaron')) return 'Camarón precocido de cultivo';
   if (n.includes('marisco')) return 'Mix de mariscos surtido';
+  if (n.includes('francesa')) return 'Papas a la francesa';
+  if (n.includes('tamal') && !n.includes('pollo')) return 'Tamales elaborados tradicionales';
+  if ((n.includes('pollo') || n.includes('gallina')) && !n.includes('repollo')) {
+    if (n.includes('filete') || n.includes('pechuga')) return 'Filete de pechuga pollo';
+    return 'Pollo entero / Presas (Sancocho/Tamal)';
+  }
   if (n.includes('servilleta')) return 'Servilletas dispensador 1 a 1';
   if (n.includes('toalla')) return 'Toalla de mano Z Natural';
   if (n.includes('vaso') && n.includes('9')) return 'Vaso plástico 9 oz';
@@ -246,25 +255,18 @@ export async function GET(request: Request) {
 
         if (existingItem) {
           // Adjust existing traslado registration so that Apertura + Traslado = Total
-          // If total in sheet was Q and Amanece was A:
-          // The real traslado was Math.max(0, Q - A)
-          const totalSheetQty = existingItem.qty;
-          const realTrasladoQty = Number(Math.max(0, totalSheetQty - amQty).toFixed(2));
-          
           if (existingItem.registros && existingItem.registros.length > 0) {
-            existingItem.registros.forEach((r: any) => {
-              if (r.tipo === 'BODEGA_A_COCINA') {
-                r.cantidad = realTrasladoQty;
-                r.total = Math.round(realTrasladoQty * r.costoUnitario);
+            const trasladoReg = existingItem.registros.find((r: any) => r.tipo === 'BODEGA_A_COCINA');
+            if (trasladoReg) {
+              if (trasladoReg.unidad === am.unidad) {
+                trasladoReg.cantidad = Number(Math.max(0, existingItem.qty - amQty).toFixed(2));
               }
-            });
+              trasladoReg.total = Math.max(0, existingItem.total - amTotal);
+            }
             existingItem.registros.unshift(amReg);
           } else {
             existingItem.registros = [amReg];
           }
-          // The item's total quantity remains totalSheetQty (or amQty if larger)
-          existingItem.qty = Math.max(totalSheetQty, amQty);
-          existingItem.total = Math.round(existingItem.qty * existingItem.unitPrice);
         } else {
           // If item was not in movimientos, add it as pure Apertura item
           if (!categoryMap.has(foundCat)) categoryMap.set(foundCat, []);
@@ -281,12 +283,17 @@ export async function GET(request: Request) {
         }
       });
 
-      // Format category groups
-      const categories = Array.from(categoryMap.entries()).map(([name, items]) => ({
-        id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        name,
-        items
-      }));
+      // Format category groups with explicit subtotals
+      const categories = Array.from(categoryMap.entries()).map(([name, items]) => {
+        const subtotal = items.reduce((sum: number, it: any) => sum + (Number(it.total) || 0), 0);
+        return {
+          id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          name,
+          subtotal,
+          itemsCount: items.length,
+          items
+        };
+      });
 
       // Sort categories so Verduras and Carnes come first
       categories.sort((a, b) => {

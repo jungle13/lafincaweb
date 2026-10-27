@@ -14,6 +14,52 @@ function cleanStr(s: any): string {
     .trim();
 }
 
+function matchProteinItem(itemName: string, prot: any): boolean {
+  if (!itemName || !prot) return false;
+  const n = String(itemName).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const p = String(prot.nombre).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  if (n.includes('salmon') && p.includes('salmon')) return true;
+  if (n.includes('baby') && p.includes('baby')) return true;
+  if (n.includes('punta de anca') && p.includes('punta de anca')) return true;
+  if ((n.includes('churrasco') || n.includes('caracho')) && (p.includes('churrasco') || p.includes('caracho'))) return true;
+  if (n.includes('sobrebarriga') && p.includes('sobrebarriga')) return true;
+  if (n.includes('lengua') && p.includes('lengua')) return true;
+  if (n.includes('asada') && p.includes('asada')) return true;
+  if (n.includes('molida') && p.includes('molida')) return true;
+  if ((n.includes('callo') || n.includes('mondongo')) && (p.includes('callo') || p.includes('mondongo'))) return true;
+  if (n.includes('filete')) {
+    return p.includes('filete');
+  }
+  if (n.includes('pechuga')) {
+    return p.includes('pechuga') && !p.includes('filete');
+  }
+  if (n.includes('ala')) return p.includes('ala');
+  if (n.includes('pernil')) return p.includes('pernil');
+  if (n.includes('viscera')) return p.includes('viscera');
+  if (n.includes('gallina') || n.includes('sancocho')) return p.includes('gallina') || p.includes('sancocho');
+  if (n.includes('pollo') && !n.includes('repollo')) {
+    if (p.includes('ala') || p.includes('pernil') || p.includes('viscera') || p.includes('filete') || p.includes('pechuga')) return false;
+    return p.includes('pollo') || p.includes('gallina');
+  }
+  if (n.includes('lomo de cerdo') && p.includes('lomo de cerdo')) return true;
+  if (n.includes('san luis') && p.includes('san luis')) return true;
+  if (n.includes('ahumada') && p.includes('ahumada')) return true;
+  if ((n.includes('chicharron') || n.includes('tocino')) && (p.includes('chicharron') || p.includes('tocino'))) return true;
+  if (n.includes('chorizo paisa') && p.includes('chorizo paisa')) return true;
+  if (n.includes('chorizo de pollo') && p.includes('chorizo de pollo')) return true;
+  if ((n.includes('choricerdo') || n.includes('chorizo grande')) && (p.includes('choricerdo') || p.includes('chorizo grande'))) return true;
+  if ((n.includes('morcilla') || n.includes('rellena')) && (p.includes('morcilla') || p.includes('rellena'))) return true;
+  if (n.includes('tilapia') && p.includes('tilapia')) return true;
+  if (n.includes('trucha') && p.includes('trucha')) return true;
+  if (n.includes('camaron') && p.includes('camaron')) return true;
+  if (n.includes('marisco') && p.includes('marisco')) return true;
+  if (n.includes('huevo') && p.includes('huevo')) return true;
+  if (n.includes('tamal') && p.includes('tamal')) return true;
+  
+  return cleanStr(n).includes(cleanStr(p)) || cleanStr(p).includes(cleanStr(n));
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -40,7 +86,7 @@ export async function GET(request: Request) {
     const { data: proteinCatalog } = await supabase
       .from('catalogo_insumos')
       .select('id, codigo, nombre, categoria, es_carne, peso_estandar_porcion_kg, costo_unitario_kg, unidad_medida')
-      .or('es_carne.eq.true,categoria.ilike.%carne%,categoria.ilike.%pescado%,categoria.ilike.%pollo%,categoria.ilike.%cerdo%,categoria.ilike.%huevo%');
+      .or('es_carne.eq.true,categoria.ilike.%carne%,categoria.ilike.%pescado%,categoria.ilike.%pollo%,categoria.ilike.%cerdo%,categoria.ilike.%huevo%,categoria.ilike.%embutido%');
 
     // 3. Fetch recipe details (recetas_detalle joined with productos_venta and catalogo_insumos)
     const { data: recipes } = await supabase
@@ -99,7 +145,21 @@ export async function GET(request: Request) {
         .select('*')
         .in('conteo_id', conteoIds)
         .limit(10000);
+      
       conteoDetalles = cd || [];
+      const coveredIds = new Set((conteoDetalles || []).map((d: any) => d.conteo_id));
+      const missingIds = conteoIds.filter((id: string) => !coveredIds.has(id));
+      if (missingIds.length > 0) {
+        for (const mId of missingIds) {
+          const { data: missingCd } = await supabase
+            .from('conteos_fisicos_detalle')
+            .select('*')
+            .eq('conteo_id', mId);
+          if (missingCd && missingCd.length > 0) {
+            conteoDetalles = conteoDetalles.concat(missingCd);
+          }
+        }
+      }
     }
 
     // Process each day
@@ -125,8 +185,7 @@ export async function GET(request: Request) {
         let amanecePorc = 0;
         const apItem = dayAperturaDetalles.find((d: any) => 
           (d.insumo_id && d.insumo_id === prot.id) ||
-          cleanStr(d.nombre_insumo).includes(cleanStr(prot.nombre)) ||
-          cleanStr(prot.nombre).includes(cleanStr(d.nombre_insumo))
+          matchProteinItem(d.nombre_insumo, prot)
         );
         if (apItem) {
           const qty = Number(apItem.cantidad || 0);
@@ -142,8 +201,7 @@ export async function GET(request: Request) {
         const movItems = dayMovs.filter((m: any) => 
           m.tipo_movimiento === 'BODEGA_A_COCINA' && (
             (m.insumo_id && m.insumo_id === prot.id) ||
-            cleanStr(m.nombre_insumo).includes(cleanStr(prot.nombre)) ||
-            cleanStr(prot.nombre).includes(cleanStr(m.nombre_insumo))
+            matchProteinItem(m.nombre_insumo, prot)
           )
         );
         movItems.forEach((m: any) => {
@@ -170,8 +228,7 @@ export async function GET(request: Request) {
         let cierreRealPorc = 0;
         const ciItem = dayCierreDetalles.find((d: any) => 
           (d.insumo_id && d.insumo_id === prot.id) ||
-          cleanStr(d.nombre_insumo).includes(cleanStr(prot.nombre)) ||
-          cleanStr(prot.nombre).includes(cleanStr(d.nombre_insumo))
+          matchProteinItem(d.nombre_insumo, prot)
         );
         if (ciItem) {
           const qty = Number(ciItem.cantidad || 0);
