@@ -66,11 +66,24 @@ export async function GET(request: Request) {
     (detalles || []).forEach((d: any) => {
       if (!detallesByPlato[d.plato_id]) detallesByPlato[d.plato_id] = [];
       const insumo = d.catalogo_insumos;
-      const costoKg = Number(insumo?.costo_unitario_kg || 0);
+      const costoUnitario = Number(insumo?.costo_unitario_kg || 0);
       const porciones = Number(d.porciones_por_plato || 1);
       const cantidadPorPorcionKg = Number(d.cantidad_por_porcion_kg || 0);
-      const cantTotalKg = porciones * cantidadPorPorcionKg;
-      const costoCalculado = Math.round(cantTotalKg * costoKg);
+      
+      const isUnidad = insumo?.unidad_medida?.toLowerCase() === 'und' || 
+                       insumo?.unidad_medida?.toLowerCase() === 'unidad';
+
+      let cantidad = 0;
+      let costoCalculado = 0;
+
+      if (isUnidad) {
+        cantidad = porciones;
+        costoCalculado = Math.round(cantidad * costoUnitario);
+      } else {
+        // En Kg
+        cantidad = Number((porciones * cantidadPorPorcionKg).toFixed(3));
+        costoCalculado = Math.round(cantidad * costoUnitario);
+      }
 
       detallesByPlato[d.plato_id].push({
         id: d.id,
@@ -79,11 +92,11 @@ export async function GET(request: Request) {
         nombre: insumo?.nombre || 'Insumo no encontrado',
         categoria: insumo?.categoria || 'Insumos',
         unidad: insumo?.unidad_medida || 'Kg',
+        cantidad: cantidad,
+        costoUnitario: costoUnitario,
+        costoCalculado: costoCalculado,
         porciones_por_plato: porciones,
-        cantidad_por_porcion_kg: cantidadPorPorcionKg,
-        cantidad_total_kg: Number(cantTotalKg.toFixed(3)),
-        costo_unitario_kg: costoKg,
-        costoCalculado: costoCalculado
+        cantidad_por_porcion_kg: cantidadPorPorcionKg
       });
     });
 
@@ -114,10 +127,33 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { plato_id, insumo_id, porciones_por_plato, cantidad_por_porcion_kg } = body;
+    const { plato_id, insumo_id, porciones_por_plato, cantidad_por_porcion_kg, cantidad } = body;
 
     if (!plato_id || !insumo_id) {
       return NextResponse.json({ success: false, error: 'plato_id e insumo_id son requeridos' }, { status: 400 });
+    }
+
+    // Consultar tipo de unidad del insumo
+    const { data: insumo } = await supabase
+      .from('catalogo_insumos')
+      .select('unidad_medida, peso_estandar_porcion_kg')
+      .eq('id', insumo_id)
+      .single();
+
+    const isUnidad = insumo?.unidad_medida?.toLowerCase() === 'und' ||
+                     insumo?.unidad_medida?.toLowerCase() === 'unidad';
+
+    let porc = porciones_por_plato || 1;
+    let kgPorPorc = cantidad_por_porcion_kg || Number(insumo?.peso_estandar_porcion_kg || 0.1);
+
+    if (cantidad !== undefined) {
+      if (isUnidad) {
+        porc = Number(cantidad);
+        kgPorPorc = Number(insumo?.peso_estandar_porcion_kg || 0.055);
+      } else {
+        porc = 1;
+        kgPorPorc = Number(cantidad);
+      }
     }
 
     const { data, error } = await supabase
@@ -125,8 +161,8 @@ export async function POST(request: Request) {
       .insert({
         plato_id,
         insumo_id,
-        porciones_por_plato: porciones_por_plato || 1,
-        cantidad_por_porcion_kg: cantidad_por_porcion_kg || 0.1
+        porciones_por_plato: porc,
+        cantidad_por_porcion_kg: kgPorPorc
       })
       .select('*')
       .single();
@@ -142,15 +178,34 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, porciones_por_plato, cantidad_por_porcion_kg } = body;
+    const { id, cantidad, porciones_por_plato, cantidad_por_porcion_kg } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id de receta_detalle es requerido' }, { status: 400 });
     }
 
+    // Consultar si es unidad o Kg
+    const { data: currentDet } = await supabase
+      .from('recetas_detalle')
+      .select('id, insumo_id, catalogo_insumos(unidad_medida)')
+      .eq('id', id)
+      .single();
+
+    const isUnidad = (currentDet as any)?.catalogo_insumos?.unidad_medida?.toLowerCase() === 'und' ||
+                     (currentDet as any)?.catalogo_insumos?.unidad_medida?.toLowerCase() === 'unidad';
+
     const updates: any = {};
-    if (porciones_por_plato !== undefined) updates.porciones_por_plato = porciones_por_plato;
-    if (cantidad_por_porcion_kg !== undefined) updates.cantidad_por_porcion_kg = cantidad_por_porcion_kg;
+    if (cantidad !== undefined) {
+      if (isUnidad) {
+        updates.porciones_por_plato = Number(cantidad);
+      } else {
+        updates.cantidad_por_porcion_kg = Number(cantidad);
+        updates.porciones_por_plato = 1;
+      }
+    } else {
+      if (porciones_por_plato !== undefined) updates.porciones_por_plato = porciones_por_plato;
+      if (cantidad_por_porcion_kg !== undefined) updates.cantidad_por_porcion_kg = cantidad_por_porcion_kg;
+    }
 
     const { data, error } = await supabase
       .from('recetas_detalle')

@@ -8,7 +8,6 @@ import {
   ArrowLeft, 
   Loader2,
   RefreshCw,
-  UtensilsCrossed,
   AlertCircle
 } from 'lucide-react';
 import { CatalogItem } from '@/components/inputs/InsumoSmartSearchInput';
@@ -107,7 +106,11 @@ export default function RecetasPage() {
   // Añadir un insumo a la receta en la base de datos
   const handleAddInsumoToPlato = async (platoId: string, item: CatalogItem, cantidad: number, unidad: string) => {
     const safeQty = Math.max(0.01, cantidad || 1);
-    const cantKg = unidad.toLowerCase() === 'kg' 
+    const isUnd = item.unidadMedida?.toLowerCase() === 'und' || item.unidadMedida?.toLowerCase() === 'unidad';
+
+    const cantKg = isUnd
+      ? safeQty
+      : unidad.toLowerCase() === 'kg' 
       ? safeQty 
       : unidad.toLowerCase() === 'g' 
       ? safeQty / 1000 
@@ -120,8 +123,9 @@ export default function RecetasPage() {
         body: JSON.stringify({
           plato_id: platoId,
           insumo_id: item.id,
-          porciones_por_plato: 1,
-          cantidad_por_porcion_kg: Number(cantKg.toFixed(3))
+          cantidad: cantKg,
+          porciones_por_plato: isUnd ? Math.round(safeQty) : 1,
+          cantidad_por_porcion_kg: isUnd ? 0.055 : Number(cantKg.toFixed(3))
         })
       });
 
@@ -135,6 +139,8 @@ export default function RecetasPage() {
 
   // Modificar cantidad de un insumo en la receta
   const handleUpdateInsumoQty = async (platoId: string, insumoRecetaId: string, newQty: number) => {
+    const safeQty = isNaN(newQty) ? 0 : newQty;
+
     // Actualización optimista en interfaz
     setRecetas(prev => prev.map(p => {
       if (p.id !== platoId) return p;
@@ -142,11 +148,12 @@ export default function RecetasPage() {
         ...p,
         ingredientes: p.ingredientes.map(ing => {
           if (ing.id !== insumoRecetaId) return ing;
-          const factor = ing.unidad.toLowerCase() === 'g' ? 1 / 1000 : 1;
-          const newCost = Math.round(newQty * factor * ing.costoUnitario);
+          const factor = ing.unidad?.toLowerCase() === 'g' ? 1 / 1000 : 1;
+          const unitCost = Number(ing.costoUnitario) || 0;
+          const newCost = Math.round(safeQty * factor * unitCost);
           return {
             ...ing,
-            cantidad: newQty,
+            cantidad: safeQty,
             costoCalculado: newCost
           };
         })
@@ -159,7 +166,7 @@ export default function RecetasPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: insumoRecetaId,
-          cantidad_por_porcion_kg: newQty
+          cantidad: safeQty
         })
       });
     } catch (e) {

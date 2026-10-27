@@ -26,15 +26,21 @@ export default function InsumoRecetaCard({
   onUpdateQty,
   onRemove
 }: InsumoRecetaCardProps) {
-  const isKg = insumo.unidad.toLowerCase() === 'kg';
-  const isGram = insumo.unidad.toLowerCase() === 'g';
+  const isKg = insumo.unidad?.toLowerCase() === 'kg';
+  const isGram = insumo.unidad?.toLowerCase() === 'g';
+  const isUnd = insumo.unidad?.toLowerCase() === 'und' || insumo.unidad?.toLowerCase() === 'unidad';
+
   const stepVal = isKg ? 0.05 : isGram ? 50 : 1;
-  const minVal = isKg ? 0.01 : isGram ? 10 : 0.5;
+  const minVal = isKg ? 0.01 : isGram ? 10 : 1;
 
   const handleStep = (delta: number) => {
-    const next = Math.max(minVal, Number((insumo.cantidad + delta).toFixed(3)));
+    const current = Number(insumo.cantidad) || 0;
+    const next = Math.max(minVal, Number((current + delta).toFixed(3)));
     onUpdateQty(insumo.id, next);
   };
+
+  const displayCost = Number(insumo.costoCalculado);
+  const formattedCost = isNaN(displayCost) ? '0' : Math.round(displayCost).toLocaleString('es-CO');
 
   return (
     <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-lg p-2.5 px-3 shadow-2xs transition-colors flex items-start justify-between gap-2">
@@ -65,10 +71,13 @@ export default function InsumoRecetaCard({
               <input
                 type="number"
                 min={minVal}
-                step="any"
-                value={insumo.cantidad}
-                onChange={(e) => onUpdateQty(insumo.id, Math.max(minVal, parseFloat(e.target.value) || minVal))}
-                className="w-14 text-center font-mono font-bold text-slate-900 text-xs bg-white border-x border-slate-200 py-0.5 focus:outline-none"
+                step={isKg ? '0.01' : '1'}
+                value={insumo.cantidad !== undefined && insumo.cantidad !== null && !isNaN(insumo.cantidad) ? insumo.cantidad : ''}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  onUpdateQty(insumo.id, isNaN(val) ? 0 : val);
+                }}
+                className="w-16 text-center font-mono font-bold text-slate-900 text-xs bg-white border-x border-slate-200 py-0.5 focus:outline-none"
               />
               <button
                 type="button"
@@ -87,7 +96,7 @@ export default function InsumoRecetaCard({
           <div className="text-right font-mono shrink-0">
             <span className="text-[10px] text-slate-400 mr-1">Costo:</span>
             <span className="text-slate-800 font-bold">
-              ${Math.round(insumo.costoCalculado).toLocaleString('es-CO')}
+              ${formattedCost}
             </span>
           </div>
         </div>
