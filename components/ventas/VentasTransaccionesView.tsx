@@ -82,7 +82,7 @@ export default function VentasTransaccionesView({
                 Listado de Salidas por Venta ({totalCount.toLocaleString('es-CO')} registros)
               </h3>
               <p className="text-[11px] text-slate-500">
-                Alimentado de los reportes diarios de ventas del sistema POS Gamma
+                Registro consolidado de salidas diarias
               </p>
             </div>
           </div>

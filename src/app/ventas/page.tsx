@@ -6,29 +6,22 @@ import {
   Calendar, 
   Award, 
   ListOrdered, 
-  PieChart, 
-  RefreshCw, 
   Loader2,
-  Scale,
   AlertCircle
 } from 'lucide-react';
 import VentasKPIHeader from '@/components/ventas/VentasKPIHeader';
 import VentasDiariasView from '@/components/ventas/VentasDiariasView';
 import VentasProductosRankingView from '@/components/ventas/VentasProductosRankingView';
 import VentasTransaccionesView from '@/components/ventas/VentasTransaccionesView';
-import VentasRentabilidadView from '@/components/ventas/VentasRentabilidadView';
-import VentasCuadreCajaView from '@/components/ventas/VentasCuadreCajaView';
 import VentasExportButtons from '@/components/ventas/VentasExportButtons';
 import { 
   VentasKPIs, 
   VentaDiaria, 
-  PlatoRanking, 
-  VentasRentabilidad,
-  ComparacionCuadreResult 
+  PlatoRanking 
 } from '@/services/ventasService';
 import { usePeriodo } from '@/context/PeriodoContext';
 
-type TabView = 'TRANSACCIONES' | 'DIARIO' | 'PRODUCTOS' | 'RENTABILIDAD' | 'CUADRE';
+type TabView = 'TRANSACCIONES' | 'DIARIO' | 'PRODUCTOS';
 
 export default function VentasPage() {
   const { currentPeriodo, selectedPeriodoId } = usePeriodo();
@@ -54,18 +47,7 @@ export default function VentasPage() {
   const [ranking, setRanking] = useState<PlatoRanking[]>([]);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [totalVentasRanking, setTotalVentasRanking] = useState(0);
-  const [cuadreData, setCuadreData] = useState<ComparacionCuadreResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [rentabilidad, setRentabilidad] = useState<VentasRentabilidad>({
-    totalVentas: 0,
-    totalVentaNeta: 0,
-    totalCostosDirectosInsumos: 0,
-    margenBrutoPesos: 0,
-    margenBrutoPorcentaje: 0,
-    totalGastosOperativos: 0,
-    utilidadOperativaEstimada: 0,
-    porcentajeCostosSobreVentas: 0
-  });
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -82,8 +64,6 @@ export default function VentasPage() {
         if (json.ranking) setRanking(json.ranking);
         if (json.categorias) setCategorias(json.categorias);
         if (json.totalVentas) setTotalVentasRanking(json.totalVentas);
-        if (json.rentabilidad) setRentabilidad(json.rentabilidad);
-        if (json.cuadre) setCuadreData(json.cuadre);
       } else {
         throw new Error(json.error || 'Respuesta no exitosa al cargar ventas');
       }
@@ -110,32 +90,17 @@ export default function VentasPage() {
             <DollarSign className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900 tracking-tight">
-                Salidas por Venta
-              </h1>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-medium">
-                {periodoNombre}
-              </span>
-            </div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+              Salidas por Venta
+            </h1>
             <p className="text-xs text-slate-500">
-              Registro diario de ventas y comandas &bull; Fuente POS Gamma
+              Registro diario de ventas y comandas
             </p>
           </div>
         </div>
 
-        {/* Acciones de Exportación y Recarga */}
+        {/* Acciones de Exportación */}
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={loadAllData}
-            disabled={loading}
-            className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer border border-slate-200"
-            title="Recargar datos de ventas"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-
           <VentasExportButtons
             diarias={diarias}
             ranking={ranking}
@@ -145,7 +110,7 @@ export default function VentasPage() {
         </div>
       </div>
 
-      {/* 📊 Tarjetas de KPIs Gerenciales */}
+      {/* 📊 Tarjetas de KPIs */}
       <VentasKPIHeader kpis={kpis} periodoNombre={periodoNombre} />
 
       {/* 🗂️ Pestañas del Módulo */}
@@ -198,32 +163,6 @@ export default function VentasPage() {
             {ranking.length}
           </span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('RENTABILIDAD')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
-            activeTab === 'RENTABILIDAD'
-              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
-              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-          }`}
-        >
-          <PieChart className="w-3.5 h-3.5" />
-          <span>Rentabilidad & Margen</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('CUADRE')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
-            activeTab === 'CUADRE'
-              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
-              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-          }`}
-        >
-          <Scale className="w-3.5 h-3.5" />
-          <span>Cuadre de Caja</span>
-        </button>
       </div>
 
       {/* ⚠️ Alerta de Error con Botón de Reintento */}
@@ -260,16 +199,12 @@ export default function VentasPage() {
         />
       ) : activeTab === 'DIARIO' ? (
         <VentasDiariasView diarias={diarias} periodoId={periodoId} />
-      ) : activeTab === 'PRODUCTOS' ? (
+      ) : (
         <VentasProductosRankingView
           ranking={ranking}
           categorias={categorias}
           totalVentas={totalVentasRanking}
         />
-      ) : activeTab === 'RENTABILIDAD' ? (
-        <VentasRentabilidadView rentabilidad={rentabilidad} />
-      ) : (
-        <VentasCuadreCajaView cuadreData={cuadreData} periodoNombre={periodoNombre} />
       )}
     </div>
   );
