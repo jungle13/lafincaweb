@@ -1,14 +1,24 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { FileText, Package } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
 import { CompraDetalleItem } from '@/services/comprasService';
+import ComprasPagination from '@/components/compras/ComprasPagination';
 
 interface Props {
   lineas: CompraDetalleItem[];
 }
 
 export default function ComprasLineasView({ lineas }: Props) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Reset page cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [lineas.length]);
+
   if (lineas.length === 0) {
     return (
       <div className="bg-white rounded-lg p-8 border border-slate-200 text-center text-slate-500">
@@ -21,10 +31,16 @@ export default function ComprasLineasView({ lineas }: Props) {
   const granTotalLineas = lineas.reduce((acc, l) => acc + l.valor_compra, 0);
   const totalCantidadLineas = lineas.reduce((acc, l) => acc + l.cantidad, 0);
 
+  const totalPages = Math.ceil(lineas.length / pageSize) || 1;
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, lineas.length);
+  const paginatedLineas = lineas.slice(startIndex, endIndex);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1 text-xs text-slate-500">
-        <span>Mostrando {lineas.length} registros individuales</span>
+        <span>Mostrando {startIndex + 1} a {endIndex} de {lineas.length} registros individuales</span>
         <span className="font-mono font-bold text-slate-900">
           Total: $ {formatMoney(granTotalLineas)}
         </span>
@@ -48,7 +64,7 @@ export default function ComprasLineasView({ lineas }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {lineas.map((l, idx) => (
+            {paginatedLineas.map((l, idx) => (
               <tr key={l.id || idx} className="hover:bg-slate-50/70 transition-colors">
                 <td className="py-2 px-3 font-mono text-slate-700 whitespace-nowrap">
                   {l.fecha}
@@ -113,6 +129,21 @@ export default function ComprasLineasView({ lineas }: Props) {
           </tfoot>
         </table>
       </div>
+
+      {/* Control de Paginación */}
+      <ComprasPagination
+        currentPage={validCurrentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={lineas.length}
+        itemLabel="líneas de compra"
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(newSize) => {
+          setPageSize(newSize);
+          setCurrentPage(1);
+        }}
+        pageSizeOptions={[15, 25, 50, 100, 200]}
+      />
     </div>
   );
 }

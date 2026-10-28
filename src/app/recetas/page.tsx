@@ -13,6 +13,9 @@ import {
 import { CatalogItem } from '@/components/inputs/InsumoSmartSearchInput';
 import RecetaPlatoRow, { RecetaPlatoItem } from '@/components/recetas/RecetaPlatoRow';
 import NewPlatoModal from '@/components/recetas/NewPlatoModal';
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/dataCache';
+
+const CACHE_KEY = 'recetas_page_data';
 
 const SUBCATEGORIAS_ORDEN = [
   'MENU DEL DIA',
@@ -33,24 +36,26 @@ const SUBCAT_LABELS: Record<string, string> = {
 };
 
 export default function RecetasPage() {
-  const [recetas, setRecetas] = useState<RecetaPlatoItem[]>([]);
-  const [catalogoInsumos, setCatalogoInsumos] = useState<CatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedData<{ recetas: RecetaPlatoItem[]; catalogoInsumos: CatalogItem[] }>(CACHE_KEY);
+  const [recetas, setRecetas] = useState<RecetaPlatoItem[]>(() => cached?.recetas || []);
+  const [catalogoInsumos, setCatalogoInsumos] = useState<CatalogItem[]>(() => cached?.catalogoInsumos || []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedSubcat, setSelectedSubcat] = useState('ALL');
   const [isNewPlatoModalOpen, setIsNewPlatoModalOpen] = useState(false);
 
   // Cargar recetas y catálogo desde la base de datos
-  const loadRecetasData = useCallback(async () => {
-    setLoading(true);
+  const loadRecetasData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/recetas?t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}: Error al cargar recetas`);
       const json = await res.json();
       if (json.success) {
-        setRecetas(json.recetas || []);
+        const fetchedRecetas = json.recetas || [];
+        setRecetas(fetchedRecetas);
         
         // Mapear catálogo de insumos para el buscador
         const mappedCatalog: CatalogItem[] = (json.catalogoInsumos || []).map((i: any) => ({
@@ -62,6 +67,11 @@ export default function RecetasPage() {
           gramaje: Number(i.peso_estandar_porcion_kg || 0) * 1000
         }));
         setCatalogoInsumos(mappedCatalog);
+
+        setCachedData(CACHE_KEY, {
+          recetas: fetchedRecetas,
+          catalogoInsumos: mappedCatalog,
+        });
       } else {
         throw new Error(json.error || 'No se pudieron obtener las recetas');
       }
@@ -74,7 +84,7 @@ export default function RecetasPage() {
   }, []);
 
   useEffect(() => {
-    loadRecetasData();
+    loadRecetasData(Boolean(cached));
   }, [loadRecetasData]);
 
   // Conteo de platos por subcategoría
@@ -130,6 +140,7 @@ export default function RecetasPage() {
       });
 
       if (!res.ok) throw new Error('Error al vincular insumo en la base de datos');
+      invalidateCache(CACHE_KEY);
       await loadRecetasData();
     } catch (e) {
       console.error(e);
@@ -140,6 +151,7 @@ export default function RecetasPage() {
   // Modificar cantidad de un insumo en la receta
   const handleUpdateInsumoQty = async (platoId: string, insumoRecetaId: string, newQty: number) => {
     const safeQty = isNaN(newQty) ? 0 : newQty;
+    invalidateCache(CACHE_KEY);
 
     // Actualización optimista en interfaz
     setRecetas(prev => prev.map(p => {
@@ -176,6 +188,7 @@ export default function RecetasPage() {
 
   // Remover insumo de la receta
   const handleRemoveInsumo = async (platoId: string, insumoRecetaId: string) => {
+    invalidateCache(CACHE_KEY);
     // Optimista
     setRecetas(prev => prev.map(p => {
       if (p.id !== platoId) return p;
@@ -196,6 +209,7 @@ export default function RecetasPage() {
   // Desvincular plato de recetas
   const handleDeletePlato = async (platoId: string) => {
     if (confirm('¿Desvincular este plato del módulo de recetas? (Se conservará en productos para la venta pero no requerirá ficha técnica)')) {
+      invalidateCache(CACHE_KEY);
       setRecetas(prev => prev.filter(p => p.id !== platoId));
       try {
         await fetch(`/api/recetas?plato_id=${platoId}`, { method: 'DELETE' });
@@ -214,6 +228,8 @@ export default function RecetasPage() {
     precioVentaPos: number;
   }) => {
     try {
+      invalidateCache(CACHE_KEY);
+      invalidateCache('productos_venta');
       await fetch('/api/productos-venta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -286,7 +302,7 @@ export default function RecetasPage() {
             {/* Recargar */}
             <button
               type="button"
-              onClick={loadRecetasData}
+              onClick={() => loadRecetasData(false)}
               disabled={loading}
               className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer border border-slate-200"
               title="Recargar recetas"
@@ -350,7 +366,7 @@ export default function RecetasPage() {
           </div>
           <button
             type="button"
-            onClick={loadRecetasData}
+            onClick={() => loadRecetasData(false)}
             className="px-2.5 py-1 bg-rose-600 text-white rounded text-xs font-semibold hover:bg-rose-700 cursor-pointer"
           >
             Reintentar

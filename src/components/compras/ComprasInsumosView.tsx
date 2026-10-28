@@ -1,14 +1,24 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Package, TrendingUp } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
 import { CompraInsumoGroup } from '@/services/comprasService';
+import ComprasPagination from '@/components/compras/ComprasPagination';
 
 interface Props {
   insumos: CompraInsumoGroup[];
 }
 
 export default function ComprasInsumosView({ insumos }: Props) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  // Reset page cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [insumos.length]);
+
   if (insumos.length === 0) {
     return (
       <div className="bg-white rounded-lg p-8 border border-slate-200 text-center text-slate-500">
@@ -21,10 +31,16 @@ export default function ComprasInsumosView({ insumos }: Props) {
   const granTotalInsumos = insumos.reduce((acc, i) => acc + i.total_dinero, 0);
   const totalCantidadInsumos = insumos.reduce((acc, i) => acc + i.cantidad_total, 0);
 
+  const totalPages = Math.ceil(insumos.length / pageSize) || 1;
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, insumos.length);
+  const paginatedInsumos = insumos.slice(startIndex, endIndex);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1 text-xs text-slate-500">
-        <span>Mostrando {insumos.length} insumos consolidados</span>
+        <span>Mostrando {startIndex + 1} a {endIndex} de {insumos.length} insumos consolidados</span>
         <span className="font-mono font-bold text-slate-900">
           Total Invertido: $ {formatMoney(granTotalInsumos)}
         </span>
@@ -46,7 +62,7 @@ export default function ComprasInsumosView({ insumos }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {insumos.map((i, idx) => (
+            {paginatedInsumos.map((i, idx) => (
               <tr key={i.nombre_insumo || idx} className="hover:bg-slate-50/70 transition-colors">
                 <td className="py-2 px-3 font-semibold text-slate-900">
                   {i.nombre_insumo}
@@ -107,6 +123,21 @@ export default function ComprasInsumosView({ insumos }: Props) {
           </tfoot>
         </table>
       </div>
+
+      {/* Control de Paginación */}
+      <ComprasPagination
+        currentPage={validCurrentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={insumos.length}
+        itemLabel="insumos"
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(newSize) => {
+          setPageSize(newSize);
+          setCurrentPage(1);
+        }}
+        pageSizeOptions={[10, 20, 50, 100]}
+      />
     </div>
   );
 }

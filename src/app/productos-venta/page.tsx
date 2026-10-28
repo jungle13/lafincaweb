@@ -18,6 +18,9 @@ import {
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { formatMoney } from '@/lib/formatters';
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/dataCache';
+
+const CACHE_KEY = 'productos_venta_list';
 
 export interface ProductoVenta {
   id: string;
@@ -73,8 +76,9 @@ const SUBCATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function ProductosVentaPage() {
-  const [productos, setProductos] = useState<ProductoVenta[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedData<ProductoVenta[]>(CACHE_KEY);
+  const [productos, setProductos] = useState<ProductoVenta[]>(() => cached || []);
+  const [loading, setLoading] = useState(!cached);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
   const [selectedSubcat, setSelectedSubcat] = useState<string>('ALL');
@@ -94,13 +98,14 @@ export default function ProductosVentaPage() {
   const [formEsReceta, setFormEsReceta] = useState(true);
 
   // Cargar catálogo de productos
-  const loadProductos = async () => {
+  const loadProductos = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await fetch(`/api/productos-venta?t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.data) {
         setProductos(json.data);
+        setCachedData(CACHE_KEY, json.data);
       }
     } catch (err) {
       console.error('Error cargando productos:', err);
@@ -110,7 +115,7 @@ export default function ProductosVentaPage() {
   };
 
   useEffect(() => {
-    loadProductos();
+    loadProductos(Boolean(cached));
   }, []);
 
   // Conteos por categoría
@@ -204,6 +209,7 @@ export default function ProductosVentaPage() {
       if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar');
 
       setModalMode(null);
+      invalidateCache(CACHE_KEY);
       await loadProductos();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -217,6 +223,7 @@ export default function ProductosVentaPage() {
     try {
       const res = await fetch(`/api/productos-venta?id=${p.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar');
+      invalidateCache(CACHE_KEY);
       await loadProductos();
     } catch (err: any) {
       alert(`Error: ${err.message}`);

@@ -1,9 +1,11 @@
+import { Suspense } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
 import MobileBottomBar from '@/components/layout/MobileBottomBar';
+import NavigationProgressBar from '@/components/layout/NavigationProgressBar';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { PeriodoProvider } from '@/context/PeriodoContext';
 import { NotificationProvider } from '@/context/NotificationContext';
@@ -17,6 +19,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'La Finca - Dashboard Administrativo & Control de Bodega',
   description: 'Sistema administrativo y operativo de carnes y movimientos en tiempo real',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 };
 
 export const viewport: Viewport = {
@@ -34,6 +41,9 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body className="bg-white text-slate-800 font-sans antialiased min-h-screen">
+        <Suspense fallback={null}>
+          <NavigationProgressBar />
+        </Suspense>
         <SidebarProvider>
           <PeriodoProvider>
             <NotificationProvider>

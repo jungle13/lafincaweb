@@ -19,6 +19,9 @@ import {
 import Modal from '@/components/ui/Modal';
 import ExportCatalogoPdfModal from '@/components/catalogo/ExportCatalogoPdfModal';
 import { formatMoney, normalizeStr } from '@/lib/formatters';
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/dataCache';
+
+const CACHE_KEY = 'catalogo_insumos_list';
 
 export type TipoMedida = 'KGS' | 'UNIDADES' | 'KGS_Y_UNIDADES' | 'PAQUETES';
 
@@ -83,8 +86,9 @@ type SortField =
   | 'stock_minimo_kg';
 
 export default function CatalogoPage() {
-  const [insumos, setInsumos] = useState<CatalogoInsumo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedData<CatalogoInsumo[]>(CACHE_KEY);
+  const [insumos, setInsumos] = useState<CatalogoInsumo[]>(() => cached || []);
+  const [loading, setLoading] = useState(!cached);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
 
@@ -110,12 +114,14 @@ export default function CatalogoPage() {
   const [formEsCarne, setFormEsCarne] = useState(true);
   const [formObservaciones, setFormObservaciones] = useState('');
 
-  const loadCatalogo = async () => {
+  const loadCatalogo = async (silent = false) => {
     try {
+      if (!silent) setLoading(true);
       const res = await fetch(`/api/catalogo?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.data) {
         setInsumos(data.data);
+        setCachedData(CACHE_KEY, data.data);
       }
     } catch (e) {
       console.error('Error cargando catalogo:', e);
@@ -125,7 +131,7 @@ export default function CatalogoPage() {
   };
 
   useEffect(() => {
-    loadCatalogo();
+    loadCatalogo(Boolean(cached));
   }, []);
 
   const handleSort = (field: SortField) => {
@@ -284,6 +290,8 @@ export default function CatalogoPage() {
       if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar insumo');
 
       setModalMode(null);
+      invalidateCache(CACHE_KEY);
+      invalidateCache(CACHE_KEY);
       await loadCatalogo();
       // Notificar a otras pestañas/pantallas (ej. Costeo Diario / Input Inteligente) para sincronización automática
       try {
@@ -309,6 +317,7 @@ export default function CatalogoPage() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Error al eliminar');
 
+      invalidateCache(CACHE_KEY);
       await loadCatalogo();
       // Notificar a otras pestañas/pantallas para sincronización automática
       try {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ChevronDown, 
   ChevronRight, 
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
 import { CompraFacturaGroup } from '@/services/comprasService';
+import ComprasPagination from '@/components/compras/ComprasPagination';
 
 interface Props {
   facturas: CompraFacturaGroup[];
@@ -20,6 +21,19 @@ interface Props {
 export default function ComprasFacturasView({ facturas }: Props) {
   // State de facturas desplegadas
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  // Reset page cuando cambia la lista o filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [facturas.length]);
+
+  const totalPages = Math.ceil(facturas.length / pageSize) || 1;
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, facturas.length);
+  const paginatedFacturas = facturas.slice(startIndex, endIndex);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -31,7 +45,7 @@ export default function ComprasFacturasView({ facturas }: Props) {
   };
 
   const expandAll = () => {
-    setExpandedIds(new Set(facturas.map((f) => f.id)));
+    setExpandedIds(new Set(paginatedFacturas.map((f) => f.id)));
   };
 
   const collapseAll = () => {
@@ -51,14 +65,14 @@ export default function ComprasFacturasView({ facturas }: Props) {
     <div className="space-y-2">
       {/* Barra de Controles de Expansión */}
       <div className="flex items-center justify-between px-1 text-xs text-slate-500">
-        <span>Mostrando {facturas.length} facturas agrupadas</span>
+        <span>Mostrando {startIndex + 1} a {endIndex} de {facturas.length} facturas agrupadas</span>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={expandAll}
             className="text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer"
           >
-            Expandir todas
+            Expandir página
           </button>
           <span>•</span>
           <button
@@ -71,8 +85,8 @@ export default function ComprasFacturasView({ facturas }: Props) {
         </div>
       </div>
 
-      {/* Lista de Facturas */}
-      {facturas.map((fac) => {
+      {/* Lista de Facturas Paginadas */}
+      {paginatedFacturas.map((fac) => {
         const isExpanded = expandedIds.has(fac.id);
         return (
           <div
@@ -234,6 +248,21 @@ export default function ComprasFacturasView({ facturas }: Props) {
           </div>
         );
       })}
+
+      {/* Control de Paginación */}
+      <ComprasPagination
+        currentPage={validCurrentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={facturas.length}
+        itemLabel="facturas"
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(newSize) => {
+          setPageSize(newSize);
+          setCurrentPage(1);
+        }}
+        pageSizeOptions={[10, 20, 50, 100]}
+      />
     </div>
   );
 }

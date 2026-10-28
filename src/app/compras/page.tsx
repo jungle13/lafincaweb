@@ -26,6 +26,7 @@ import {
   CompraInsumoGroup, 
   CompraDetalleItem 
 } from '@/services/comprasService';
+import { getCachedData, setCachedData } from '@/lib/dataCache';
 
 type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS';
 
@@ -33,23 +34,34 @@ export default function ComprasPage() {
   const { currentPeriodo, selectedPeriodoId } = usePeriodo();
   const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
   const periodoNombre = currentPeriodo?.nombre || 'Octubre 2026';
+  const cacheKey = `compras_data_${periodoId}`;
 
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedData<{
+    kpis: ComprasKPIs;
+    facturas: CompraFacturaGroup[];
+    insumos: CompraInsumoGroup[];
+    lineas: CompraDetalleItem[];
+    proveedores: string[];
+    categorias: string[];
+    fechas: string[];
+  }>(cacheKey);
+
+  const [loading, setLoading] = useState(!cached);
   const [activeTab, setActiveTab] = useState<TabView>('FACTURAS');
 
   // Datos del backend
-  const [kpis, setKpis] = useState<ComprasKPIs>({
+  const [kpis, setKpis] = useState<ComprasKPIs>(() => cached?.kpis || {
     totalFacturas: 0,
     totalDinero: 0,
     totalItems: 0,
     categorias: [],
   });
-  const [facturas, setFacturas] = useState<CompraFacturaGroup[]>([]);
-  const [insumos, setInsumos] = useState<CompraInsumoGroup[]>([]);
-  const [lineas, setLineas] = useState<CompraDetalleItem[]>([]);
-  const [proveedores, setProveedores] = useState<string[]>([]);
-  const [categorias, setCategorias] = useState<string[]>([]);
-  const [fechas, setFechas] = useState<string[]>([]);
+  const [facturas, setFacturas] = useState<CompraFacturaGroup[]>(() => cached?.facturas || []);
+  const [insumos, setInsumos] = useState<CompraInsumoGroup[]>(() => cached?.insumos || []);
+  const [lineas, setLineas] = useState<CompraDetalleItem[]>(() => cached?.lineas || []);
+  const [proveedores, setProveedores] = useState<string[]>(() => cached?.proveedores || []);
+  const [categorias, setCategorias] = useState<string[]>(() => cached?.categorias || []);
+  const [fechas, setFechas] = useState<string[]>(() => cached?.fechas || []);
   const [error, setError] = useState<string | null>(null);
 
   // Filtros activos
@@ -58,8 +70,8 @@ export default function ComprasPage() {
   const [selectedProveedor, setSelectedProveedor] = useState('');
   const [selectedFecha, setSelectedFecha] = useState('');
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/compras?periodo_id=${periodoId}&t=${Date.now()}`, {
@@ -77,6 +89,16 @@ export default function ComprasPage() {
         if (json.proveedores) setProveedores(json.proveedores);
         if (json.categorias) setCategorias(json.categorias);
         if (json.fechas) setFechas(json.fechas);
+
+        setCachedData(cacheKey, {
+          kpis: json.kpis,
+          facturas: json.facturas,
+          insumos: json.insumos,
+          lineas: json.lineas,
+          proveedores: json.proveedores,
+          categorias: json.categorias,
+          fechas: json.fechas,
+        });
       } else {
         throw new Error(json.error || 'Respuesta no exitosa');
       }
@@ -86,10 +108,10 @@ export default function ComprasPage() {
     } finally {
       setLoading(false);
     }
-  }, [periodoId]);
+  }, [periodoId, cacheKey]);
 
   useEffect(() => {
-    loadData();
+    loadData(Boolean(cached));
   }, [loadData]);
 
   // Limpiar todos los filtros

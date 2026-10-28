@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -11,7 +12,8 @@ import {
   BookOpen,
   TrendingUp,
   UtensilsCrossed,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
@@ -58,6 +60,12 @@ const NAV_SECTIONS: NavSection[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen, closeSidebar } = useSidebar();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  // Limpiar pendingHref cuando cambia la ruta
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
 
   return (
     <>
@@ -108,20 +116,34 @@ export default function Sidebar() {
               {section.items.map((item, idx) => {
                 const Icon = item.icon;
                 const isExact = pathname === item.href;
+                const isPending = pendingHref === item.href;
+                const isActive = isExact || isPending;
 
                 return (
                   <Link
                     key={idx}
                     href={item.href}
-                    onClick={closeSidebar}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      isExact
+                    prefetch={true}
+                    onClick={() => {
+                      if (!isExact) {
+                        setPendingHref(item.href);
+                      }
+                      closeSidebar();
+                    }}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                      isActive
                         ? 'bg-orange-500/15 text-orange-400 font-semibold border-l-[3px] border-orange-500 rounded-l-none'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 ${isExact ? 'text-orange-400' : 'text-slate-400'}`} />
-                    <span className="truncate">{item.label}</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-orange-400' : 'text-slate-400'}`} />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+
+                    {isPending && !isExact && (
+                      <Loader2 className="w-3.5 h-3.5 text-orange-400 animate-spin shrink-0" />
+                    )}
                   </Link>
                 );
               })}
