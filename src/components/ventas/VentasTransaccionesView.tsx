@@ -94,13 +94,13 @@ export default function VentasTransaccionesView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar por código o nombre de producto..."
-              className="w-full h-8 pl-8 pr-7 text-xs rounded-md border border-slate-200 outline-none focus:border-slate-400 bg-white placeholder-slate-400"
+              className="w-full min-h-[40px] sm:min-h-0 sm:h-8 pl-8 pr-7 text-sm sm:text-xs rounded-md border border-slate-200 outline-none focus:border-slate-400 bg-white placeholder-slate-400"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -109,7 +109,7 @@ export default function VentasTransaccionesView({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100 text-xs">
-          <span className="text-slate-400 flex items-center gap-1 text-[11px]">
+          <span className="text-slate-400 flex items-center gap-1 text-[11px] hidden sm:flex">
             <Filter className="w-3 h-3" />
             <span>Filtros:</span>
           </span>
@@ -118,7 +118,7 @@ export default function VentasTransaccionesView({
           <select
             value={selectedFecha}
             onChange={(e) => setSelectedFecha(e.target.value)}
-            className="h-8 px-2.5 rounded-md border border-slate-200 text-slate-700 bg-white outline-none focus:border-slate-400 text-xs cursor-pointer"
+            className="w-full sm:w-auto min-h-[40px] sm:min-h-0 sm:h-8 px-2.5 rounded-md border border-slate-200 text-slate-700 bg-white outline-none focus:border-slate-400 text-sm sm:text-xs cursor-pointer font-mono"
           >
             <option value="ALL">Todas las Fechas ({fechasDisponibles.length} días)</option>
             {fechasDisponibles.map((f) => (
@@ -132,7 +132,7 @@ export default function VentasTransaccionesView({
           <select
             value={selectedCategoria}
             onChange={(e) => setSelectedCategoria(e.target.value)}
-            className="h-8 px-2.5 rounded-md border border-slate-200 text-slate-700 bg-white outline-none focus:border-slate-400 text-xs cursor-pointer"
+            className="w-full sm:w-auto min-h-[40px] sm:min-h-0 sm:h-8 px-2.5 rounded-md border border-slate-200 text-slate-700 bg-white outline-none focus:border-slate-400 text-sm sm:text-xs cursor-pointer"
           >
             <option value="ALL">Todas las Categorías</option>
             {categoriasDisponibles.map((c) => (
@@ -230,17 +230,17 @@ export default function VentasTransaccionesView({
             </div>
 
             {/* Paginación */}
-            <div className="p-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-xs text-slate-500 font-mono">
+            <div className="p-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+              <span className="text-xs text-slate-500 font-mono text-center sm:text-left">
                 Página <strong>{page}</strong> de <strong>{totalPages}</strong> &bull; Mostrando {transacciones.length} de {totalCount} registros
               </span>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => loadData(Math.max(1, page - 1))}
                   disabled={page <= 1}
-                  className="px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer text-xs"
+                  className="px-3 py-2 sm:py-1 min-h-[38px] sm:min-h-0 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer text-xs font-medium"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                   <span>Anterior</span>
@@ -250,7 +250,7 @@ export default function VentasTransaccionesView({
                   type="button"
                   onClick={() => loadData(Math.min(totalPages, page + 1))}
                   disabled={page >= totalPages}
-                  className="px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer text-xs"
+                  className="px-3 py-2 sm:py-1 min-h-[38px] sm:min-h-0 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer text-xs font-medium"
                 >
                   <span>Siguiente</span>
                   <ChevronRight className="w-3.5 h-3.5" />

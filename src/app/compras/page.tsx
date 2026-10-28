@@ -204,7 +204,7 @@ export default function ComprasPage() {
   }, [lineas, searchQuery, selectedCategoria, selectedProveedor, selectedFecha]);
 
   return (
-    <div className="space-y-4 w-full px-2 sm:px-4 md:px-6 font-normal">
+    <div className="space-y-4 w-full font-normal">
       {/* 🏷️ Encabezado Principal Tipo Git */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3">
@@ -242,7 +242,7 @@ export default function ComprasPage() {
 
       {/* 🔍 Barra de Búsqueda Inteligente y Filtros */}
       <div className="bg-white rounded-lg p-3 border border-slate-200 space-y-2.5 shadow-2xs">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2">
           {/* Buscador de texto */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -251,65 +251,68 @@ export default function ComprasPage() {
               placeholder="Buscar por factura, proveedor, insumo o detalle original del PDF..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 focus:bg-white text-slate-800"
+              className="w-full pl-9 pr-8 py-2 sm:py-1.5 min-h-[40px] sm:min-h-0 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 focus:bg-white text-slate-800"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Filtro Proveedor */}
-          <div className="min-w-[180px]">
-            <select
-              value={selectedProveedor}
-              onChange={(e) => setSelectedProveedor(e.target.value)}
-              className="w-full py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer"
-            >
-              <option value="">Todos los Proveedores</option>
-              {proveedores.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Grid de Filtros Select en Móvil */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-wrap items-center">
+            {/* Filtro Proveedor */}
+            <div className="w-full sm:min-w-[170px]">
+              <select
+                value={selectedProveedor}
+                onChange={(e) => setSelectedProveedor(e.target.value)}
+                className="w-full py-2 sm:py-1.5 px-2.5 min-h-[40px] sm:min-h-0 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer"
+              >
+                <option value="">Todos los Proveedores</option>
+                {proveedores.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filtro Categoría */}
-          <div className="min-w-[170px]">
-            <select
-              value={selectedCategoria}
-              onChange={(e) => setSelectedCategoria(e.target.value)}
-              className="w-full py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer"
-            >
-              <option value="">Todas las Categorías</option>
-              {categorias.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filtro Categoría */}
+            <div className="w-full sm:min-w-[160px]">
+              <select
+                value={selectedCategoria}
+                onChange={(e) => setSelectedCategoria(e.target.value)}
+                className="w-full py-2 sm:py-1.5 px-2.5 min-h-[40px] sm:min-h-0 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer"
+              >
+                <option value="">Todas las Categorías</option>
+                {categorias.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filtro Fecha */}
-          <div className="min-w-[140px]">
-            <select
-              value={selectedFecha}
-              onChange={(e) => setSelectedFecha(e.target.value)}
-              className="w-full py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer font-mono"
-            >
-              <option value="">Todas las Fechas</option>
-              {fechas.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
+            {/* Filtro Fecha */}
+            <div className="w-full sm:min-w-[130px]">
+              <select
+                value={selectedFecha}
+                onChange={(e) => setSelectedFecha(e.target.value)}
+                className="w-full py-2 sm:py-1.5 px-2.5 min-h-[40px] sm:min-h-0 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer font-mono"
+              >
+                <option value="">Todas las Fechas</option>
+                {fechas.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Limpiar Filtros */}
@@ -317,7 +320,7 @@ export default function ComprasPage() {
             <button
               type="button"
               onClick={clearFilters}
-              className="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-md transition-colors cursor-pointer whitespace-nowrap"
+              className="flex items-center justify-center gap-1 px-3 py-2 sm:py-1.5 min-h-[40px] sm:min-h-0 text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-md transition-colors cursor-pointer whitespace-nowrap"
             >
               <X className="w-3.5 h-3.5" />
               <span>Limpiar</span>

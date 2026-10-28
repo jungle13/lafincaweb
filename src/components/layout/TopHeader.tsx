@@ -13,7 +13,6 @@ const VIEW_TITLES: Record<string, string> = {
   '/recetas': 'Fichas Técnicas / Recetas',
   '/inventario': 'Inventario de Carnes',
   '/catalogo': 'Catálogo de Carnes e Insumos',
-  '/insumos': 'Gestión de Insumos',
   '/ajustes': 'Inconsistencias y Ajustes',
   '/periodos': 'Control y Cierre de Periodos',
   '/dashboard': 'Dashboard General',

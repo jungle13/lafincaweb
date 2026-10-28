@@ -248,7 +248,7 @@ export default function ProductosVentaPage() {
         </div>
 
         {/* Buscador y Botón Nuevo */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full md:w-auto">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <input
@@ -256,14 +256,14 @@ export default function ProductosVentaPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar por código o nombre..."
-              className="w-full h-8 pl-8 pr-2.5 text-xs bg-slate-50/60 hover:bg-white focus:bg-white rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 placeholder-slate-400 transition-colors"
+              className="w-full min-h-[40px] sm:min-h-0 sm:h-8 pl-8 pr-2.5 text-sm sm:text-xs bg-slate-50/60 hover:bg-white focus:bg-white rounded-md border border-slate-200 focus:border-slate-400 outline-none text-slate-800 placeholder-slate-400 transition-colors"
             />
           </div>
 
           <button
             type="button"
             onClick={openCreateModal}
-            className="px-3 h-8 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap cursor-pointer"
+            className="w-full sm:w-auto min-h-[40px] sm:min-h-0 px-3 sm:h-8 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-all whitespace-nowrap cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Nuevo Producto</span>
@@ -346,7 +346,7 @@ export default function ProductosVentaPage() {
       {/* ------------------------------------------------------------ */}
       {/* TABLA PRINCIPAL DE PRODUCTOS VENDIBLES                       */}
       {/* ------------------------------------------------------------ */}
-      <div className="w-full border border-slate-200 rounded-lg bg-white shadow-2xs overflow-hidden">
+      <div className="w-full border border-slate-200 rounded-lg bg-white shadow-2xs overflow-hidden hidden md:block">
         <div className="relative max-h-[calc(100vh-250px)] overflow-y-auto overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase tracking-wider select-none shadow-2xs">

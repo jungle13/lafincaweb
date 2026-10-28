@@ -51,8 +51,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Productos Para la Venta', href: '/productos-venta', icon: UtensilsCrossed },
       { label: 'Recetas', href: '/recetas', icon: BookOpen },
-      { label: 'Catálogo de Carnes', href: '/catalogo', icon: Beef },
-      { label: 'Insumos y Costos', href: '/insumos', icon: PackageSearch },
+      { label: 'Catálogo de Carnes e Insumos', href: '/catalogo', icon: Beef },
     ],
   },
 ];

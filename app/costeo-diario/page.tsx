@@ -2644,7 +2644,7 @@ Trucha 8`;
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-4 -mb-20 md:-m-6 md:mb-0 bg-white overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 -mb-20 md:mb-0 bg-white overflow-hidden">
       
       {/* ============================================================ */}
       {/* SECCIÓN SUPERIOR STICKY / FIJA: PESTAÑAS + SUBHEADER ACCIONES*/}

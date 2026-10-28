@@ -82,7 +82,7 @@ export default function VentasPage() {
   const fechasDisponibles = (diarias || []).map((d) => d.fecha);
 
   return (
-    <div className="space-y-4 w-full px-2 sm:px-4 md:px-6 font-normal">
+    <div className="space-y-4 w-full font-normal">
       {/* 🏷️ Encabezado Principal Tipo Git */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200">
         <div className="flex items-center gap-3">

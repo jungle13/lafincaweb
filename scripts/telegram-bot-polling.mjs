@@ -393,24 +393,69 @@ async function consultarCompras(params = {}) {
 }
 
 // 5. Consultar Ventas y Precios de Platos en Carta
-async function consultarVentas(fecha, producto) {
+
+function normalizarTerminoBusqueda(term) {
+  const limpio = term.trim().toLowerCase();
+  if (limpio.startsWith('mazm') || limpio.startsWith('mazam')) return ['mazamorra', 'mazam'];
+  if (limpio.startsWith('tamal')) return ['tamal'];
+  if (limpio.startsWith('churr') || limpio.startsWith('churas')) return ['churrasco'];
+  if (limpio.startsWith('baby') || limpio.startsWith('babi')) return ['baby', 'viche'];
+  if (limpio.startsWith('costill')) return ['costilla'];
+  if (limpio.startsWith('sobrebarr')) return ['sobrebarriga'];
+  if (limpio.startsWith('punta')) return ['punta'];
+  if (limpio.startsWith('aguacat')) return ['aguacate'];
+  if (limpio.startsWith('ceboll')) return ['cebolla'];
+  if (limpio.startsWith('tomat')) return ['tomate'];
+  if (limpio.startsWith('platan')) return ['platano', 'plátano'];
+
+  const variantes = [limpio];
+  if (limpio.endsWith('es')) {
+    variantes.push(limpio.slice(0, -2));
+  } else if (limpio.endsWith('s')) {
+    variantes.push(limpio.slice(0, -1));
+  }
+  return Array.from(new Set(variantes));
+}
+
+async function consultarVentas(fecha, producto, fecha_fin) {
   try {
     if (producto && producto.trim() !== '') {
+      const variantes = normalizarTerminoBusqueda(producto);
+      const orFilter = variantes.map((v) => `nombre_producto.ilike.%${v}%`).join(',');
+
       let q = supabase
         .from('ventas_detalle')
         .select('fecha, nombre_producto, cantidad, valor_unitario, gran_total')
-        .ilike('nombre_producto', `%${producto.trim()}%`);
+        .or(orFilter);
 
-      if (fecha) q = q.eq('fecha', fecha);
-      const { data } = await q.order('fecha', { ascending: false }).limit(30);
+      if (fecha && fecha_fin) {
+        q = q.gte('fecha', fecha).lte('fecha', fecha_fin);
+      } else if (fecha) {
+        q = q.eq('fecha', fecha);
+      }
+      const { data, error } = await q.order('fecha', { ascending: false }).limit(60);
+
+      if (error) throw error;
+
+      const totalCantidad = (data || []).reduce((acc, d) => acc + Number(d.cantidad || 0), 0);
+      const totalDinero = (data || []).reduce((acc, d) => acc + Number(d.gran_total || 0), 0);
+      const porFecha = {};
+      (data || []).forEach((d) => {
+        porFecha[d.fecha] = (porFecha[d.fecha] || 0) + Number(d.cantidad || 0);
+      });
+
       return {
-        ventas_producto: (data || []).map((r) => ({
-          fecha: r.fecha,
-          producto: r.nombre_producto,
-          cantidad_vendida: Number(r.cantidad || 0),
-          precio_venta_publico: Number(r.cantidad ? Math.round(r.gran_total / r.cantidad) : r.valor_unitario),
-          valor_neto_sin_impuesto: Number(r.valor_unitario || 0),
-          total_vendido: Number(r.gran_total || 0),
+        producto_buscado: producto,
+        total_unidades_vendidas: totalCantidad,
+        total_dinero_recaudado: totalDinero,
+        desglose_por_fecha: porFecha,
+        ventas_producto: data?.map((d) => ({
+          fecha: d.fecha,
+          producto: d.nombre_producto,
+          cantidad_vendida: Number(d.cantidad || 0),
+          precio_venta_publico: Number(d.cantidad ? Math.round(d.gran_total / d.cantidad) : d.valor_unitario),
+          valor_neto_sin_impuesto: Number(d.valor_unitario || 0),
+          total_vendido: Number(d.gran_total || 0),
         })),
       };
     }
@@ -419,13 +464,20 @@ async function consultarVentas(fecha, producto) {
       .from('ventas_diarias')
       .select('fecha, dia_semana, total_articulos, venta_neta, gran_total')
       .order('fecha', { ascending: false })
-      .limit(fecha ? 1 : 7);
+      .limit(fecha ? (fecha_fin ? 7 : 1) : 7);
 
-    if (fecha) query = query.eq('fecha', fecha);
-    const { data } = await query;
+    if (fecha && fecha_fin) {
+      query = query.gte('fecha', fecha).lte('fecha', fecha_fin);
+    } else if (fecha) {
+      query = query.eq('fecha', fecha);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
     return { jornadas: data || [] };
-  } catch (e) {
-    return { error: e.message };
+  } catch (err) {
+    return { error: err.message };
   }
 }
 
@@ -498,7 +550,9 @@ REGLAS DE FORMATO ESTRICTAS:
      Usa consultar_movimientos_cocina con tipo: 'TRASLADO':
      * Lista cada insumo: - Insumo: Cantidad Unidad | Costo Unitario: $COP | Total: $COP
      * Total Traslado: $COP.
-   - Si piden ventas de fin de semana (sábado y domingo): indica sábado, domingo y el total consolidado.
+   - Si piden ventas de fin de semana (sábado y domingo):
+     Usa consultar_ventas con fecha: '2026-10-24', fecha_fin: '2026-10-25' y el producto.
+     Muestra siempre el desglose: Sábado 2026-10-24: X unidades | Domingo 2026-10-25: Y unidades | Total: Z unidades.
    - Si piden "precio de venta" o "precio en carta" de un plato (ej: Tamal, Mazamorra, Churrasco, etc.):
      Usa consultar_ventas buscando el producto para devolver el precio de venta al público en carta.
    - Si piden "costo de insumo" o "costo de catálogo" de materia prima:
@@ -546,12 +600,13 @@ const tools = [
   {
     type: 'function',
     function: {
-      name: 'consultar_ventas',
-      description: 'Consulta ventas y PRECIOS DE VENTA al público en la carta de platos terminados (ej: Tamal: $24.000 COP, Tamal ejecutivo: $20.000 COP, Mazamorra: $8.000 COP, Churrasco, etc.) o cantidades vendidas en fechas específicas.',
+            name: 'consultar_ventas',
+      description: 'Consulta ventas y PRECIOS DE VENTA al público en la carta de platos terminados (ej: Tamal: $24.000 COP, Mazamorra: $8.000 COP, etc.), cantidades vendidas y desglose por fecha.',
       parameters: {
         type: 'object',
         properties: {
-          fecha: { type: 'string', description: 'Fecha YYYY-MM-DD. Opcional.' },
+          fecha: { type: 'string', description: 'Fecha inicio YYYY-MM-DD. Opcional.' },
+          fecha_fin: { type: 'string', description: 'Fecha fin YYYY-MM-DD (para fin de semana usar 2026-10-25). Opcional.' },
           producto: { type: 'string', description: 'Nombre del plato vendido (ej: Tamal, Mazamorra, Churrasco). Opcional.' },
         },
       },
@@ -619,7 +674,7 @@ async function ejecutarTool(callName, args) {
   if (callName === 'consultar_movimientos_cocina' || callName === 'consultar_traslados_cocina') {
     return await consultarMovimientosCocina(args.fecha, args.tipo || (callName === 'consultar_traslados_cocina' ? 'TRASLADO' : undefined), args.categoria, args.insumo);
   } else if (callName === 'consultar_ventas') {
-    return await consultarVentas(args.fecha, args.producto);
+    return await consultarVentas(args.fecha, args.producto, args.fecha_fin);
   } else if (callName === 'consultar_costeo_diario') {
     return await consultarCosteoDiario(args.fecha);
   } else if (callName === 'consultar_stock_conteo') {

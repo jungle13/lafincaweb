@@ -368,29 +368,18 @@ export async function getVentasRentabilidad(periodoId: string = 'per-2026-09'): 
     totalVentaNeta += parseFloat(d.venta_neta || 0);
   });
 
-  // 2. Obtener costos directos y gastos operativos (protegido si no existe la tabla)
-  let gastos: any[] = [];
-  try {
-    const { data: gData, error: gErr } = await supabase
-      .from('transacciones_gastos_insumos')
-      .select('tipo_contable, valor_total')
-      .eq('periodo_id', periodoId);
-    if (!gErr && gData) gastos = gData;
-  } catch {
-    gastos = [];
-  }
-
+  // 2. Obtener costos directos desde compras_detalle
   let totalCostosDirectosInsumos = 0;
   let totalGastosOperativos = 0;
-
-  (gastos || []).forEach((g) => {
-    const val = parseFloat(g.valor_total || 0);
-    if (g.tipo_contable === 'COSTO_DIRECTO') {
-      totalCostosDirectosInsumos += val;
-    } else {
-      totalGastosOperativos += val;
+  try {
+    const { data: cData } = await supabase
+      .from('compras_detalle')
+      .select('valor_compra')
+      .eq('periodo_id', periodoId);
+    if (cData) {
+      totalCostosDirectosInsumos = cData.reduce((acc, c) => acc + Number(c.valor_compra || 0), 0);
     }
-  });
+  } catch {}
 
   const margenBrutoPesos = totalVentaNeta - totalCostosDirectosInsumos;
   const margenBrutoPorcentaje = totalVentaNeta > 0 ? (margenBrutoPesos / totalVentaNeta) * 100 : 0;

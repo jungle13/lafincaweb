@@ -587,7 +587,7 @@ export default function AuditoriaCocinaPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-4 -mb-20 md:-m-6 md:mb-0 bg-white overflow-hidden font-sans">
+    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 -mb-20 md:mb-0 bg-white overflow-hidden font-sans">
       
       {/* 1. SECCIÓN SUPERIOR STICKY: Barra de Pestañas + Subheader modular */}
       <div className="shrink-0 bg-white border-b border-slate-200 z-20 shadow-2xs">

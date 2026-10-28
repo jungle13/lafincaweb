@@ -11,7 +11,7 @@ interface Props {
 
 export default function VentasKPIHeader({ kpis }: Props) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
       {/* 1. Gran Total Ventas */}
       <div className="bg-white rounded-lg p-3 border border-slate-200">
         <div className="flex items-center justify-between gap-2">
