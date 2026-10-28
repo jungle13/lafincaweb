@@ -27,22 +27,24 @@ export async function GET(request: Request) {
     const fechaInicio = searchParams.get('fecha_inicio') || '2026-09-01';
     const fechaFin = searchParams.get('fecha_fin') || '2026-09-30';
 
-    // 1. Obtener EXCLUSIVAMENTE movimientos de carnes trasladadas a cocina (TRASLADO_COCINA)
-    // Sin incluir devoluciones, solo lo que efectivamente se pasa a cocina
+    // 1. Obtener movimientos de traslados a cocina desde registros_costeo_cocina
     let allMovs: any[] = [];
     let fromMov = 0;
     const stepMov = 1000;
     while (true) {
       const { data: chunk, error: errChunk } = await supabase
-        .from('movimientos_inventario')
+        .from('registros_costeo_cocina')
         .select('*, catalogo_insumos(codigo, nombre, categoria, costo_unitario_kg, tipo_medida)')
-        .eq('tipo_movimiento', 'TRASLADO_COCINA')
+        .eq('tipo', 'TRASLADO')
         .gte('fecha', fechaInicio)
         .lte('fecha', fechaFin)
-        .order('fecha_hora', { ascending: true })
+        .order('created_at', { ascending: true })
         .range(fromMov, fromMov + stepMov - 1);
 
-      if (errChunk) throw errChunk;
+      if (errChunk) {
+        console.error('Error fetching registros_costeo_cocina for control-diario:', errChunk);
+        break;
+      }
       if (!chunk || chunk.length === 0) break;
       allMovs.push(...chunk);
       if (chunk.length < stepMov) break;
@@ -92,29 +94,47 @@ export async function GET(request: Request) {
       });
     }
 
-    // Acumular únicamente movimientos de lo que se pasa a cocina (TRASLADO_COCINA)
+    // Acumular movimientos de carnes trasladadas a cocina
     allMovs.forEach((m: any) => {
       const diaObj = diasMap.get(m.fecha);
       if (!diaObj) return;
 
-      const cantKg = parseFloat(m.cant_sin_porcionar_kg) || 0;
-      const porcUnd = parseInt(m.porciones_und) || 0;
-      const pesoPorcKg = parseFloat(m.peso_porciones_kg) || 0;
-      const totKg = cantKg + pesoPorcKg;
-      const costo = parseFloat(m.valor_total_movimiento) || 0;
+      const isCarne = (m.categoria || '').toLowerCase().includes('carne') ||
+                      (m.catalogo_insumos?.categoria || '').toLowerCase().includes('carne') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('carne') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('lomo') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('churrasco') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('pollo') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('pechuga') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('costilla') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('tocino') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('chicharron') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('chorizo') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('morcilla') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('sobrebarriga') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('punta de anca') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('trucha') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('tilapia') ||
+                      (m.nombre_insumo || '').toLowerCase().includes('salmon');
+
+      if (!isCarne) return;
+
+      const totKg = parseFloat(m.cantidad) || 0;
+      const costo = parseFloat(m.valor_total) || (totKg * (parseFloat(m.costo_unitario) || 0));
+      const porcUnd = m.unidad === 'Und' ? Math.round(totKg) : 0;
 
       diaObj.movimientosCarnes.push({
         id: m.id,
-        hora: m.fecha_hora ? m.fecha_hora.substring(11, 16) : '12:00',
+        hora: m.created_at ? new Date(m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '12:00',
         tipoMovimiento: 'TRASLADO_COCINA',
         insumoCodigo: m.catalogo_insumos?.codigo || 'S/C',
-        insumoNombre: m.catalogo_insumos?.nombre || 'Insumo',
-        categoria: m.catalogo_insumos?.categoria || 'CARNES',
-        cantSinPorcKg: cantKg,
+        insumoNombre: m.nombre_insumo || m.catalogo_insumos?.nombre || 'Insumo',
+        categoria: m.categoria || m.catalogo_insumos?.categoria || 'CARNES',
+        cantSinPorcKg: totKg,
         porcionesUnd: porcUnd,
-        pesoPorcKg: pesoPorcKg,
+        pesoPorcKg: m.unidad !== 'Und' ? totKg : 0,
         totalKg: totKg,
-        costoUnit: parseFloat(m.costo_unitario_kg) || 0,
+        costoUnit: parseFloat(m.costo_unitario) || 0,
         valorTotal: costo,
         observaciones: m.observaciones || ''
       });

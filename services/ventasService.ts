@@ -368,11 +368,17 @@ export async function getVentasRentabilidad(periodoId: string = 'per-2026-09'): 
     totalVentaNeta += parseFloat(d.venta_neta || 0);
   });
 
-  // 2. Obtener costos directos y gastos operativos de transacciones_gastos_insumos
-  const { data: gastos } = await supabase
-    .from('transacciones_gastos_insumos')
-    .select('tipo_contable, valor_total')
-    .eq('periodo_id', periodoId);
+  // 2. Obtener costos directos y gastos operativos (protegido si no existe la tabla)
+  let gastos: any[] = [];
+  try {
+    const { data: gData, error: gErr } = await supabase
+      .from('transacciones_gastos_insumos')
+      .select('tipo_contable, valor_total')
+      .eq('periodo_id', periodoId);
+    if (!gErr && gData) gastos = gData;
+  } catch {
+    gastos = [];
+  }
 
   let totalCostosDirectosInsumos = 0;
   let totalGastosOperativos = 0;
@@ -459,14 +465,18 @@ export async function getComparacionCuadreVentas(
 
   if (errVentas) throw errVentas;
 
-  // 2. Obtener planillas de auditoría de caja
-  const { data: planillasCaja, error: errPlanillas } = await supabase
-    .from('auditoria_cierres_caja')
-    .select('*')
-    .eq('periodo_id', periodoId)
-    .order('pagina_planilla', { ascending: true });
-
-  if (errPlanillas) throw errPlanillas;
+  // 2. Obtener planillas de auditoría de caja (protegido si no existe la tabla)
+  let planillasCaja: any[] = [];
+  try {
+    const { data: pData, error: pErr } = await supabase
+      .from('auditoria_cierres_caja')
+      .select('*')
+      .eq('periodo_id', periodoId)
+      .order('pagina_planilla', { ascending: true });
+    if (!pErr && pData) planillasCaja = pData;
+  } catch {
+    planillasCaja = [];
+  }
 
   const planillasByFecha = new Map<string, AuditoriaCierrePlanilla[]>();
   (planillasCaja || []).forEach((p: any) => {

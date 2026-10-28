@@ -123,56 +123,26 @@ export async function GET(request: Request) {
       .in('fecha', dates)
       .limit(10000);
 
-    // 5. Fetch movimientos_inventario for these dates
-    const { data: movimientos } = await supabase
-      .from('movimientos_inventario')
+    // 5. Fetch all registros_costeo_cocina for these dates
+    const { data: allRegistros, error: regErr } = await supabase
+      .from('registros_costeo_cocina')
       .select('*')
       .in('fecha', dates)
-      .limit(10000);
+      .limit(20000);
 
-    // 6. Fetch conteos_fisicos and details for these dates
-    const { data: conteos } = await supabase
-      .from('conteos_fisicos')
-      .select('id, fecha, tipo')
-      .in('fecha', dates)
-      .limit(500);
-
-    const conteoIds = (conteos || []).map((c: any) => c.id);
-    let conteoDetalles: any[] = [];
-    if (conteoIds.length > 0) {
-      const { data: cd } = await supabase
-        .from('conteos_fisicos_detalle')
-        .select('*')
-        .in('conteo_id', conteoIds)
-        .limit(10000);
-      
-      conteoDetalles = cd || [];
-      const coveredIds = new Set((conteoDetalles || []).map((d: any) => d.conteo_id));
-      const missingIds = conteoIds.filter((id: string) => !coveredIds.has(id));
-      if (missingIds.length > 0) {
-        for (const mId of missingIds) {
-          const { data: missingCd } = await supabase
-            .from('conteos_fisicos_detalle')
-            .select('*')
-            .eq('conteo_id', mId);
-          if (missingCd && missingCd.length > 0) {
-            conteoDetalles = conteoDetalles.concat(missingCd);
-          }
-        }
-      }
+    if (regErr) {
+      console.error('Error fetching registros_costeo_cocina for audit:', regErr);
     }
 
     // Process each day
     const sheets = days.map((dayInfo: any) => {
       const dateStr = dayInfo.fecha;
       const dayVentas = (ventasDetalle || []).filter((v: any) => v.fecha === dateStr);
-      const dayMovs = (movimientos || []).filter((m: any) => m.fecha === dateStr);
+      const dayRegs = (allRegistros || []).filter((r: any) => r.fecha === dateStr);
       
-      const dayAperturaConteo = (conteos || []).find((c: any) => c.fecha === dateStr && c.tipo === 'COCINA_APERTURA');
-      const dayCierreConteo = (conteos || []).find((c: any) => c.fecha === dateStr && c.tipo === 'COCINA_CIERRE');
-
-      const dayAperturaDetalles = dayAperturaConteo ? conteoDetalles.filter((d: any) => d.conteo_id === dayAperturaConteo.id) : [];
-      const dayCierreDetalles = dayCierreConteo ? conteoDetalles.filter((d: any) => d.conteo_id === dayCierreConteo.id) : [];
+      const dayAperturaDetalles = dayRegs.filter((r: any) => r.tipo === 'APERTURA');
+      const dayMovs = dayRegs.filter((r: any) => r.tipo === 'TRASLADO');
+      const dayCierreDetalles = dayRegs.filter((r: any) => r.tipo === 'CIERRE');
 
       // Create protein audit items
       const proteinMap = new Map<string, any>();

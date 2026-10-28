@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import catalogoOficial from '@/lib/catalogo-oficial.json';
 import { 
   FileSpreadsheet,
   ClipboardList, 
@@ -27,7 +28,10 @@ import {
   CheckCircle2,
   Sparkles,
   Columns2,
-  Info
+  Info,
+  Loader2,
+  Eraser,
+  RefreshCw
 } from 'lucide-react';
 
 interface InsumoRegistro {
@@ -62,6 +66,8 @@ interface CategoryGroup {
   id: string;
   name: string;
   items: InsumoItem[];
+  subtotal?: number;
+  itemsCount?: number;
 }
 
 interface CosteoSheet {
@@ -82,447 +88,6 @@ interface AllowedUnitOption {
   toBaseFactor: (catalogItem?: any) => number;
 }
 
-function getAllowedUnitsForInsumo(item?: {
-  nombre?: string;
-  insumo?: string;
-  categoria?: string;
-  unidad_medida?: string;
-  tipo_medida?: string;
-  es_carne?: boolean;
-  peso_estandar_porcion_kg?: number;
-  peso_porc_gramos?: number;
-}): AllowedUnitOption[] {
-  const n = (item?.nombre || item?.insumo || '').toLowerCase();
-  const c = (item?.categoria || '').toLowerCase();
-  const u = (item?.unidad_medida || '').toLowerCase();
-
-  // 1. Huevos
-  if (n.includes('huevo')) {
-    return [
-      { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 },
-      { value: 'Panal', label: 'Panales (30 Und)', baseUnit: 'Und', toBaseFactor: () => 30 }
-    ];
-  }
-
-  // 2. Leche o Líquidos (aceite, vinagre, jugos)
-  if (n.includes('leche') || n.includes('aceite') || n.includes('jugo') || n.includes('líquid') || u === 'litro' || u === 'lt') {
-    return [
-      { value: 'Litro', label: 'Litros (Lt)', baseUnit: 'Litro', toBaseFactor: () => 1 },
-      { value: 'Bolsa', label: 'Bolsas (1 Lt)', baseUnit: 'Litro', toBaseFactor: () => 1 },
-      { value: 'Mililitro', label: 'Mililitros (ml)', baseUnit: 'Litro', toBaseFactor: () => 0.001 }
-    ];
-  }
-
-  // 3. Desechables y Empaques
-  if (c.includes('desechable') || c.includes('empaque') || n.includes('vaso') || n.includes('servilleta') || n.includes('cubierto') || n.includes('contenedor')) {
-    return [
-      { value: 'Paquete', label: 'Paquetes', baseUnit: 'Paquete', toBaseFactor: () => 1 },
-      { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 }
-    ];
-  }
-
-  // 4. Granos y Abarrotes
-  if (c.includes('grano') || c.includes('abarrote') || n.includes('arroz') || n.includes('frijol') || n.includes('lenteja') || n.includes('azucar') || n.includes('sal')) {
-    return [
-      { value: 'Kg', label: 'Kilogramos (Kg)', baseUnit: 'Kg', toBaseFactor: () => 1 },
-      { value: 'Libras', label: 'Libras (500g)', baseUnit: 'Kg', toBaseFactor: () => 0.5 },
-      { value: 'Gramos', label: 'Gramos (g)', baseUnit: 'Kg', toBaseFactor: () => 0.001 },
-      { value: 'Paquete', label: 'Paquetes', baseUnit: 'Kg', toBaseFactor: () => 1 }
-    ];
-  }
-
-  // 5. Carnes y Proteínas (o insumos con porción)
-  const isMeat = item?.es_carne || c.includes('carne') || c.includes('pollo') || c.includes('cerdo') || c.includes('pescado') || (item?.peso_estandar_porcion_kg && item.peso_estandar_porcion_kg > 0);
-  if (isMeat) {
-    const stdWeight = item?.peso_estandar_porcion_kg || (item?.peso_porc_gramos ? item.peso_porc_gramos / 1000 : getPortionWeightKg(n)) || 0.25;
-    return [
-      { value: 'Kg', label: 'Kilogramos (Kg)', baseUnit: 'Kg', toBaseFactor: () => 1 },
-      { value: 'Porciones', label: `Porciones (${Math.round(stdWeight * 1000)}g c/u)`, baseUnit: 'Kg', toBaseFactor: () => stdWeight },
-      { value: 'Libras', label: 'Libras (500g)', baseUnit: 'Kg', toBaseFactor: () => 0.5 },
-      { value: 'Gramos', label: 'Gramos (g)', baseUnit: 'Kg', toBaseFactor: () => 0.001 }
-    ];
-  }
-
-  // 6. Por defecto (Verduras e insumos generales)
-  return [
-    { value: 'Kg', label: 'Kilogramos (Kg)', baseUnit: 'Kg', toBaseFactor: () => 1 },
-    { value: 'Libras', label: 'Libras (500g)', baseUnit: 'Kg', toBaseFactor: () => 0.5 },
-    { value: 'Gramos', label: 'Gramos (g)', baseUnit: 'Kg', toBaseFactor: () => 0.001 },
-    { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 },
-    { value: 'Bolsa', label: 'Bolsa / Atado', baseUnit: 'Kg', toBaseFactor: () => 1 }
-  ];
-}
-
-// Generador de título formal concatenando fecha
-function formatDateToTitle(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const dateObj = new Date(year, month - 1, day);
-  
-  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-  const meses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
-
-  const diaSemana = dias[dateObj.getDay()];
-  const mesNombre = meses[dateObj.getMonth()];
-
-  return `${diaSemana}, ${day} de ${mesNombre} de ${year} - Hoja Costeo Cocina`;
-}
-
-// Datos de prueba iniciales basados en los archivos de la Finca
-const INITIAL_SHEETS: CosteoSheet[] = [
-  {
-    id: 'sheet-2026-10-23',
-    month: '2026-10',
-    dateStr: '2026-10-23',
-    title: 'Viernes, 23 de Octubre de 2026 - Hoja Costeo Cocina',
-    posSales: 4250000,
-    devoluciones: 34000,
-    categories: [
-      {
-        id: 'verduras',
-        name: 'Verduras e Insumos',
-        items: [
-          { 
-            id: 'v1', 
-            name: 'Plátano maduro institucional', 
-            qty: 49.0, 
-            unit: 'Kg', 
-            unitPrice: 2000, 
-            total: 98000,
-            registros: [
-              {
-                id: 'reg-v1-0',
-                hora: '07:00 AM',
-                usuario: 'Administradora',
-                tipo: 'INVENTARIO_INICIAL_COCINA',
-                origen: 'Inventario Cocina (Cierre anterior)',
-                destino: 'Cocina Principal',
-                cantidad: 5.0,
-                unidad: 'Kg',
-                modoIngreso: 'MANUAL',
-                costoUnitario: 2000,
-                total: 10000,
-                observaciones: 'Saldo de apertura en mesón de preparación'
-              },
-              {
-                id: 'reg-v1-1',
-                hora: '08:30 AM',
-                usuario: 'Bodeguero (Carlos M.)',
-                tipo: 'BODEGA_A_COCINA',
-                origen: 'Bodega General',
-                destino: 'Cocina Principal',
-                cantidad: 26.1,
-                unidad: 'Kg',
-                modoIngreso: 'MANUAL',
-                costoUnitario: 2000,
-                total: 52200,
-                observaciones: 'Primera bajada matutina para patacones'
-              },
-              {
-                id: 'reg-v1-2',
-                hora: '11:45 AM',
-                usuario: 'Administradora',
-                tipo: 'BODEGA_A_COCINA',
-                origen: 'Bodega General',
-                destino: 'Cocina Principal',
-                cantidad: 22.9,
-                unidad: 'Kg',
-                modoIngreso: 'CALCULADO_UNIDAD',
-                detalleCalculo: '1 canastilla completa pesada en báscula',
-                costoUnitario: 2000,
-                total: 45800,
-                observaciones: 'Refuerzo de mediodía según demanda'
-              }
-            ]
-          },
-          { id: 'v2', name: 'Cebolla larga / junca', qty: 7.0, unit: 'Kg', unitPrice: 2000, total: 14000 },
-          { id: 'v3', name: 'Limón Tahití fresco', qty: 7.9, unit: 'Kg', unitPrice: 2500, total: 19750 },
-          { id: 'v4', name: 'Tomate chonto seleccionado', qty: 2.5, unit: 'Kg', unitPrice: 2500, total: 6250 }
-        ]
-      },
-      {
-        id: 'carnes',
-        name: 'Carnes y Proteínas (Saldo Cocina + Traslados)',
-        items: [
-          { 
-            id: 'c1', 
-            name: 'Costilla ahumada de cerdo (400g)', 
-            qty: 12.0, 
-            unit: 'Kg', 
-            unitPrice: 18000, 
-            total: 216000,
-            isInitialInventory: true,
-            registros: [
-              {
-                id: 'reg-c1-1',
-                hora: '07:15 AM',
-                usuario: 'Administradora',
-                tipo: 'INVENTARIO_INICIAL_COCINA',
-                origen: 'Inventario Cocina (Cierre anterior)',
-                destino: 'Cocina Principal',
-                cantidad: 1.6,
-                unidad: 'Kg',
-                modoIngreso: 'MANUAL',
-                costoUnitario: 18000,
-                total: 28800,
-                observaciones: 'Saldo en refrigerador de cocina del día anterior'
-              },
-              {
-                id: 'reg-c1-2',
-                hora: '09:40 AM',
-                usuario: 'Bodeguero (Carlos M.)',
-                tipo: 'BODEGA_A_COCINA',
-                origen: 'Bodega General (Cuartos Fríos)',
-                destino: 'Cocina Principal',
-                cantidad: 10.4,
-                unidad: 'Kg',
-                modoIngreso: 'CALCULADO_PESO',
-                detalleCalculo: '26 porciones pesadas x 400g',
-                costoUnitario: 18000,
-                total: 187200,
-                observaciones: 'Traslado para parrilla de almuerzos'
-              },
-              {
-                id: 'reg-c1-3',
-                hora: '03:45 PM',
-                usuario: 'Administradora',
-                tipo: 'DEVOLUCION_COCINA',
-                origen: 'Cocina Principal',
-                destino: 'Bodega General (Cuartos Fríos)',
-                cantidad: 2.0,
-                unidad: 'Kg',
-                modoIngreso: 'MANUAL',
-                detalleCalculo: '5 porciones devueltas x 400g',
-                costoUnitario: 18000,
-                total: 36000,
-                observaciones: 'Devolución a frío por excedente de turno tarde'
-              }
-            ]
-          },
-          { id: 'c2', name: 'Filete Basa seleccionado', qty: 10.0, unit: 'Kg', unitPrice: 15500, total: 155000 },
-          { id: 'c3', name: 'Punta de anca de res', qty: 2.0, unit: 'Kg', unitPrice: 44000, total: 88000 },
-          { id: 'c4', name: 'Carne molida de res especial', qty: 7.1, unit: 'Kg', unitPrice: 25900, total: 183890 }
-        ]
-      },
-      {
-        id: 'granos',
-        name: 'Granos y Abarrotes',
-        items: [
-          { id: 'g1', name: 'Arroz blanco institucional', qty: 3.0, unit: 'Kg', unitPrice: 5080, total: 15240 },
-          { id: 'g2', name: 'Panela en atados', qty: 5.0, unit: 'Atado', unitPrice: 4300, total: 21500 },
-          { id: 'g3', name: 'Aceite vegetal garrafa', qty: 1.0, unit: 'Und', unitPrice: 18000, total: 18000 }
-        ]
-      },
-      {
-        id: 'desechables',
-        name: 'Desechables y Empaques',
-        items: [
-          { id: 'd1', name: 'Contenedor térmico sopero 16 oz', qty: 5.0, unit: 'Paquete', unitPrice: 11200, total: 56000 },
-          { id: 'd2', name: 'Servilletas dispensador 1 a 1', qty: 5.0, unit: 'Paquete', unitPrice: 2000, total: 10000 }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'sheet-2026-10-22',
-    month: '2026-10',
-    dateStr: '2026-10-22',
-    title: 'Jueves, 22 de Octubre de 2026 - Hoja Costeo Cocina',
-    posSales: 4250000,
-    categories: [
-      {
-        id: 'verduras',
-        name: 'Verduras e Insumos',
-        items: [
-          { id: 'v1', name: 'Plátano maduro institucional', qty: 49.0, unit: 'Kg', unitPrice: 2000, total: 98000 },
-          { id: 'v2', name: 'Cebolla larga / junca', qty: 7.0, unit: 'Kg', unitPrice: 2000, total: 14000 }
-        ]
-      },
-      {
-        id: 'carnes',
-        name: 'Carnes y Proteínas (Saldo Cocina + Traslados)',
-        items: [
-          { id: 'c1', name: 'Costilla ahumada de cerdo', qty: 12.0, unit: 'Kg', unitPrice: 18000, total: 216000 }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'sheet-2026-10-21',
-    month: '2026-10',
-    dateStr: '2026-10-21',
-    title: 'Miércoles, 21 de Octubre de 2026 - Hoja Costeo Cocina',
-    posSales: 3980000,
-    categories: [
-      {
-        id: 'verduras',
-        name: 'Verduras e Insumos',
-        items: [
-          { id: 'v1', name: 'Plátano maduro institucional', qty: 35.0, unit: 'Kg', unitPrice: 2000, total: 70000 }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'sheet-2026-10-20',
-    month: '2026-10',
-    dateStr: '2026-10-20',
-    title: 'Martes, 20 de Octubre de 2026 - Hoja Costeo Cocina',
-    posSales: 3750000,
-    categories: []
-  },
-  {
-    id: 'sheet-2026-09-30',
-    month: '2026-09',
-    dateStr: '2026-09-30',
-    title: 'Miércoles, 30 de Septiembre de 2026 - Hoja Costeo Cocina',
-    posSales: 4100000,
-    categories: [
-      {
-        id: 'carnes',
-        name: 'Carnes y Proteínas (Saldo Cocina + Traslados)',
-        items: [
-          { id: 'c1-sep', name: 'Costilla San Luis de cerdo', qty: 15.0, unit: 'Kg', unitPrice: 22900, total: 343500 }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'sheet-2026-09-29',
-    month: '2026-09',
-    dateStr: '2026-09-29',
-    title: 'Martes, 29 de Septiembre de 2026 - Hoja Costeo Cocina',
-    posSales: 3600000,
-    categories: []
-  }
-];
-
-// Evaluador aritmético inteligente para campo de cantidad (soporta "26.1 + 22.9", "5*3.5", etc.)
-function evaluateQtyFormula(formula: string): { value: number; isValid: boolean; preview?: string } {
-  if (!formula || !formula.trim()) return { value: 0, isValid: false };
-  try {
-    const sanitized = formula.trim().replace(/,/g, '.').replace(/x/gi, '*');
-    if (!/^[\d\s\+\-\*/\(\)\.]+$/.test(sanitized)) {
-      return { value: 0, isValid: false };
-    }
-    // Si termina en operador mientras se escribe
-    if (/[\+\-\*/]$/.test(sanitized.trim())) {
-      const sub = sanitized.trim().slice(0, -1);
-      const val = Function(`'use strict'; return (${sub})`)();
-      if (typeof val === 'number' && !isNaN(val) && isFinite(val)) {
-        return { value: Number(val.toFixed(2)), isValid: true, preview: '... sumando' };
-      }
-      return { value: 0, isValid: false };
-    }
-    const val = Function(`'use strict'; return (${sanitized})`)();
-    if (typeof val === 'number' && !isNaN(val) && isFinite(val) && val > 0) {
-      const rounded = Number(val.toFixed(2));
-      const hasOp = /[+\-*/]/.test(sanitized);
-      return {
-        value: rounded,
-        isValid: true,
-        preview: hasOp ? `= ${rounded}` : undefined
-      };
-    }
-  } catch {}
-  return { value: 0, isValid: false };
-}
-
-// Gramaje estándar del catálogo de carnes (peso estándar por porción en Kg)
-function getPortionWeightKg(name: string): number {
-  const match = name.match(/(\d+)\s*g/i);
-  if (match) return parseFloat(match[1]) / 1000;
-  const lower = name.toLowerCase();
-  if (lower.includes('costilla')) return 0.400; // 400g
-  if (lower.includes('punta de anca') || lower.includes('churrasco') || lower.includes('bife')) return 0.350; // 350g
-  if (lower.includes('basa') || lower.includes('filete') || lower.includes('pechuga') || lower.includes('pollo')) return 0.300; // 300g
-  if (lower.includes('sobrebarriga')) return 0.380; // 380g
-  if (lower.includes('molida')) return 0.250; // 250g
-  if (lower.includes('tocino') || lower.includes('chicharron')) return 0.200; // 200g
-  return 0.350; // 350g estándar
-}
-
-
-// Catálogo maestro base con parámetros oficiales de porcionado y costos
-const DEFAULT_CATALOG_ITEMS = [
-  // Carnes de Res
-  { codigo: 'CAR-033', nombre: 'Punta de anca', categoria: 'CARNE DE RES', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.222, costo_unitario_kg: 44000 },
-  { codigo: 'CAR-026', nombre: 'Churrasco', categoria: 'CARNE DE RES', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.250, costo_unitario_kg: 38000 },
-  { codigo: 'CAR-027', nombre: 'Costilla de res', categoria: 'CARNE DE RES', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.200, costo_unitario_kg: 18500 },
-  { codigo: 'CAR-023', nombre: 'Carne molida', categoria: 'CARNE DE RES', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.250, costo_unitario_kg: 10900 },
-  { codigo: 'CAR-020', nombre: 'Caderita', categoria: 'CARNE DE RES', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.286, costo_unitario_kg: 29800 },
-  { codigo: 'CAR-034', nombre: 'Sobaco', categoria: 'CARNE DE RES', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.200, costo_unitario_kg: 25900 },
-  { codigo: 'CAR-029', nombre: 'Lengua de res', categoria: 'CARNE DE RES', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.200, costo_unitario_kg: 23900 },
-  // Carnes de Cerdo
-  { codigo: 'CAR-003', nombre: 'Costilla ahumada', categoria: 'CARNE DE CERDO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.222, costo_unitario_kg: 24500 },
-  { codigo: 'CAR-006', nombre: 'Costilla san luis', categoria: 'CARNE DE CERDO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.500, costo_unitario_kg: 22900 },
-  { codigo: 'CAR-010', nombre: 'Lomo de cerdo', categoria: 'CARNE DE CERDO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.222, costo_unitario_kg: 19000 },
-  { codigo: 'CER-075', nombre: 'Tocino', categoria: 'CARNE DE CERDO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.394, costo_unitario_kg: 21900 },
-  { codigo: 'CAR-001', nombre: 'Bondiola importada', categoria: 'CARNE DE CERDO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.333, costo_unitario_kg: 20000 },
-  // Pollo
-  { codigo: 'CAR-041', nombre: 'Filete de pollo', categoria: 'CARNE POLLO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.200, costo_unitario_kg: 18500 },
-  { codigo: 'CAR-037', nombre: 'Alas de pollo', categoria: 'CARNE POLLO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.250, costo_unitario_kg: 15750 },
-  { codigo: 'CAR-043', nombre: 'Pernil de pollo', categoria: 'CARNE POLLO', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.222, costo_unitario_kg: 7700 },
-  // Pescados y Mariscos
-  { codigo: 'PES-067', nombre: 'Tilapia 350/450', categoria: 'PESCADOS Y MARISCOS', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.333, costo_unitario_kg: 18000 },
-  { codigo: 'PES-069', nombre: 'Trucha', categoria: 'PESCADOS Y MARISCOS', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.250, costo_unitario_kg: 23000 },
-  { codigo: 'PES-066', nombre: 'Salmon', categoria: 'PESCADOS Y MARISCOS', unidad_medida: 'Kg', es_carne: true, peso_estandar_porcion_kg: 0.200, costo_unitario_kg: 55000 },
-  // Huevos y Lácteos
-  { codigo: 'HUE-001', nombre: 'Huevos AA frescos', categoria: 'HUEVOS Y LACTEOS', unidad_medida: 'Und', es_carne: false, costo_unitario_kg: 650 },
-  { codigo: 'LAC-001', nombre: 'Leche entera pasteurizada', categoria: 'HUEVOS Y LACTEOS', unidad_medida: 'Litro', es_carne: false, costo_unitario_kg: 3800 },
-  // Verduras
-  { codigo: 'VER-001', nombre: 'Plátano maduro institucional', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 2000 },
-  { codigo: 'VER-002', nombre: 'Cebolla larga / junca', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 2000 },
-  { codigo: 'VER-003', nombre: 'Limón Tahití fresco', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 2500 },
-  { codigo: 'VER-004', nombre: 'Tomate chonto seleccionado', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 2500 },
-  // Granos y Abarrotes
-  { codigo: 'GRA-001', nombre: 'Arroz blanco institucional', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 5080 },
-  { codigo: 'GRA-002', nombre: 'Panela en atados', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Atado', es_carne: false, costo_unitario_kg: 4300 },
-  { codigo: 'GRA-003', nombre: 'Aceite vegetal garrafa', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Litro', es_carne: false, costo_unitario_kg: 18000 },
-  { codigo: 'GRA-004', nombre: 'Arroz', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 5080 },
-  { codigo: 'GRA-005', nombre: 'Arroz Proarroz x 50 kg', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Bulto', es_carne: false, costo_unitario_kg: 254000 },
-  { codigo: 'GRA-006', nombre: 'Frijol', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 8500 },
-  { codigo: 'GRA-007', nombre: 'Lenteja', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 7000 },
-  { codigo: 'GRA-008', nombre: 'Azúcar', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 4500 },
-  { codigo: 'GRA-009', nombre: 'Sal', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 1400 },
-  { codigo: 'GRA-010', nombre: 'Café', categoria: 'GRANOS Y ABARROTES', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 27500 },
-  // Verduras adicionales
-  { codigo: 'VER-005', nombre: 'Zanahoria', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 2000 },
-  { codigo: 'VER-006', nombre: 'Papa capira', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 3500 },
-  { codigo: 'VER-007', nombre: 'Papa criolla', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 4000 },
-  { codigo: 'VER-008', nombre: 'Cebolla cabezona', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 3700 },
-  { codigo: 'VER-009', nombre: 'Aguacate', categoria: 'VERDURAS', unidad_medida: 'Kg', es_carne: false, costo_unitario_kg: 7000 },
-  { codigo: 'VER-010', nombre: 'Papas a la francesa', categoria: 'VERDURAS', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 7000 },
-  // Desechables y Empaques (Vasos 9 oz, etc.)
-  { codigo: 'DES-001', nombre: 'Contenedor térmico sopero 16 oz', categoria: 'DESECHABLES', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 11200 },
-  { codigo: 'DES-002', nombre: 'Servilletas dispensador 1 a 1', categoria: 'DESECHABLES', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 2000 },
-  { codigo: 'DES-003', nombre: 'Vaso Vacan 9 oz', categoria: 'DESECHABLES', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 3100 },
-  { codigo: 'DES-004', nombre: 'Vaso cartón 9.0 onz x 50', categoria: 'DESECHABLES', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 3100 },
-  { codigo: 'DES-005', nombre: 'Vaso Tami 12 oz Transparente', categoria: 'DESECHABLES', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 5000 },
-  { codigo: 'DES-006', nombre: 'Tapa Vaso 12 oz Tami', categoria: 'DESECHABLES', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 5450 },
-  { codigo: 'DES-007', nombre: 'Vasote 3.5 oz', categoria: 'DESECHABLES', unidad_medida: 'Paquete', es_carne: false, costo_unitario_kg: 2750 }
-];
-
-
-interface ParsedConteoItem {
-  id: string;
-  originalLine: string;
-  itemName: string;
-  category: string;
-  rawQty: number;
-  rawQtyStr: string;
-  presentation: 'Porcion' | 'Entero';
-  inputUnit: string;
-  baseUnit: string;
-  weightKg: number;
-  unitPrice: number;
-  estimatedTotal: number;
-  stdPortionWeight: number;
-  isMatched: boolean;
-}
-
 function normalizeStrHelper(s: string): string {
   return (s || '')
     .toLowerCase()
@@ -531,13 +96,15 @@ function normalizeStrHelper(s: string): string {
     .trim();
 }
 
-function mapCategoryToGroupId(catName: string): string {
-  const c = normalizeStrHelper(catName);
-  if (c.includes('carne') || c.includes('pollo') || c.includes('cerdo') || c.includes('pescado') || c.includes('res') || c.includes('marisco')) return 'carnes';
-  if (c.includes('verdura') || c.includes('hortaliza') || c.includes('fruta')) return 'verduras';
-  if (c.includes('grano') || c.includes('abarrote') || c.includes('lacteo') || c.includes('huevo')) return 'granos';
-  if (c.includes('desechable') || c.includes('empaque')) return 'desechables';
-  return 'carnes';
+function isChorizoOrHuevo(name: string): boolean {
+  const n = normalizeStrHelper(name);
+  return (
+    n.includes('chorizo') ||
+    n.includes('choripollo') ||
+    n.includes('rellena') ||
+    n.includes('morcilla') ||
+    n.includes('huevo')
+  );
 }
 
 function isProteinItem(name: string, category: string): boolean {
@@ -572,20 +139,216 @@ function isProteinItem(name: string, category: string): boolean {
   );
 }
 
-function isChorizoOrHuevo(name: string): boolean {
-  const n = normalizeStrHelper(name);
-  return (
-    n.includes('chorizo') ||
-    n.includes('choripollo') ||
-    n.includes('rellena') ||
-    n.includes('huevo')
-  );
+function isPortionableMeat(catalogItem?: any, name: string = '', category: string = ''): boolean {
+  const n = normalizeStrHelper(name || catalogItem?.nombre || catalogItem?.insumo || '');
+  if (n.includes('tamal')) return false;
+  if (n.includes('huevo')) return false;
+
+  const tipo = catalogItem?.tipo_medida || '';
+  if (tipo === 'UNIDADES') {
+    if (!n.includes('chorizo') && !n.includes('morcilla') && !n.includes('rellena')) return false;
+  }
+
+  if (catalogItem?.es_carne && (tipo === 'KGS_Y_UNIDADES' || tipo === 'KGS')) return true;
+  if (catalogItem?.es_carne && Number(catalogItem?.peso_estandar_porcion_kg) > 0 && tipo !== 'UNIDADES') return true;
+
+  const c = normalizeStrHelper(category || catalogItem?.categoria || '');
+  if (c.includes('res') || c.includes('cerdo') || c.includes('pollo') || c.includes('pescado') || c.includes('marisco')) {
+    if (n.includes('tamal')) return false;
+    return true;
+  }
+  return false;
 }
 
-function getUnitsForItem(name: string, category: string, stdPortionWeight: number): { value: string; label: string }[] {
-  const n = normalizeStrHelper(name);
-  const isMeat = isProteinItem(name, category);
-  const isChorizoHuevos = isChorizoOrHuevo(name);
+// Gramaje estándar del catálogo de carnes (peso estándar por porción en Kg)
+function getPortionWeightKg(name: string): number {
+  const match = name.match(/(\d+)\s*g/i);
+  if (match) return parseFloat(match[1]) / 1000;
+  const lower = name.toLowerCase();
+  if (lower.includes('costilla')) return 0.400; // 400g
+  if (lower.includes('punta de anca') || lower.includes('churrasco') || lower.includes('bife')) return 0.350; // 350g
+  if (lower.includes('basa') || lower.includes('filete') || lower.includes('pechuga') || lower.includes('pollo')) return 0.300; // 300g
+  if (lower.includes('sobrebarriga')) return 0.380; // 380g
+  if (lower.includes('molida')) return 0.250; // 250g
+  if (lower.includes('tocino') || lower.includes('chicharron')) return 0.200; // 200g
+  return 0.350; // 350g estándar
+}
+
+function getAllowedUnitsForInsumo(item?: {
+  nombre?: string;
+  insumo?: string;
+  categoria?: string;
+  unidad_medida?: string;
+  tipo_medida?: string;
+  es_carne?: boolean;
+  peso_estandar_porcion_kg?: number;
+  peso_porc_gramos?: number;
+}): AllowedUnitOption[] {
+  const n = (item?.nombre || item?.insumo || '').toLowerCase();
+  const c = (item?.categoria || '').toLowerCase();
+  const u = (item?.unidad_medida || '').toLowerCase();
+  const tipo = item?.tipo_medida || '';
+
+  // 1. Huevos
+  if (n.includes('huevo')) {
+    return [
+      { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 },
+      { value: 'Panal', label: 'Panales (30 Und)', baseUnit: 'Und', toBaseFactor: () => 30 }
+    ];
+  }
+
+  // 2. Insumos basados en Unidades (Tamales, Arepas, Aguacates, Bebidas, etc.)
+  if (n.includes('tamal') || ((tipo === 'UNIDADES' || u === 'und') && !isPortionableMeat(item, n, c))) {
+    return [
+      { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 },
+      { value: 'Paquete', label: 'Paquetes', baseUnit: 'Und', toBaseFactor: () => 1 }
+    ];
+  }
+
+  // 3. Leche o Líquidos (aceite, vinagre, jugos)
+  if (n.includes('leche') || n.includes('aceite') || n.includes('jugo') || n.includes('líquid') || u === 'litro' || u === 'lt' || u.includes('bidon')) {
+    return [
+      { value: 'Litro', label: 'Litros (Lt)', baseUnit: 'Litro', toBaseFactor: () => 1 },
+      { value: 'Bolsa', label: 'Bolsas (1 Lt)', baseUnit: 'Litro', toBaseFactor: () => 1 },
+      { value: 'Mililitro', label: 'Mililitros (ml)', baseUnit: 'Litro', toBaseFactor: () => 0.001 }
+    ];
+  }
+
+  // 4. Desechables y Empaques (o tipo PAQUETES)
+  if (tipo === 'PAQUETES' || c.includes('desechable') || c.includes('empaque') || n.includes('vaso') || n.includes('servilleta') || n.includes('cubierto') || n.includes('contenedor')) {
+    return [
+      { value: 'Paquete', label: 'Paquetes', baseUnit: 'Paquete', toBaseFactor: () => 1 },
+      { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 }
+    ];
+  }
+
+  // 5. Carnes y Proteínas porcionables
+  if (isPortionableMeat(item, n, c)) {
+    const stdWeight = item?.peso_estandar_porcion_kg || (item?.peso_porc_gramos ? item.peso_porc_gramos / 1000 : getPortionWeightKg(n)) || 0.25;
+    const opts: AllowedUnitOption[] = [];
+    if (isChorizoOrHuevo(n) || tipo === 'UNIDADES') {
+      opts.push({ value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 });
+    }
+    opts.push(
+      { value: 'Porciones', label: `Porciones (${Math.round(stdWeight * 1000)}g c/u)`, baseUnit: 'Kg', toBaseFactor: () => stdWeight },
+      { value: 'Kg', label: 'Kilogramos (Kg)', baseUnit: 'Kg', toBaseFactor: () => 1 },
+      { value: 'Libras', label: 'Libras (500g)', baseUnit: 'Kg', toBaseFactor: () => 0.5 },
+      { value: 'Gramos', label: 'Gramos (g)', baseUnit: 'Kg', toBaseFactor: () => 0.001 }
+    );
+    return opts;
+  }
+
+  // 6. Granos y Abarrotes
+  if (c.includes('grano') || c.includes('abarrote') || n.includes('arroz') || n.includes('frijol') || n.includes('lenteja') || n.includes('azucar') || n.includes('sal')) {
+    return [
+      { value: 'Kg', label: 'Kilogramos (Kg)', baseUnit: 'Kg', toBaseFactor: () => 1 },
+      { value: 'Libras', label: 'Libras (500g)', baseUnit: 'Kg', toBaseFactor: () => 0.5 },
+      { value: 'Gramos', label: 'Gramos (g)', baseUnit: 'Kg', toBaseFactor: () => 0.001 },
+      { value: 'Paquete', label: 'Paquetes', baseUnit: 'Kg', toBaseFactor: () => 1 }
+    ];
+  }
+
+  // 7. Por defecto (Verduras e insumos generales)
+  return [
+    { value: 'Kg', label: 'Kilogramos (Kg)', baseUnit: 'Kg', toBaseFactor: () => 1 },
+    { value: 'Libras', label: 'Libras (500g)', baseUnit: 'Kg', toBaseFactor: () => 0.5 },
+    { value: 'Gramos', label: 'Gramos (g)', baseUnit: 'Kg', toBaseFactor: () => 0.001 },
+    { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 },
+    { value: 'Bolsa', label: 'Bolsa / Atado', baseUnit: 'Kg', toBaseFactor: () => 1 }
+  ];
+}
+
+// Generador de título formal concatenando fecha
+function formatDateToTitle(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const dateObj = new Date(year, month - 1, day);
+  
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const meses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const diaSemana = dias[dateObj.getDay()];
+  const mesNombre = meses[dateObj.getMonth()];
+
+  return `${diaSemana}, ${day} de ${mesNombre} de ${year} - Hoja Costeo Cocina`;
+}
+
+// Lista inicial vacía: se carga 100% desde Supabase
+const INITIAL_SHEETS: CosteoSheet[] = [];
+
+// Evaluador aritmético inteligente para campo de cantidad
+function evaluateQtyFormula(formula: string): { value: number; isValid: boolean; preview?: string } {
+  if (!formula || !formula.trim()) return { value: 0, isValid: false };
+  try {
+    const sanitized = formula.trim().replace(/,/g, '.').replace(/x/gi, '*');
+    if (!/^[\d\s\+\-\*/\(\)\.]+$/.test(sanitized)) {
+      return { value: 0, isValid: false };
+    }
+    // Si termina en operador mientras se escribe
+    if (/[\+\-\*/]$/.test(sanitized.trim())) {
+      const sub = sanitized.trim().slice(0, -1);
+      const val = Function(`'use strict'; return (${sub})`)();
+      if (typeof val === 'number' && !isNaN(val) && isFinite(val)) {
+        return { value: Number(val.toFixed(2)), isValid: true, preview: '... sumando' };
+      }
+      return { value: 0, isValid: false };
+    }
+    const val = Function(`'use strict'; return (${sanitized})`)();
+    if (typeof val === 'number' && !isNaN(val) && isFinite(val) && val > 0) {
+      const rounded = Number(val.toFixed(2));
+      const hasOp = /[+\-*/]/.test(sanitized);
+      return {
+        value: rounded,
+        isValid: true,
+        preview: hasOp ? `= ${rounded}` : undefined
+      };
+    }
+  } catch {}
+  return { value: 0, isValid: false };
+}
+
+// Catálogo maestro base con parámetros oficiales de porcionado y costos sincronizado con Supabase
+const DEFAULT_CATALOG_ITEMS: any[] = catalogoOficial;
+
+interface ParsedConteoItem {
+  id: string;
+  originalLine: string;
+  itemName: string;
+  category: string;
+  rawQty: number;
+  rawQtyStr: string;
+  presentation: 'Porcion' | 'Entero';
+  inputUnit: string;
+  baseUnit: string;
+  weightKg: number;
+  unitPrice: number;
+  estimatedTotal: number;
+  stdPortionWeight: number;
+  isMatched: boolean;
+  catalogItemId?: string;
+  catalogItem?: any;
+}
+
+function mapCategoryToGroupId(catName: string): string {
+  const c = normalizeStrHelper(catName);
+  if (c.includes('carne') || c.includes('pollo') || c.includes('cerdo') || c.includes('pescado') || c.includes('res') || c.includes('marisco')) return 'carnes';
+  if (c.includes('verdura') || c.includes('hortaliza') || c.includes('fruta')) return 'verduras';
+  if (c.includes('grano') || c.includes('abarrote') || c.includes('lacteo') || c.includes('huevo')) return 'granos';
+  if (c.includes('desechable') || c.includes('empaque')) return 'desechables';
+  return 'carnes';
+}
+
+function getUnitsForItem(
+  name: string,
+  category: string,
+  stdPortionWeight: number,
+  catalogItem?: any
+): { value: string; label: string }[] {
+  const n = normalizeStrHelper(name || catalogItem?.nombre || '');
+  const u = normalizeStrHelper(catalogItem?.unidad_medida || '');
+  const tipo = catalogItem?.tipo_medida || '';
 
   // 1. Huevos
   if (n.includes('huevo')) {
@@ -595,32 +358,48 @@ function getUnitsForItem(name: string, category: string, stdPortionWeight: numbe
     ];
   }
 
-  // 2. Proteínas / Carnes
-  if (isMeat) {
-    const porcLabel = stdPortionWeight > 0 ? `Porciones (${Math.round(stdPortionWeight * 1000)}g)` : 'Porciones';
+  // 2. Tamales y artículos contados puramente por Unidad
+  if (n.includes('tamal') || ((tipo === 'UNIDADES' || u === 'und') && !isPortionableMeat(catalogItem, name, category))) {
+    return [
+      { value: 'Und', label: 'Unidades (Und)' },
+      { value: 'Paquete', label: 'Paquetes' }
+    ];
+  }
 
-    // Si es chorizo / choripollo / rellena: permite Und además de Porciones, Kg, Gramos, Libras
-    if (isChorizoHuevos) {
+  // 3. Desechables y Paquetes
+  const c = normalizeStrHelper(category || catalogItem?.categoria || '');
+  if (tipo === 'PAQUETES' || u.includes('paq') || c.includes('desechable') || c.includes('empaque')) {
+    return [
+      { value: 'Paquete', label: 'Paquetes' },
+      { value: 'Und', label: 'Unidades (Und)' }
+    ];
+  }
+
+  // 4. Carnes y Proteínas porcionables
+  if (isPortionableMeat(catalogItem, name, category)) {
+    const stdW = catalogItem?.peso_estandar_porcion_kg || stdPortionWeight || 0.25;
+    const porcLabel = `Porciones (${Math.round(stdW * 1000)}g)`;
+
+    if (isChorizoOrHuevo(name) || tipo === 'UNIDADES') {
       return [
         { value: 'Und', label: 'Unidades (Und)' },
         { value: 'Porciones', label: porcLabel },
         { value: 'Kg', label: 'Kilogramos (Kg)' },
-        { value: 'Gramos', label: 'Gramos (g)' },
-        { value: 'Libras', label: 'Libras (Lb)' }
+        { value: 'Libras', label: 'Libras (Lb)' },
+        { value: 'Gramos', label: 'Gramos (g)' }
       ];
     }
 
-    // Demás carnes y proteínas (Porciones, Kg, Gramos, Libras)
     return [
       { value: 'Porciones', label: porcLabel },
       { value: 'Kg', label: 'Kilogramos (Kg)' },
-      { value: 'Gramos', label: 'Gramos (g)' },
-      { value: 'Libras', label: 'Libras (Lb)' }
+      { value: 'Libras', label: 'Libras (Lb)' },
+      { value: 'Gramos', label: 'Gramos (g)' }
     ];
   }
 
-  // 3. Líquidos (Leche, aceites, jugos) - NUNCA llevan "Porciones"
-  if (n.includes('leche') || n.includes('aceite') || n.includes('jugo') || n.includes('vinagre')) {
+  // 5. Líquidos
+  if (n.includes('leche') || n.includes('aceite') || n.includes('jugo') || n.includes('vinagre') || u.includes('litro')) {
     return [
       { value: 'Lts', label: 'Litros (Lts)' },
       { value: 'Und', label: 'Unidades (Und)' },
@@ -629,20 +408,11 @@ function getUnitsForItem(name: string, category: string, stdPortionWeight: numbe
     ];
   }
 
-  // 4. Desechables y Empaques
-  const c = normalizeStrHelper(category);
-  if (c.includes('desechable') || c.includes('empaque')) {
-    return [
-      { value: 'Und', label: 'Unidades (Und)' },
-      { value: 'Paquete', label: 'Paquetes' }
-    ];
-  }
-
-  // 5. Verduras, Granos y Abarrotes en general - NUNCA llevan "Porciones"
+  // 6. Por defecto (Verduras y Granos)
   return [
     { value: 'Kg', label: 'Kilogramos (Kg)' },
-    { value: 'Gramos', label: 'Gramos (g)' },
     { value: 'Libras', label: 'Libras (Lb)' },
+    { value: 'Gramos', label: 'Gramos (g)' },
     { value: 'Und', label: 'Unidades (Und)' }
   ];
 }
@@ -653,119 +423,179 @@ function computeConteoItemEquivAndTotal(
   itemName: string,
   category: string,
   stdPortionWeight: number,
-  unitPrice: number
+  unitPrice: number,
+  catalogItem?: any
 ): {
   weightKg: number;
   baseUnit: string;
   presentation: 'Porcion' | 'Entero';
   estimatedTotal: number;
 } {
-  const isMeat = isProteinItem(itemName, category);
-  const isChorizoHuevos = isChorizoOrHuevo(itemName);
-  const normName = normalizeStrHelper(itemName);
+  const normName = normalizeStrHelper(itemName || catalogItem?.nombre || '');
+  const tipo = catalogItem?.tipo_medida || '';
+  const u = normalizeStrHelper(catalogItem?.unidad_medida || '');
 
-  let weightKg = rawQty;
-  let baseUnit = 'Kg';
-  let presentation: 'Porcion' | 'Entero' = 'Entero';
-  let estimatedTotal = 0;
-
-  // 1. Huevos
+  // 1. Huevos (cálculo por unidad o panales de 30)
   if (normName.includes('huevo')) {
-    baseUnit = 'Und';
-    presentation = 'Entero';
     const effectiveUnds = unit === 'Panal' ? rawQty * 30 : rawQty;
-    weightKg = effectiveUnds;
-    estimatedTotal = Math.round(effectiveUnds * unitPrice);
-    return { weightKg, baseUnit, presentation, estimatedTotal };
+    return {
+      weightKg: effectiveUnds,
+      baseUnit: 'Und',
+      presentation: 'Entero',
+      estimatedTotal: Math.round(effectiveUnds * unitPrice)
+    };
   }
 
-  // 2. Proteínas / Carnes (siempre calculan equivalente en Kg, salvo chorizos en Und)
-  if (isMeat) {
-    baseUnit = 'Kg';
+  // 2. Insumos contados puramente por Unidad (Tamal, Arepas, Aguacates, Bebidas, etc.)
+  if (normName.includes('tamal') || ((tipo === 'UNIDADES' || u === 'und') && !isPortionableMeat(catalogItem, itemName, category))) {
+    return {
+      weightKg: rawQty,
+      baseUnit: 'Und',
+      presentation: 'Entero',
+      estimatedTotal: Math.round(rawQty * unitPrice)
+    };
+  }
+
+  // 3. Desechables y Paquetes
+  if (unit === 'Paquete' || tipo === 'PAQUETES' || u.includes('paq')) {
+    if (unit === 'Und') {
+      return {
+        weightKg: rawQty,
+        baseUnit: 'Und',
+        presentation: 'Entero',
+        estimatedTotal: Math.round(rawQty * unitPrice)
+      };
+    }
+    return {
+      weightKg: rawQty,
+      baseUnit: 'Paq',
+      presentation: 'Entero',
+      estimatedTotal: Math.round(rawQty * unitPrice)
+    };
+  }
+
+  // 4. Carnes y Proteínas porcionables
+  if (isPortionableMeat(catalogItem, itemName, category)) {
+    const stdW = catalogItem?.peso_estandar_porcion_kg || stdPortionWeight || 0.25;
+
     if (unit === 'Porciones') {
-      presentation = 'Porcion';
-      const effectiveW = stdPortionWeight > 0 ? stdPortionWeight : 0.25;
-      weightKg = Number((rawQty * effectiveW).toFixed(2));
-      estimatedTotal = Math.round(weightKg * unitPrice);
-    } else if (unit === 'Kg') {
-      presentation = 'Entero';
-      weightKg = Number(rawQty.toFixed(2));
-      estimatedTotal = Math.round(weightKg * unitPrice);
-    } else if (unit === 'Gramos') {
-      presentation = 'Entero';
-      weightKg = Number((rawQty / 1000).toFixed(3));
-      estimatedTotal = Math.round(weightKg * unitPrice);
-    } else if (unit === 'Libras') {
-      presentation = 'Entero';
-      weightKg = Number((rawQty * 0.5).toFixed(2));
-      estimatedTotal = Math.round(weightKg * unitPrice);
-    } else if (unit === 'Und') {
-      if (isChorizoHuevos) {
-        presentation = 'Entero';
-        if (unitPrice > 5000 && stdPortionWeight > 0) {
-          weightKg = Number((rawQty * stdPortionWeight).toFixed(2));
-          estimatedTotal = Math.round(weightKg * unitPrice);
-        } else {
-          weightKg = rawQty;
-          baseUnit = 'Und';
-          estimatedTotal = Math.round(rawQty * unitPrice);
-        }
-      } else {
-        presentation = 'Entero';
-        weightKg = Number((rawQty * (stdPortionWeight || 0.25)).toFixed(2));
-        estimatedTotal = Math.round(weightKg * unitPrice);
+      const weightKg = Number((rawQty * stdW).toFixed(2));
+      return {
+        weightKg,
+        baseUnit: 'Kg',
+        presentation: 'Porcion',
+        estimatedTotal: Math.round(weightKg * unitPrice)
+      };
+    }
+
+    if (unit === 'Kg') {
+      return {
+        weightKg: Number(rawQty.toFixed(2)),
+        baseUnit: 'Kg',
+        presentation: 'Entero',
+        estimatedTotal: Math.round(rawQty * unitPrice)
+      };
+    }
+
+    if (unit === 'Libras') {
+      const weightKg = Number((rawQty * 0.5).toFixed(2));
+      return {
+        weightKg,
+        baseUnit: 'Kg',
+        presentation: 'Entero',
+        estimatedTotal: Math.round(weightKg * unitPrice)
+      };
+    }
+
+    if (unit === 'Gramos') {
+      const weightKg = Number((rawQty / 1000).toFixed(3));
+      return {
+        weightKg,
+        baseUnit: 'Kg',
+        presentation: 'Entero',
+        estimatedTotal: Math.round(weightKg * unitPrice)
+      };
+    }
+
+    if (unit === 'Und') {
+      if (unitPrice < 5000 || tipo === 'UNIDADES') {
+        return {
+          weightKg: rawQty,
+          baseUnit: 'Und',
+          presentation: 'Entero',
+          estimatedTotal: Math.round(rawQty * unitPrice)
+        };
       }
+      const weightKg = Number((rawQty * stdW).toFixed(2));
+      return {
+        weightKg,
+        baseUnit: 'Kg',
+        presentation: 'Entero',
+        estimatedTotal: Math.round(weightKg * unitPrice)
+      };
     }
-    return { weightKg, baseUnit, presentation, estimatedTotal };
   }
 
-  // 3. Líquidos (Leche, aceites, jugos)
-  if (normName.includes('leche') || normName.includes('aceite') || normName.includes('jugo')) {
-    if (unit === 'Lts') {
-      baseUnit = 'Lts';
-      weightKg = Number(rawQty.toFixed(2));
-      estimatedTotal = Math.round(weightKg * unitPrice);
-    } else if (unit === 'Mililitros') {
-      baseUnit = 'Lts';
-      weightKg = Number((rawQty / 1000).toFixed(2));
-      estimatedTotal = Math.round(weightKg * unitPrice);
-    } else if (unit === 'Und') {
-      baseUnit = 'Lts';
-      weightKg = rawQty;
-      estimatedTotal = Math.round(rawQty * unitPrice);
-    } else {
-      baseUnit = 'Kg';
-      weightKg = Number(rawQty.toFixed(2));
-      estimatedTotal = Math.round(weightKg * unitPrice);
+  // 5. Líquidos
+  if (unit === 'Lts' || normName.includes('leche') || normName.includes('aceite')) {
+    if (unit === 'Mililitros') {
+      const volLts = Number((rawQty / 1000).toFixed(2));
+      return {
+        weightKg: volLts,
+        baseUnit: 'Lts',
+        presentation: 'Entero',
+        estimatedTotal: Math.round(volLts * unitPrice)
+      };
     }
-    return { weightKg, baseUnit, presentation, estimatedTotal };
+    return {
+      weightKg: Number(rawQty.toFixed(2)),
+      baseUnit: 'Lts',
+      presentation: 'Entero',
+      estimatedTotal: Math.round(rawQty * unitPrice)
+    };
   }
 
-  // 4. Insumos generales (Verduras, Granos, Desechables)
+  // 6. Insumos generales (Verduras, Granos)
   if (unit === 'Gramos') {
-    baseUnit = 'Kg';
-    weightKg = Number((rawQty / 1000).toFixed(3));
-    estimatedTotal = Math.round(weightKg * unitPrice);
-  } else if (unit === 'Libras') {
-    baseUnit = 'Kg';
-    weightKg = Number((rawQty * 0.5).toFixed(2));
-    estimatedTotal = Math.round(weightKg * unitPrice);
-  } else if (unit === 'Und' || unit === 'Paquete') {
-    baseUnit = unit;
-    weightKg = rawQty;
-    estimatedTotal = Math.round(rawQty * unitPrice);
-  } else {
-    // Kg
-    baseUnit = 'Kg';
-    weightKg = Number(rawQty.toFixed(2));
-    estimatedTotal = Math.round(weightKg * unitPrice);
+    const weightKg = Number((rawQty / 1000).toFixed(3));
+    return {
+      weightKg,
+      baseUnit: 'Kg',
+      presentation: 'Entero',
+      estimatedTotal: Math.round(weightKg * unitPrice)
+    };
   }
 
-  return { weightKg, baseUnit, presentation, estimatedTotal };
+  if (unit === 'Libras') {
+    const weightKg = Number((rawQty * 0.5).toFixed(2));
+    return {
+      weightKg,
+      baseUnit: 'Kg',
+      presentation: 'Entero',
+      estimatedTotal: Math.round(weightKg * unitPrice)
+    };
+  }
+
+  if (unit === 'Und') {
+    return {
+      weightKg: rawQty,
+      baseUnit: 'Und',
+      presentation: 'Entero',
+      estimatedTotal: Math.round(rawQty * unitPrice)
+    };
+  }
+
+  // Por defecto Kg
+  return {
+    weightKg: Number(rawQty.toFixed(2)),
+    baseUnit: 'Kg',
+    presentation: 'Entero',
+    estimatedTotal: Math.round(rawQty * unitPrice)
+  };
 }
 
 
-const STOP_WORDS_SET = new Set(['de', 'la', 'el', 'los', 'las', 'en', 'con', 'y', 'a', 'un', 'una', 'por', 'para', 'del', 'al']);
+const STOP_WORDS_SET = new Set(['de', 'la', 'el', 'los', 'las', 'en', 'con', 'y', 'a', 'un', 'una', 'unos', 'unas', 'por', 'para', 'del', 'al', 'o', 'sin', '1', '2', '3', 'x']);
 
 function stemSpanishWord(word: string): string {
   let w = normalizeStrHelper(word);
@@ -922,40 +752,48 @@ function calculateStringSimilarity(str1: string, str2: string): number {
   if (!s1 || !s2) return 0.0;
   if (s1 === s2) return 1.0;
 
-  // 1. Inclusión de subcadena directa
-  if (s1.includes(s2) || s2.includes(s1)) {
+  // 1. Inclusión de subcadena directa (solo si ambas tienen longitud representativa >= 4)
+  if (Math.min(s1.length, s2.length) >= 4 && (s1.includes(s2) || s2.includes(s1))) {
     const minL = Math.min(s1.length, s2.length);
     const maxL = Math.max(s1.length, s2.length);
     return 0.85 + (0.15 * (minL / maxL));
   }
 
-  // 2. Token Matching (ej: "vasos 9 oz" vs "vaso vacan 9 oz")
-  const words1 = s1.split(/\s+/).map(w => w.replace(/s$/, '').replace(/\.0$/, ''));
-  const words2 = s2.split(/\s+/).map(w => w.replace(/s$/, '').replace(/\.0$/, ''));
+  // 2. Token Matching (filtrando stop words y palabras de 1-2 letras)
+  const words1 = s1.split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS_SET.has(w)).map(w => w.replace(/es$/, '').replace(/s$/, ''));
+  const words2 = s2.split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS_SET.has(w)).map(w => w.replace(/es$/, '').replace(/s$/, ''));
+
+  if (words1.length === 0 || words2.length === 0) return 0.0;
 
   let matchedWords = 0;
   for (const w1 of words1) {
-    if (w1.length >= 2 && words2.some(w2 => w2 === w1 || w2.includes(w1) || w1.includes(w2))) {
+    if (words2.some(w2 => w2 === w1 || (w1.length >= 4 && w2.startsWith(w1)) || (w2.length >= 4 && w1.startsWith(w2)))) {
       matchedWords++;
     }
   }
-  const tokenScore = words1.length > 0 ? (matchedWords / words1.length) * 0.9 : 0;
 
-  // 3. Similitud Bigrama (Dice coefficient) para capturar faltas ortográficas (ej: "zanahora" -> "zanahoria")
-  const bg = (s: string) => {
-    const set = new Set<string>();
-    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
-    return set;
-  };
-  const bg1 = bg(s1);
-  const bg2 = bg(s2);
-  let intersection = 0;
-  bg1.forEach(b => {
-    if (bg2.has(b)) intersection++;
-  });
-  const diceScore = (2 * intersection) / (bg1.size + bg2.size || 1);
+  const overlap = matchedWords / words1.length;
+  const coverage = matchedWords / words2.length;
+  const tokenScore = overlap * 0.7 + coverage * 0.3;
 
-  return Math.max(tokenScore, diceScore);
+  // 3. Similitud Bigrama (Dice coefficient) solo si ambas tienen al menos 4 caracteres
+  if (s1.length >= 4 && s2.length >= 4) {
+    const bg = (s: string) => {
+      const set = new Set<string>();
+      for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+      return set;
+    };
+    const bg1 = bg(s1);
+    const bg2 = bg(s2);
+    let intersection = 0;
+    bg1.forEach(b => {
+      if (bg2.has(b)) intersection++;
+    });
+    const diceScore = (2 * intersection) / (bg1.size + bg2.size || 1);
+    return Math.max(tokenScore, diceScore * 0.8);
+  }
+
+  return tokenScore;
 }
 
 // Estilo y color distintivo de categoría para los badges
@@ -1073,6 +911,235 @@ function findBestCatalogMatch(query: string, catalogList: any[]): { item: any | 
   const normQuery = normalizeStrHelper(query);
   if (!normQuery) return { item: null, score: 0 };
 
+  const q = normQuery;
+
+  // 1. Reglas directas prioritarias de alta precisión para cocina y restaurante
+  // Pescados y Mariscos
+  if (q.includes('camaron')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('camaron'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('tilapia')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('tilapia'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('trucha')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('trucha'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('salmon')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('salmon'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('marisco')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('marisco'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('bagre')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('bagre'));
+    if (it) return { item: it, score: 1.0 };
+  }
+
+  // Embutidos
+  if (q.includes('chorizo pollo') || q.includes('choripollo')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('chorizo') && n.includes('pollo');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('chorizo grande') || q.includes('choricerdo')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return (n.includes('chorizo') && n.includes('grande')) || n.includes('choricerdo');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('chorizo paisa') || (q.includes('chorizo') && !q.includes('pollo') && !q.includes('grande') && !q.includes('coctel'))) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('chorizo paisa'));
+    if (it) return { item: it, score: 0.95 };
+  }
+  if (q.includes('coctelero') || (q.includes('chorizo') && q.includes('coctel'))) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('coctelero'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('rellena') || q.includes('morcilla')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('rellena') || n.includes('morcilla');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+
+  // Carnes Res / Cerdo / Pollo
+  if (q.includes('lomo cerdo') || (q.includes('lomo') && q.includes('cerdo'))) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('lomo') && n.includes('cerdo');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('ahumada') || (q.includes('costilla') && q.includes('ahumada'))) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('ahumada'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('san luis')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('san luis'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('churrasco') || q.includes('caracho')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('churrasco') || n.includes('caracho');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('baby') || q.includes('viche')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('baby') || n.includes('viche');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('punta de anca') || q.includes('punta anca')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('punta de anca'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('sobrebarriga')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('sobrebarriga'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('lengua')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('lengua'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('filete pollo') || q.includes('filete pechuga') || q.includes('pechuga')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('filete') && (n.includes('pollo') || n.includes('pechuga'));
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('pollo') && !q.includes('chorizo') && !q.includes('repollo')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return (n.includes('pollo') || n.includes('presas')) && !n.includes('repollo');
+    });
+    if (it) return { item: it, score: 0.9 };
+  }
+  if (q.includes('chicharron') || q.includes('tocino')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('chicharron') || n.includes('tocino');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+
+  // Huevos, Papas, Tamales, Granos, Abarrotes
+  if (q.includes('huevo')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('huevo'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('francesa')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('francesa'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('tamal') || q === 'tama' || q.startsWith('tama ')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('tamal'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('leche') && !q.includes('mazamorra') && !q.includes('dulce')) {
+    if (q.includes('crema')) {
+      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('crema de leche'));
+      if (it) return { item: it, score: 1.0 };
+    }
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('leche') && (n.includes('entera') || n.includes('institucional')) && !n.includes('crema');
+    }) || catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('leche') && !n.includes('crema') && !n.includes('mazamorra') && !n.includes('dulce');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('mazamorra') || q.includes('peto')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('mazamorra') || n.includes('peto');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('arroz')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('arroz'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('repollo')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('repollo'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('yuca')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('yuca'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('platano') && q.includes('maduro')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('platano') && n.includes('maduro');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('platano') && (q.includes('verde') || !q.includes('maduro'))) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('platano') && n.includes('verde');
+    });
+    if (it) return { item: it, score: 0.95 };
+  }
+  if (q.includes('chonto')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('chonto'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('cabezona')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('cabezona'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('larga') || q.includes('junca')) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('cebolla larga') || n.includes('junca');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('limon')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('limon'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('zanahor')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('zanahor'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('pimenton')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('pimenton'));
+    if (it) return { item: it, score: 1.0 };
+  }
+
+  // Desechables comunes con tamaños
+  if (q.includes('vaso') && (q.includes('9') || q.includes('9oz'))) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('vaso') && n.includes('9');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('vaso') && (q.includes('12') || q.includes('12oz'))) {
+    const it = catalogList.find(c => {
+      const n = normalizeStrHelper(c.nombre || c.insumo);
+      return n.includes('vaso') && n.includes('12');
+    });
+    if (it) return { item: it, score: 1.0 };
+  }
+
+  // 2. Coincidencia difusa general con catálogo
   let bestItem: any = null;
   let bestScore = 0;
 
@@ -1091,77 +1158,12 @@ function findBestCatalogMatch(query: string, catalogList: any[]): { item: any | 
     }
   }
 
-  // Reglas directas de alta precisión para casos comunes o errores de escritura:
-  if (bestScore < 0.6) {
-    if (normQuery.includes('arroz')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('arroz'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('zanahor')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('zanahor'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('vaso') && (normQuery.includes('9') || normQuery.includes('9oz') || normQuery.includes('9 oz'))) {
-      const it = catalogList.find(c => {
-        const n = normalizeStrHelper(c.nombre || c.insumo);
-        return n.includes('vaso') && n.includes('9');
-      });
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('vaso') && (normQuery.includes('12') || normQuery.includes('12oz') || normQuery.includes('12 oz'))) {
-      const it = catalogList.find(c => {
-        const n = normalizeStrHelper(c.nombre || c.insumo);
-        return n.includes('vaso') && n.includes('12');
-      });
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('san luis')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('san luis'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('rellena')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('rellena'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('baby')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('baby'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('choripollo')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('choripollo'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('francesa')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('francesa'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('marisco')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('marisco'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('camaron')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('camaron'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('salmon')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('salmon'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('trucha')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('trucha'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('huevo')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('huevo'));
-      if (it) return { item: it, score: 0.95 };
-    }
-    if (normQuery.includes('leche')) {
-      const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('leche'));
-      if (it) return { item: it, score: 0.95 };
-    }
+  if (bestScore >= 0.60) {
+    return { item: bestItem, score: bestScore };
   }
 
-  return { item: bestItem, score: bestScore };
+  // Sin coincidencia confiable en catálogo oficial
+  return { item: null, score: 0 };
 }
 
 function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteoItem[] {
@@ -1260,23 +1262,26 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
     const inferred = inferCategoryFromName(itemPart);
     const finalName = isMatched ? (matchedItem.nombre || matchedItem.insumo) : itemPart;
     const finalCategory = isMatched ? (matchedItem.categoria || inferred.category) : inferred.category;
-    const isMeat = isMatched
-      ? (matchedItem.es_carne || isProteinItem(finalName, finalCategory))
-      : inferred.isMeat;
+    const portionable = isPortionableMeat(matchedItem, finalName, finalCategory);
     const isChorizoHuevos = isChorizoOrHuevo(finalName);
+
     const stdWeight = isMatched
-      ? (matchedItem?.peso_estandar_porcion_kg || (matchedItem?.peso_porc_gramos ? matchedItem.peso_porc_gramos / 1000 : (isMeat ? getPortionWeightKg(finalName) : 0)))
-      : (isMeat ? getPortionWeightKg(finalName) : 0);
-    const unitPrice = isMatched
-      ? (matchedItem?.costo_unitario_kg || matchedItem?.costoUnitario || (isMeat ? 18000 : 3500))
-      : (isMeat ? 18000 : 3500);
+      ? Number(matchedItem?.peso_estandar_porcion_kg || (portionable ? getPortionWeightKg(finalName) : 0))
+      : (portionable ? getPortionWeightKg(finalName) : 0);
+
+    // PRECIO UNITARIO REAL DESDE BASE DE DATOS
+    const unitPrice = isMatched && Number(matchedItem?.costo_unitario_kg) > 0
+      ? Number(matchedItem.costo_unitario_kg)
+      : (portionable ? 25000 : 3500);
 
     // Sugerencia lógica de unidad inicial si no vino explícita
     let finalUnit = explicitUnit || '';
     if (!finalUnit) {
       if (normalizeStrHelper(finalName).includes('huevo')) {
         finalUnit = 'Und';
-      } else if (isMeat) {
+      } else if (normalizeStrHelper(finalName).includes('tamal') || (!portionable && matchedItem?.tipo_medida === 'UNIDADES')) {
+        finalUnit = 'Und';
+      } else if (portionable) {
         if (isChorizoHuevos) {
           finalUnit = 'Und';
         } else {
@@ -1284,10 +1289,12 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
         }
       } else if (normalizeStrHelper(finalName).includes('leche') || normalizeStrHelper(finalName).includes('aceite')) {
         finalUnit = 'Lts';
-      } else if (isMatched && matchedItem?.unidad_medida) {
+      } else if (matchedItem?.tipo_medida === 'PAQUETES' || normalizeStrHelper(matchedItem?.unidad_medida || '').includes('paq')) {
+        finalUnit = 'Paquete';
+      } else if (matchedItem?.unidad_medida && matchedItem.unidad_medida.length <= 10) {
         finalUnit = matchedItem.unidad_medida;
       } else {
-        finalUnit = inferred.defaultUnit;
+        finalUnit = inferred.defaultUnit || 'Kg';
       }
     }
     if (!finalUnit) {
@@ -1300,7 +1307,8 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
       finalName,
       finalCategory,
       stdWeight,
-      unitPrice
+      unitPrice,
+      matchedItem
     );
 
     results.push({
@@ -1317,7 +1325,9 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
       unitPrice,
       estimatedTotal: calc.estimatedTotal,
       stdPortionWeight: stdWeight,
-      isMatched: !!matchedItem
+      isMatched: !!matchedItem,
+      catalogItemId: matchedItem?.id || undefined,
+      catalogItem: matchedItem || undefined
     });
   }
 
@@ -1325,9 +1335,9 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
 }
 
 export default function CosteoDiarioPage() {
-  const [sheets, setSheets] = useState<CosteoSheet[]>(INITIAL_SHEETS);
-  const [openTabs, setOpenTabs] = useState<string[]>(['sheet-2026-10-23']);
-  const [activeTabId, setActiveTabId] = useState<string | null>('sheet-2026-10-23');
+  const [sheets, setSheets] = useState<CosteoSheet[]>([]);
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<'2026-10' | '2026-09'>('2026-10');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -1336,6 +1346,21 @@ export default function CosteoDiarioPage() {
   const [newDate, setNewDate] = useState('2026-10-24');
   const [newCarryOver, setNewCarryOver] = useState(true);
 
+  // Modal para Limpiar y Resetear Hoja
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isResettingSheet, setIsResettingSheet] = useState(false);
+  const [clearSheetsSelection, setClearSheetsSelection] = useState<{
+    apertura: boolean;
+    movimientos: boolean;
+    devoluciones: boolean;
+    cierre: boolean;
+  }>({
+    apertura: true,
+    movimientos: true,
+    devoluciones: true,
+    cierre: true,
+  });
+
   // Modos operativos y switches de inclusión
   const [activeOperationalView, setActiveOperationalView] = useState<
     'TRASLADOS' | 'COCINA_APERTURA' | 'DEVOLUCIONES' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE'
@@ -1343,8 +1368,6 @@ export default function CosteoDiarioPage() {
   const [incluirCocinaApertura, setIncluirCocinaApertura] = useState(true);
   const [incluirDevoluciones, setIncluirDevoluciones] = useState(false);
 
-  // Modo exclusivo para Cocina Cierre: AUTO (Cierre Automático), MANUAL (Conteo Físico), SPLIT (Comparativo)
-  const [cierreViewMode, setCierreViewMode] = useState<'AUTO' | 'MANUAL' | 'SPLIT'>('AUTO');
 
   // Catálogo inteligente y buscador en tiempo real
   const [catalogItems, setCatalogItems] = useState<any[]>(DEFAULT_CATALOG_ITEMS);
@@ -1379,6 +1402,7 @@ export default function CosteoDiarioPage() {
   }, []);
 
   const [isLoadingSheets, setIsLoadingSheets] = useState(true);
+  const [isCreatingSheet, setIsCreatingSheet] = useState(false);
 
   // Cargar hojas reales desde Supabase (/api/costeo-diario)
   useEffect(() => {
@@ -1397,15 +1421,65 @@ export default function CosteoDiarioPage() {
       .finally(() => setIsLoadingSheets(false));
   }, []);
 
-  useEffect(() => {
-    fetch('/api/catalogo')
-      .then(r => r.json())
-      .then(data => {
-        if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
-          setCatalogItems(data.data);
+  const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
+
+  const refreshCatalog = async (reParseText?: string) => {
+    try {
+      setIsRefreshingCatalog(true);
+      const res = await fetch(`/api/catalogo?t=${Date.now()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
+        setCatalogItems(data.data);
+        if (typeof reParseText === 'string' && reParseText.trim()) {
+          const parsed = parseBulkConteosText(reParseText, data.data);
+          setParsedConteosList(parsed);
         }
-      })
-      .catch(() => {});
+      }
+    } catch (err) {
+      console.error('Error al sincronizar catálogo maestro:', err);
+    } finally {
+      setIsRefreshingCatalog(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshCatalog();
+
+    // 1. Recargar automáticamente cuando la ventana/pestaña vuelve a recibir foco o visibilidad
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCatalog();
+      }
+    };
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+
+    // 2. Escuchar cambios de catálogo provenientes de otras pestañas o ventanas
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'catalogo_insumos_updated') {
+        refreshCatalog();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel('catalogo_sync_channel');
+        channel.onmessage = (msg) => {
+          if (msg.data === 'reload') {
+            refreshCatalog();
+          }
+        };
+      }
+    } catch (e) {}
+
+    return () => {
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      window.removeEventListener('storage', handleStorage);
+      if (channel) channel.close();
+    };
   }, []);
 
   // In-line Row Adding
@@ -1558,6 +1632,21 @@ export default function CosteoDiarioPage() {
     const now = new Date();
     const horaAuto = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+    const operationalType: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' = 
+      activeOperationalView === 'COCINA_APERTURA' ? 'INVENTARIO_INICIAL_COCINA' :
+      activeOperationalView === 'DEVOLUCIONES' ? 'DEVOLUCION_COCINA' :
+      activeOperationalView === 'COCINA_CIERRE' ? 'COCINA_CIERRE' :
+      activeOperationalView === 'BODEGA_APERTURA' ? 'BODEGA_APERTURA' :
+      activeOperationalView === 'BODEGA_CIERRE' ? 'BODEGA_CIERRE' : 'BODEGA_A_COCINA';
+
+    const originDest = 
+      activeOperationalView === 'DEVOLUCIONES' ? { origen: 'Cocina Principal', destino: 'Bodega General' } :
+      activeOperationalView === 'COCINA_CIERRE' ? { origen: 'Cocina Principal', destino: 'Inventario Cierre Cocina' } :
+      activeOperationalView === 'COCINA_APERTURA' ? { origen: 'Inventario Cocina (Amanece)', destino: 'Cocina Principal' } :
+      activeOperationalView === 'BODEGA_APERTURA' ? { origen: 'Inventario Bodega', destino: 'Bodega General' } :
+      activeOperationalView === 'BODEGA_CIERRE' ? { origen: 'Bodega General', destino: 'Inventario Cierre Bodega' } :
+      { origen: 'Bodega General', destino: 'Cocina Principal' };
+
     let updatedRegistros: InsumoRegistro[] = [];
 
     if (editingRegId) {
@@ -1578,15 +1667,15 @@ export default function CosteoDiarioPage() {
       setDrawerSuccessMsg(`✓ Cambio guardado (${finalQty} ${activeDrawerInsumo.item.unit})`);
       setEditingRegId(null);
     } else {
-      // Registrar nueva bajada
+      // Registrar nueva bajada / conteo
       const newReg: InsumoRegistro = {
         id: `reg-${Date.now()}`,
         hora: horaAuto,
         usuario: 'Administradora',
-        tipo: 'BODEGA_A_COCINA',
+        tipo: operationalType,
         presentacion: drawerPresentacion,
-        origen: 'Bodega General',
-        destino: 'Cocina Principal',
+        origen: originDest.origen,
+        destino: originDest.destino,
         cantidad: finalQty,
         unidad: activeDrawerInsumo.item.unit,
         detalleCalculo: detalleCalculo,
@@ -1598,14 +1687,14 @@ export default function CosteoDiarioPage() {
       setDrawerSuccessMsg(`✓ +${finalQty} ${activeDrawerInsumo.item.unit} ($${regTotal.toLocaleString('es-CO')})`);
     }
 
-    const newTotalQty = Number(updatedRegistros.reduce((acc, r) => acc + r.cantidad, 0).toFixed(2));
+    const newTotalQty = Number(updatedRegistros.reduce((acc, r) => acc + (r.tipo === 'DEVOLUCION_COCINA' ? -r.cantidad : r.cantidad), 0).toFixed(2));
     const newTotalCost = Math.round(newTotalQty * unitPrice);
 
     const updatedItem: InsumoItem = {
       ...activeDrawerInsumo.item,
-      qty: newTotalQty,
+      qty: Math.max(0, newTotalQty),
       unitPrice: unitPrice,
-      total: newTotalCost,
+      total: Math.max(0, newTotalCost),
       registros: updatedRegistros
     };
 
@@ -1638,8 +1727,11 @@ export default function CosteoDiarioPage() {
         fecha: activeSheet.dateStr,
         titulo: activeSheet.title,
         pos_sales: activeSheet.posSales,
+        targetView: activeOperationalView,
         movimiento: {
-          tipo: 'BODEGA_A_COCINA',
+          id: editingRegId ? editingRegId.replace(/^(reg-|item-)/, '') : undefined,
+          tipo: operationalType,
+          insumo_id: activeDrawerInsumo.item.id?.replace(/^(item-|reg-)/, '') || null,
           nombre_insumo: activeDrawerInsumo.item.name,
           categoria: activeDrawerInsumo.categoryName,
           cantidad: finalQty,
@@ -1649,7 +1741,17 @@ export default function CosteoDiarioPage() {
           observaciones: drawerObs.trim() || undefined
         }
       })
-    }).catch(err => console.error('Error guardando movimiento en API:', err));
+    })
+      .then(async res => {
+        if (res.ok) {
+          const r = await fetch('/api/costeo-diario');
+          const d = await r.json();
+          if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
+            setSheets(d.sheets);
+          }
+        }
+      })
+      .catch(err => console.error('Error guardando movimiento en API:', err));
 
     // Limpiar campo de cantidad y notas para el siguiente ingreso
     setDrawerQtyFormula('');
@@ -1663,18 +1765,18 @@ export default function CosteoDiarioPage() {
     }, 50);
   };
 
-  // Eliminar registro del insumo
-  const handleDeleteInsumoRegistro = (regId: string) => {
+  // Eliminar registro del insumo y persistir en Supabase
+  const handleDeleteInsumoRegistro = async (regId: string) => {
     if (!activeDrawerInsumo || !activeSheet) return;
     const currentRegistros = activeDrawerInsumo.item.registros || [];
     const updatedRegistros = currentRegistros.filter(r => r.id !== regId);
-    const newTotalQty = Number(updatedRegistros.reduce((acc, r) => acc + r.cantidad, 0).toFixed(2));
+    const newTotalQty = Number(updatedRegistros.reduce((acc, r) => acc + (r.tipo === 'DEVOLUCION_COCINA' ? -r.cantidad : r.cantidad), 0).toFixed(2));
     const newTotalCost = Math.round(newTotalQty * activeDrawerInsumo.item.unitPrice);
 
     const updatedItem: InsumoItem = {
       ...activeDrawerInsumo.item,
-      qty: newTotalQty,
-      total: newTotalCost,
+      qty: Math.max(0, newTotalQty),
+      total: Math.max(0, newTotalCost),
       registros: updatedRegistros
     };
 
@@ -1696,6 +1798,25 @@ export default function CosteoDiarioPage() {
       ...activeDrawerInsumo,
       item: updatedItem
     });
+
+    try {
+      await fetch('/api/costeo-diario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DELETE_ITEM',
+          fecha: activeSheet.dateStr,
+          registroIds: [regId]
+        })
+      });
+      const r = await fetch('/api/costeo-diario');
+      const d = await r.json();
+      if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
+        setSheets(d.sheets);
+      }
+    } catch (err) {
+      console.error('Error eliminando registro en base de datos:', err);
+    }
   };
 
   // Current Active Sheet
@@ -1740,89 +1861,7 @@ export default function CosteoDiarioPage() {
     } else if (activeOperationalView === 'DEVOLUCIONES') {
       filteredRegs = regs.filter(r => r.tipo === 'DEVOLUCION_COCINA');
     } else if (activeOperationalView === 'COCINA_CIERRE') {
-      // 1. Apertura Cocina
-      const aperturaQty = regs.filter(r => r.tipo === 'INVENTARIO_INICIAL_COCINA').reduce((sum, r) => sum + r.cantidad, 0);
-      // 2. Traslados Bodega a Cocina
-      const trasladosQty = regs.filter(r => r.tipo === 'BODEGA_A_COCINA').reduce((sum, r) => sum + r.cantidad, 0);
-      // 3. Devoluciones Cocina a Bodega
-      const devolucionesQty = regs.filter(r => r.tipo === 'DEVOLUCION_COCINA').reduce((sum, r) => sum + r.cantidad, 0);
-
-      // Cierre Automático = Apertura + Traslados - Devoluciones
-      const autoQty = Number(Math.max(0, aperturaQty + trasladosQty - devolucionesQty).toFixed(2));
-      const autoTotal = Math.round(autoQty * item.unitPrice);
-      const hasAutoEntries = hasAperturaDiligenciada && (aperturaQty + trasladosQty + devolucionesQty) > 0;
-
-      // Cierre Manual ingresado físicamente
-      const manualRegs = regs.filter(r => r.tipo === 'COCINA_CIERRE');
-      const manualQty = Number(manualRegs.reduce((sum, r) => sum + r.cantidad, 0).toFixed(2));
-      const manualTotal = Math.round(manualQty * item.unitPrice);
-      const hasManualEntries = manualRegs.length > 0;
-
-      // Diferencia (Físico Manual vs Teórico Auto)
-      const diffQty = Number((manualQty - autoQty).toFixed(2));
-      const diffTotal = manualTotal - autoTotal;
-
-      if (cierreViewMode === 'AUTO') {
-        return {
-          filteredRegs: [],
-          manualRegs,
-          qty: autoQty,
-          total: autoTotal,
-          hasEntries: hasAutoEntries,
-          isAuto: true,
-          aperturaQty,
-          trasladosQty,
-          devolucionesQty,
-          autoQty,
-          autoTotal,
-          manualQty,
-          manualTotal,
-          hasManualEntries,
-          diffQty,
-          diffTotal
-        };
-      }
-
-      if (cierreViewMode === 'MANUAL') {
-        return {
-          filteredRegs: manualRegs,
-          manualRegs,
-          qty: manualQty,
-          total: manualTotal,
-          hasEntries: hasManualEntries,
-          isAuto: false,
-          aperturaQty,
-          trasladosQty,
-          devolucionesQty,
-          autoQty,
-          autoTotal,
-          manualQty,
-          manualTotal,
-          hasManualEntries,
-          diffQty,
-          diffTotal
-        };
-      }
-
-      // Modo 'SPLIT' (Comparativo Lado a Lado)
-      return {
-        filteredRegs: manualRegs,
-        manualRegs,
-        qty: autoQty,
-        total: autoTotal,
-        hasEntries: hasAutoEntries || hasManualEntries,
-        isAuto: true,
-        aperturaQty,
-        trasladosQty,
-        devolucionesQty,
-        autoQty,
-        autoTotal,
-        manualQty,
-        manualTotal,
-        hasManualEntries,
-        diffQty,
-        diffTotal
-      };
+      filteredRegs = regs.filter(r => r.tipo === 'COCINA_CIERRE');
     } else if (activeOperationalView === 'BODEGA_APERTURA') {
       filteredRegs = regs.filter(r => r.tipo === 'BODEGA_APERTURA');
     } else if (activeOperationalView === 'BODEGA_CIERRE') {
@@ -1879,44 +1918,103 @@ export default function CosteoDiarioPage() {
     return sheet.categories.reduce((acc, cat) => acc + calculateCategoryViewTotal(cat), 0);
   };
 
-  // Cifras consolidadas del día para el panel lateral derecho
-  const calculateCostoCocinaBruto = (sheet?: CosteoSheet): number => {
+  // Cifras consolidadas del día para el panel lateral derecho (Liquidación del Día)
+  const calculateCostoApertura = (sheet?: CosteoSheet): number => {
     if (!sheet) return 0;
     return sheet.categories.reduce((acc, cat) => {
       return acc + cat.items.reduce((cAcc, it) => {
-        const regs = it.registros && it.registros.length > 0 ? it.registros : [
-          { tipo: it.isInitialInventory ? 'INVENTARIO_INICIAL_COCINA' : 'BODEGA_A_COCINA', total: it.total } as any
-        ];
-        const sumBruto = regs
-          .filter(r => r.tipo === 'BODEGA_A_COCINA' || r.tipo === 'INVENTARIO_INICIAL_COCINA')
-          .reduce((sum, r) => sum + r.total, 0);
-        return cAcc + (regs.some(r => r.tipo === 'BODEGA_A_COCINA' || r.tipo === 'INVENTARIO_INICIAL_COCINA') ? sumBruto : it.total);
+        const regs = it.registros || [];
+        const sum = regs.filter(r => r.tipo === 'INVENTARIO_INICIAL_COCINA').reduce((s, r) => s + r.total, 0);
+        return cAcc + sum;
+      }, 0);
+    }, 0);
+  };
+
+  const calculateCostoTraslados = (sheet?: CosteoSheet): number => {
+    if (!sheet) return 0;
+    return sheet.categories.reduce((acc, cat) => {
+      return acc + cat.items.reduce((cAcc, it) => {
+        const regs = it.registros || [];
+        const sum = regs.filter(r => r.tipo === 'BODEGA_A_COCINA').reduce((s, r) => s + r.total, 0);
+        return cAcc + sum;
       }, 0);
     }, 0);
   };
 
   const calculateTotalDevoluciones = (sheet?: CosteoSheet): number => {
     if (!sheet) return 0;
-    let totalDev = 0;
-    sheet.categories.forEach(cat => {
-      cat.items.forEach(it => {
-        if (it.registros) {
-          it.registros.forEach(r => {
-            if (r.tipo === 'DEVOLUCION_COCINA') {
-              totalDev += r.total;
-            }
-          });
-        }
-      });
-    });
-    return totalDev > 0 ? totalDev : (sheet.devoluciones || 0);
+    return sheet.categories.reduce((acc, cat) => {
+      return acc + cat.items.reduce((cAcc, it) => {
+        const regs = it.registros || [];
+        const sum = regs.filter(r => r.tipo === 'DEVOLUCION_COCINA').reduce((s, r) => s + r.total, 0);
+        return cAcc + sum;
+      }, 0);
+    }, 0);
   };
 
-  const costoCocinaBruto = calculateCostoCocinaBruto(activeSheet);
+  const calculateCostoCierre = (sheet?: CosteoSheet): number => {
+    if (!sheet) return 0;
+    return sheet.categories.reduce((acc, cat) => {
+      return acc + cat.items.reduce((cAcc, it) => {
+        const regs = it.registros || [];
+        const sum = regs.filter(r => r.tipo === 'COCINA_CIERRE').reduce((s, r) => s + r.total, 0);
+        return cAcc + sum;
+      }, 0);
+    }, 0);
+  };
+
+  const costoApertura = calculateCostoApertura(activeSheet);
+  const costoTraslados = calculateCostoTraslados(activeSheet);
   const totalDevoluciones = calculateTotalDevoluciones(activeSheet);
-  const costoNetoCocina = Math.max(0, costoCocinaBruto - totalDevoluciones);
+  const costoCierre = calculateCostoCierre(activeSheet);
+  const consumoReal = Math.max(0, costoApertura + costoTraslados - totalDevoluciones - costoCierre);
   const ventasDia = activeSheet?.posSales || 0;
-  const rendimientoDia = ventasDia - costoNetoCocina;
+  const rendimientoDia = ventasDia - consumoReal;
+  const foodCostPct = ventasDia > 0 ? (consumoReal / ventasDia) * 100 : 0;
+
+  // Estadísticas detalladas para el modal de limpiar hojas
+  const clearSheetStats = useMemo(() => {
+    if (!activeSheet) {
+      return {
+        apertura: { count: 0, total: 0 },
+        movimientos: { count: 0, total: 0 },
+        devoluciones: { count: 0, total: 0 },
+        cierre: { count: 0, total: 0 },
+      };
+    }
+
+    let apCount = 0, apTotal = 0;
+    let movCount = 0, movTotal = 0;
+    let devCount = 0, devTotal = 0;
+    let cieCount = 0, cieTotal = 0;
+
+    activeSheet.categories.forEach(cat => {
+      cat.items.forEach(it => {
+        (it.registros || []).forEach(r => {
+          if (r.tipo === 'INVENTARIO_INICIAL_COCINA') {
+            apCount++;
+            apTotal += Number(r.total || 0);
+          } else if (r.tipo === 'BODEGA_A_COCINA') {
+            movCount++;
+            movTotal += Number(r.total || 0);
+          } else if (r.tipo === 'DEVOLUCION_COCINA') {
+            devCount++;
+            devTotal += Number(r.total || 0);
+          } else if (r.tipo === 'COCINA_CIERRE') {
+            cieCount++;
+            cieTotal += Number(r.total || 0);
+          }
+        });
+      });
+    });
+
+    return {
+      apertura: { count: apCount, total: Math.round(apTotal) },
+      movimientos: { count: movCount, total: Math.round(movTotal) },
+      devoluciones: { count: devCount, total: Math.round(devTotal) },
+      cierre: { count: cieCount, total: Math.round(cieTotal) },
+    };
+  }, [activeSheet]);
 
   // Selección en el buscador inteligente
   const handleSelectCatalogItem = (item: any) => {
@@ -1963,58 +2061,46 @@ export default function CosteoDiarioPage() {
     }
   };
 
-  // Create New Sheet from Modal
-  const handleCreateSheet = (e: React.FormEvent) => {
+  // Create New Sheet from Modal (Persistido en Base de Datos Real)
+  const handleCreateSheet = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newId = `sheet-${newDate}`;
-    
-    // Check if exists
-    const exists = sheets.find(s => s.dateStr === newDate);
-    if (exists) {
-      handleOpenSheet(exists.id);
+    if (!newDate) return;
+    setIsCreatingSheet(true);
+
+    try {
+      const res = await fetch('/api/costeo-diario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'CREATE_SHEET',
+          fecha: newDate,
+          titulo: formatDateToTitle(newDate),
+          importCarryOver: newCarryOver
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.error || 'Error al persistir la hoja en base de datos');
+      }
+
+      // Re-sincronizar todas las hojas desde la base de datos real
+      const r = await fetch('/api/costeo-diario');
+      const d = await r.json();
+      if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
+        setSheets(d.sheets);
+      }
+
+      const targetId = `sheet-${newDate}`;
+      setOpenTabs(prev => prev.includes(targetId) ? prev : [...prev, targetId]);
+      setActiveTabId(targetId);
       setIsModalOpen(false);
-      return;
+    } catch (err: any) {
+      console.error('Error al crear la hoja de costeo:', err);
+      alert(`Error al crear la hoja: ${err.message}`);
+    } finally {
+      setIsCreatingSheet(false);
     }
-
-    const monthKey = newDate.startsWith('2026-09') ? '2026-09' : '2026-10';
-    const title = formatDateToTitle(newDate);
-
-    const newSheet: CosteoSheet = {
-      id: newId,
-      month: monthKey,
-      dateStr: newDate,
-      title: title,
-      posSales: 0,
-      categories: [
-        {
-          id: 'verduras',
-          name: 'Verduras e Insumos',
-          items: []
-        },
-        {
-          id: 'carnes',
-          name: 'Carnes y Proteínas (Saldo Cocina + Traslados)',
-          items: newCarryOver ? [
-            { id: 'c-init-1', name: 'Costilla ahumada de cerdo', qty: 1.6, unit: 'Kg', unitPrice: 18000, total: 28800, isInitialInventory: true }
-          ] : []
-        },
-        {
-          id: 'granos',
-          name: 'Granos y Abarrotes',
-          items: []
-        },
-        {
-          id: 'desechables',
-          name: 'Desechables y Empaques',
-          items: []
-        }
-      ]
-    };
-
-    setSheets([newSheet, ...sheets]);
-    setOpenTabs([...openTabs, newId]);
-    setActiveTabId(newId);
-    setIsModalOpen(false);
   };
 
   // Add Item to Category con conversión inteligente a Kg según catálogo
@@ -2137,22 +2223,132 @@ export default function CosteoDiarioPage() {
     const updatedSheet = { ...activeSheet, categories: updatedCategories };
     setSheets(sheets.map(s => s.id === activeSheet.id ? updatedSheet : s));
 
+    const insumoToSave = newInsumoName.trim();
+    const catNameToSave = selectedCatalogItem?.categoria || targetCategory?.name || 'Verduras e Insumos';
+
     setNewInsumoName('');
     setNewInsumoQtyFormula('');
     setSelectedCatalogItem(null);
     setAddingCategory(null);
+
+    // Persistir adición en Supabase vía API
+    fetch('/api/costeo-diario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fecha: activeSheet.dateStr,
+        titulo: activeSheet.title,
+        pos_sales: activeSheet.posSales,
+        targetView: activeOperationalView,
+        movimiento: {
+          tipo: operationalType,
+          insumo_id: selectedCatalogItem?.id || null,
+          nombre_insumo: insumoToSave,
+          categoria: catNameToSave,
+          cantidad: finalQty,
+          unidad: finalUnit,
+          costo_unitario: price,
+          total: finalTotal,
+          observaciones: activeOperationalView === 'DEVOLUCIONES' ? 'Devolución registrada a bodega' : 'Ingreso registrado'
+        }
+      })
+    })
+      .then(async res => {
+        if (res.ok) {
+          const r = await fetch('/api/costeo-diario');
+          const d = await r.json();
+          if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
+            setSheets(d.sheets);
+          }
+        }
+      })
+      .catch(err => console.error('Error persistiendo nuevo insumo en API:', err));
   };
 
-  // Delete item
-  const handleDeleteItem = (catId: string, itemId: string) => {
+  // Delete item y persistir eliminación en Base de Datos
+  const handleDeleteItem = async (catId: string, itemId: string) => {
     if (!activeSheet) return;
-    const updatedCategories = activeSheet.categories.map(cat => {
-      if (cat.id === catId) {
-        return { ...cat, items: cat.items.filter(it => it.id !== itemId) };
+    const cat = activeSheet.categories.find(c => c.id === catId);
+    const item = cat?.items.find(it => it.id === itemId);
+
+    // Actualización optimista en interfaz
+    const updatedCategories = activeSheet.categories.map(c => {
+      if (c.id === catId) {
+        return { ...c, items: c.items.filter(it => it.id !== itemId) };
       }
-      return cat;
+      return c;
     });
     setSheets(sheets.map(s => s.id === activeSheet.id ? { ...activeSheet, categories: updatedCategories } : s));
+
+    // Persistir eliminación en base de datos
+    try {
+      const regIds = (item?.registros || []).map(r => r.id);
+      await fetch('/api/costeo-diario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DELETE_ITEM',
+          fecha: activeSheet.dateStr,
+          itemName: item?.name,
+          registroIds: regIds.length > 0 ? regIds : [itemId]
+        })
+      });
+
+      const r = await fetch('/api/costeo-diario');
+      const d = await r.json();
+      if (d?.sheets && Array.isArray(d.sheets)) {
+        setSheets(d.sheets);
+      }
+    } catch (err) {
+      console.error('Error al eliminar ítem en base de datos:', err);
+    }
+  };
+
+  // Resetear / Limpiar hojas seleccionadas en Base de Datos
+  const handleResetActiveSheet = async () => {
+    if (!activeSheet) return;
+
+    const selectedTipos: string[] = [];
+    if (clearSheetsSelection.apertura) selectedTipos.push('APERTURA');
+    if (clearSheetsSelection.movimientos) selectedTipos.push('TRASLADO');
+    if (clearSheetsSelection.devoluciones) selectedTipos.push('DEVOLUCION');
+    if (clearSheetsSelection.cierre) selectedTipos.push('CIERRE');
+
+    if (selectedTipos.length === 0) {
+      alert('Por favor selecciona al menos una hoja para limpiar.');
+      return;
+    }
+
+    setIsResettingSheet(true);
+    try {
+      const res = await fetch('/api/costeo-diario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'RESET_SHEET',
+          fecha: activeSheet.dateStr,
+          tipos: selectedTipos
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.error || 'Error al limpiar las hojas seleccionadas');
+      }
+
+      // Re-sincronizar con base de datos real
+      const r = await fetch(`/api/costeo-diario?fecha=${activeSheet.dateStr}&t=${Date.now()}`, { cache: 'no-store' });
+      const d = await r.json();
+      if (d?.sheets && Array.isArray(d.sheets)) {
+        setSheets(d.sheets);
+      }
+      setIsClearModalOpen(false);
+    } catch (err: any) {
+      console.error('Error al resetear la hoja de costeo:', err);
+      alert(`Error al limpiar: ${err.message}`);
+    } finally {
+      setIsResettingSheet(false);
+    }
   };
 
   // Filtered sheets by selected month and search query
@@ -2202,7 +2398,8 @@ Trucha 8`;
         item.itemName,
         item.category,
         item.stdPortionWeight,
-        item.unitPrice
+        item.unitPrice,
+        item.catalogItem
       );
       return {
         ...item,
@@ -2225,11 +2422,35 @@ Trucha 8`;
         item.itemName,
         item.category,
         item.stdPortionWeight,
-        item.unitPrice
+        item.unitPrice,
+        item.catalogItem
       );
       return {
         ...item,
         inputUnit: newUnit,
+        weightKg: calc.weightKg,
+        baseUnit: calc.baseUnit,
+        presentation: calc.presentation,
+        estimatedTotal: calc.estimatedTotal
+      };
+    }));
+  };
+
+  const handleUpdateParsedItemPrice = (itemId: string, newPrice: number) => {
+    setParsedConteosList(prev => prev.map(item => {
+      if (item.id !== itemId) return item;
+      const calc = computeConteoItemEquivAndTotal(
+        item.rawQty,
+        item.inputUnit,
+        item.itemName,
+        item.category,
+        item.stdPortionWeight,
+        newPrice,
+        item.catalogItem
+      );
+      return {
+        ...item,
+        unitPrice: newPrice,
         weightKg: calc.weightKg,
         baseUnit: calc.baseUnit,
         presentation: calc.presentation,
@@ -2259,10 +2480,35 @@ Trucha 8`;
 
     parsedConteosList.forEach(pItem => {
       const targetCatId = mapCategoryToGroupId(pItem.category);
-      let cat = updatedCategories.find(c => c.id === targetCatId);
+      let cat: CategoryGroup | undefined = updatedCategories.find(c => {
+        if (c.id === targetCatId) return true;
+        const cNorm = normalizeStrHelper(c.name);
+        if (targetCatId === 'verduras' && (cNorm.includes('verdura') || cNorm.includes('fruver'))) return true;
+        if (targetCatId === 'carnes' && (cNorm.includes('carne') || cNorm.includes('prote'))) return true;
+        if (targetCatId === 'granos' && (cNorm.includes('grano') || cNorm.includes('abarrote') || cNorm.includes('lacteo'))) return true;
+        if (targetCatId === 'desechables' && (cNorm.includes('desechable') || cNorm.includes('empaque'))) return true;
+        return false;
+      });
+
       if (!cat) {
-        cat = updatedCategories[0];
+        const catNames: Record<string, string> = {
+          verduras: 'Verduras e Insumos',
+          carnes: 'Carnes y Proteínas (Saldo Cocina + Traslados)',
+          granos: 'Granos y Abarrotes',
+          desechables: 'Desechables y Empaques'
+        };
+        const newCat: CategoryGroup = {
+          id: targetCatId,
+          name: catNames[targetCatId] || 'Insumos Varios',
+          items: [],
+          subtotal: 0,
+          itemsCount: 0
+        };
+        updatedCategories.push(newCat);
+        cat = newCat;
       }
+
+      const activeCat = cat;
 
       const newReg: InsumoRegistro = {
         id: `reg-bulk-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -2282,7 +2528,7 @@ Trucha 8`;
           : `Reemplazo / corrección de valor (=) (${conteosTargetView})`
       };
 
-      const existingItem = cat.items.find(it => normalizeStrHelper(it.name) === normalizeStrHelper(pItem.itemName));
+      const existingItem = activeCat.items.find(it => normalizeStrHelper(it.name) === normalizeStrHelper(pItem.itemName));
 
       if (existingItem) {
         let updatedRegs: InsumoRegistro[] = [];
@@ -2306,7 +2552,7 @@ Trucha 8`;
         };
 
         updatedCategories = updatedCategories.map(c => {
-          if (c.id !== cat.id) return c;
+          if (c.id !== activeCat.id) return c;
           return {
             ...c,
             items: c.items.map(it => it.id === existingItem.id ? updatedItem : it)
@@ -2324,7 +2570,7 @@ Trucha 8`;
         };
 
         updatedCategories = updatedCategories.map(c => {
-          if (c.id !== cat.id) return c;
+          if (c.id !== activeCat.id) return c;
           return {
             ...c,
             items: [...c.items, newItem]
@@ -2332,6 +2578,13 @@ Trucha 8`;
         });
       }
     });
+
+    // Recalcular subtotales y conteo de items de cada categoría
+    updatedCategories = updatedCategories.map(c => ({
+      ...c,
+      subtotal: c.items.reduce((sum, it) => sum + (Number(it.total) || 0), 0),
+      itemsCount: c.items.length
+    }));
 
     const updatedSheet: CosteoSheet = {
       ...activeSheet,
@@ -2341,10 +2594,53 @@ Trucha 8`;
     setSheets(sheets.map(s => s.id === activeSheet.id ? updatedSheet : s));
     setActiveOperationalView(conteosTargetView);
     setIsConteosDrawerOpen(false);
-    setConteosSuccessToast(`✓ ${parsedConteosList.length} conteos ${conteosActionMode === 'SUMAR' ? 'sumados como adicionales' : 'reemplazados'} en ${conteosTargetView}`);
+    setConteosSuccessToast(`✓ ${parsedConteosList.length} conteos guardados (${conteosActionMode === 'SUMAR' ? 'adicionados +' : 'reemplazados ='})`);
     setTimeout(() => setConteosSuccessToast(''), 4000);
+
+    // Persistir conteos masivos en Supabase vía POST /api/costeo-diario
+    const itemsPayload = parsedConteosList.map(p => ({
+      insumo_id: (p as any).catalogItemId || null,
+      nombre_insumo: p.itemName,
+      categoria: p.category,
+      cantidad: p.weightKg,
+      unidad: p.baseUnit,
+      costo_unitario: p.unitPrice,
+      total: p.estimatedTotal,
+      observaciones: p.presentation === 'Porcion' ? `${p.rawQty} porciones (${p.weightKg} Kg)` : `${p.rawQty} ${p.inputUnit}`
+    }));
+
+    const targetDateToSave = activeSheet.dateStr;
+    const currentTargetView = conteosTargetView;
+    const currentActionMode = conteosActionMode;
+
     setConteosRawText('');
     setParsedConteosList([]);
+
+    fetch('/api/costeo-diario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fecha: targetDateToSave,
+        targetView: currentTargetView,
+        actionMode: currentActionMode,
+        items: itemsPayload
+      })
+    })
+      .then(async res => {
+        if (!res.ok) {
+          const errJson = await res.json();
+          throw new Error(errJson.error || 'Error al persistir');
+        }
+        // Re-sincronizar con base de datos para garantizar consistencia total
+        const r = await fetch('/api/costeo-diario');
+        const d = await r.json();
+        if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
+          setSheets(d.sheets);
+        }
+      })
+      .catch(err => {
+        console.error('Error persistiendo conteos masivos en Supabase:', err);
+      });
   };
 
   return (
@@ -2435,20 +2731,30 @@ Trucha 8`;
               </p>
             </div>
 
-            {/* Botón en el subheader para Añadir Conteos Rápidos */}
-            <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+            {/* Botones en el subheader para Acciones de la Hoja (Móvil nativo: 2 columnas completas) */}
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0 mt-1 sm:mt-0">
               {conteosSuccessToast && (
-                <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md animate-fade-in">
+                <div className="col-span-2 sm:col-span-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md animate-fade-in text-center">
                   {conteosSuccessToast}
-                </span>
+                </div>
               )}
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(true)}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 hover:text-rose-900 border border-rose-200 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
+                title="Limpiar hoja y resetear datos de base de datos"
+              >
+                <Eraser className="w-3.5 h-3.5 text-rose-500 group-hover:text-rose-700" />
+                <span>Limpiar hoja</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setIsConteosDrawerOpen(true);
                   setConteosTargetView(activeOperationalView);
+                  refreshCatalog(conteosRawText);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-md transition-all shadow-2xs cursor-pointer group"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
                 title="Añadir conteos de texto rápido"
               >
                 <ClipboardList className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
@@ -2465,9 +2771,12 @@ Trucha 8`;
       {/* 2. ÁREA PRINCIPAL CON SCROLL EXCLUSIVO PARA LOS LISTADOS      */}
       {/* ============================================================ */}
       <div className="flex-1 overflow-y-auto min-h-0 bg-white">
-        
-      
-      {activeTabId === null || !activeSheet ? (
+        {isLoadingSheets ? (
+          <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500">
+            <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
+            <span className="text-xs font-medium">Cargando hojas de costeo desde la base de datos...</span>
+          </div>
+        ) : activeTabId === null || !activeSheet ? (
         
         /* ------------------------------------------------------------ */
         /* VISTA 1: "HOJAS DE COSTEO" (Listado sobrio tipo GitHub)      */
@@ -2618,7 +2927,123 @@ Trucha 8`;
           <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
             
             {/* Columna Izquierda: Listados de Insumos */}
-            <div className="flex-1 w-full min-w-0 space-y-4">
+            <div className="flex-1 w-full min-w-0 space-y-3.5">
+
+              {/* -------------------------------------------------------- */}
+              {/* SELECTOR DE VISTAS OPERATIVAS (Exclusivo Dispositivos Móviles) */}
+              {/* -------------------------------------------------------- */}
+              <div className="lg:hidden bg-slate-100 p-1 rounded-xl flex items-center gap-1 overflow-x-auto select-none shadow-inner border border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={() => setActiveOperationalView('COCINA_APERTURA')}
+                  className={`flex-1 min-w-[85px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                    activeOperationalView === 'COCINA_APERTURA'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Apertura</span>
+                  {clearSheetStats.apertura.count > 0 && (
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
+                      {clearSheetStats.apertura.count}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveOperationalView('TRASLADOS')}
+                  className={`flex-1 min-w-[85px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                    activeOperationalView === 'TRASLADOS'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Traslados</span>
+                  {clearSheetStats.movimientos.count > 0 && (
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
+                      {clearSheetStats.movimientos.count}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveOperationalView('DEVOLUCIONES')}
+                  className={`flex-1 min-w-[95px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                    activeOperationalView === 'DEVOLUCIONES'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Devoluciones</span>
+                  {clearSheetStats.devoluciones.count > 0 && (
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
+                      {clearSheetStats.devoluciones.count}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveOperationalView('COCINA_CIERRE')}
+                  className={`flex-1 min-w-[80px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                    activeOperationalView === 'COCINA_CIERRE'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Cierre</span>
+                  {clearSheetStats.cierre.count > 0 && (
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
+                      {clearSheetStats.cierre.count}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* -------------------------------------------------------- */}
+              {/* RESUMEN FINANCIERO MÓVIL (Tarjeta Nativa de Alta Visibilidad) */}
+              {/* -------------------------------------------------------- */}
+              <div className="lg:hidden bg-slate-900 text-white rounded-xl p-3 shadow-md space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                      Consumo Real del Día
+                    </span>
+                    <span className="text-xl font-black font-mono text-white">
+                      ${consumoReal.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                      Food Cost
+                    </span>
+                    <span className={`text-sm font-bold font-mono ${foodCostPct > 35 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {ventasDia > 0 ? `${foodCostPct.toFixed(1)}%` : '0.0%'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-1.5 pt-1.5 border-t border-slate-800 text-center">
+                  <div className="bg-slate-800/80 rounded p-1">
+                    <span className="text-[9px] text-slate-400 block font-medium">Apertura</span>
+                    <span className="text-[11px] font-bold font-mono text-slate-200">${Math.round(costoApertura / 1000)}k</span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded p-1">
+                    <span className="text-[9px] text-emerald-400 block font-medium">+Traslados</span>
+                    <span className="text-[11px] font-bold font-mono text-emerald-300">${Math.round(costoTraslados / 1000)}k</span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded p-1">
+                    <span className="text-[9px] text-amber-400 block font-medium">-Devoluc.</span>
+                    <span className="text-[11px] font-bold font-mono text-amber-300">${Math.round(totalDevoluciones / 1000)}k</span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded p-1">
+                    <span className="text-[9px] text-rose-400 block font-medium">-Cierre</span>
+                    <span className="text-[11px] font-bold font-mono text-rose-300">${Math.round(costoCierre / 1000)}k</span>
+                  </div>
+                </div>
+              </div>
 
               {/* -------------------------------------------------------- */}
               {/* BARRA SUPERIOR DE VISTA OPERATIVA Y SWITCHES MINIMALISTAS */}
@@ -2640,9 +3065,9 @@ Trucha 8`;
 
                 {/* Switches Minimalistas exclusivos de la vista Traslados */}
                 {activeOperationalView === 'TRASLADOS' && (
-                  <div className="flex items-center gap-4 text-xs select-none">
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs select-none">
                     {/* Switch 1: Incluir Cocina Apertura */}
-                    <label className="flex items-center gap-2 cursor-pointer group">
+                    <label className="flex items-center gap-2 cursor-pointer group py-0.5">
                       <button
                         type="button"
                         role="switch"
@@ -2658,15 +3083,15 @@ Trucha 8`;
                           }`}
                         />
                       </button>
-                      <span className={`text-xs transition-colors ${incluirCocinaApertura ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
+                      <span className={`text-xs transition-colors ${incluirCocinaApertura ? 'text-slate-900 font-semibold' : 'text-slate-500'}`}>
                         Incluir Cocina Apertura
                       </span>
                     </label>
 
-                    <div className="h-4 w-px bg-slate-200" />
+                    <div className="hidden sm:block h-4 w-px bg-slate-200" />
 
                     {/* Switch 2: Incluir Devoluciones */}
-                    <label className="flex items-center gap-2 cursor-pointer group">
+                    <label className="flex items-center gap-2 cursor-pointer group py-0.5">
                       <button
                         type="button"
                         role="switch"
@@ -2682,81 +3107,15 @@ Trucha 8`;
                           }`}
                         />
                       </button>
-                      <span className={`text-xs transition-colors ${incluirDevoluciones ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
+                      <span className={`text-xs transition-colors ${incluirDevoluciones ? 'text-slate-900 font-semibold' : 'text-slate-500'}`}>
                         Incluir Devoluciones
                       </span>
                     </label>
                   </div>
                 )}
-
-                {/* Badges / TAGs y Botón Split exclusivos de la vista Cocina Cierre */}
-                {activeOperationalView === 'COCINA_CIERRE' && (
-                  <div className="flex items-center gap-2 text-xs select-none flex-wrap">
-                    <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => setCierreViewMode('AUTO')}
-                        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          cierreViewMode === 'AUTO'
-                            ? 'bg-white text-blue-700 shadow-2xs font-bold'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                        title="Calcular automáticamente: Apertura + Traslados - Devoluciones"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Cierre Automático</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCierreViewMode('MANUAL')}
-                        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          cierreViewMode === 'MANUAL'
-                            ? 'bg-white text-slate-900 shadow-2xs font-bold'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                        title="Ver o registrar inventario físico manual"
-                      >
-                        <Pencil className="w-3.5 h-3.5 text-slate-600" />
-                        <span>Cierre Manual</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCierreViewMode('SPLIT')}
-                        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          cierreViewMode === 'SPLIT'
-                            ? 'bg-white text-emerald-800 shadow-2xs font-bold'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                        title="Comparar en la misma pantalla: Automático vs Manual y diferencias"
-                      >
-                        <Columns2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Comparar (Split)</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Mensaje Informativo: El sistema solo calcula automáticamente si se diligenció Cocina Apertura */}
-              {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode !== 'MANUAL' && !hasAperturaDiligenciada && (
-                <div className="bg-amber-50/80 border border-amber-200/90 rounded-lg p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-amber-900 shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>
-                      El sistema solo calculará automáticamente el cierre cuando se diligencie como mínimo el inventario de <strong>Cocina Apertura</strong>.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveOperationalView('COCINA_APERTURA')}
-                    className="self-start sm:self-auto shrink-0 font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer text-xs"
-                  >
-                    Ir a Cocina Apertura →
-                  </button>
-                </div>
-              )}
+
 
               {/* LISTADO DE CATEGORÍAS */}
               {activeSheet.categories.map((cat) => {
@@ -2766,7 +3125,13 @@ Trucha 8`;
                 // Filtrar items según la vista activa
                 const displayItems = cat.items.filter(it => {
                   const m = getItemMetricsForView(it);
-                  if (activeOperationalView === 'TRASLADOS') return true;
+                  if (activeOperationalView === 'TRASLADOS') {
+                    // Si no se incluye cocina apertura, no mostrar insumos que queden en cero
+                    if (!incluirCocinaApertura) {
+                      return m.hasEntries && m.qty > 0;
+                    }
+                    return m.hasEntries;
+                  }
                   return m.hasEntries;
                 });
 
@@ -2800,167 +3165,119 @@ Trucha 8`;
                         </span>
                       </div>
                       <div className="text-xs font-semibold text-slate-700">
-                        {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'SPLIT' ? (
-                          <div className="flex items-center gap-2 text-xs">
-                            <span>Auto: <strong className="text-blue-700 font-mono">${cat.items.reduce((acc, it) => acc + getItemMetricsForView(it).autoTotal, 0).toLocaleString('es-CO')}</strong></span>
-                            <span className="text-slate-300">|</span>
-                            <span>Manual: <strong className="text-slate-900 font-mono">${cat.items.reduce((acc, it) => acc + getItemMetricsForView(it).manualTotal, 0).toLocaleString('es-CO')}</strong></span>
-                          </div>
-                        ) : (
-                          <>Subtotal: <span className="font-bold text-slate-900">${catViewTotal.toLocaleString('es-CO')}</span></>
-                        )}
+                        Subtotal: <span className="font-bold text-slate-900">${catViewTotal.toLocaleString('es-CO')}</span>
                       </div>
                     </div>
 
                     {/* Encabezado de Columnas */}
-                    {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'SPLIT' ? (
-                      <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                        <div className="col-span-4">Insumo / Fórmula</div>
-                        <div className="col-span-2 text-right">Cierre Auto (Teórico)</div>
-                        <div className="col-span-2 text-right">Cierre Manual (Físico)</div>
-                        <div className="col-span-2 text-right">Diferencia</div>
-                        <div className="col-span-2 text-right">Impacto $</div>
-                      </div>
-                    ) : (
-                      <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-white border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        <div className="col-span-6">Insumo / Producto</div>
-                        <div className="col-span-2 text-right">
-                          {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO' ? 'Cantidad Cierre Auto' : 'Cantidad'}
-                        </div>
-                        <div className="col-span-2 text-right">Costo Factura</div>
-                        <div className="col-span-2 text-right">Subtotal</div>
-                      </div>
-                    )}
+                    <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-white border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <div className="col-span-6">Insumo / Producto</div>
+                      <div className="col-span-2 text-right">Cantidad</div>
+                      <div className="col-span-2 text-right">Costo Factura</div>
+                      <div className="col-span-2 text-right">Subtotal</div>
+                    </div>
 
                     {/* Filas de Insumos */}
                     <div className="divide-y divide-slate-100">
                       {displayItems.map((item) => {
                         const metrics = getItemMetricsForView(item);
 
-                        if (activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'SPLIT') {
-                          return (
-                            <div
-                              key={item.id}
-                              className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 px-4 hover:bg-slate-50 items-center transition-colors text-xs"
-                            >
-                              <div className="sm:col-span-4 flex flex-col min-w-0 pr-1">
-                                <div className="flex items-center gap-1.5 truncate">
-                                  <span className="font-semibold text-slate-900 truncate">{item.name}</span>
+                        return (
+                          <div key={item.id} className="transition-colors hover:bg-slate-50/80">
+                            {/* VISTA MÓVIL (< sm): Tarjeta Nativa Touch de Alta Densidad */}
+                            <div className="sm:hidden p-3 active:bg-slate-100 transition-colors">
+                              <div className="flex items-start justify-between gap-2.5">
+                                {/* Columna Izquierda: Nombre, Categoría y Badges */}
+                                <div 
+                                  className="flex-1 min-w-0 cursor-pointer touch-manipulation"
+                                  onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                >
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-slate-900 text-xs leading-snug">
+                                      {item.name}
+                                    </span>
+                                    {item.isInitialInventory && activeOperationalView === 'TRASLADOS' && incluirCocinaApertura && (
+                                      <span className="text-[9px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded border border-slate-200 shrink-0 font-medium">
+                                        Apertura
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1 font-mono">
+                                    <span>${item.unitPrice.toLocaleString('es-CO')}/{item.unit}</span>
+                                    <span>•</span>
+                                    <span className="text-slate-600 font-medium underline decoration-dotted">
+                                      {metrics.filteredRegs.length} {metrics.filteredRegs.length === 1 ? 'reg' : 'regs'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Columna Derecha: Cantidad Destacada, Subtotal y Botón Eliminar */}
+                                <div className="shrink-0 flex items-center gap-2">
+                                  <div 
+                                    className="text-right cursor-pointer touch-manipulation"
+                                    onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                  >
+                                    <div className="text-xs font-black text-slate-900 font-mono bg-slate-100 px-2 py-0.5 rounded-md inline-block">
+                                      {metrics.qty} <span className="text-[10px] font-bold text-slate-600">{item.unit}</span>
+                                    </div>
+                                    <div className="text-xs font-bold font-mono text-slate-900 mt-0.5">
+                                      ${metrics.total.toLocaleString('es-CO')}
+                                    </div>
+                                  </div>
+
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
-                                    className="text-[10px] text-slate-400 hover:text-slate-700 underline cursor-pointer shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteItem(cat.id, item.id);
+                                    }}
+                                    className="text-slate-400 hover:text-rose-600 active:scale-90 p-1.5 rounded-md hover:bg-rose-50 transition-all cursor-pointer touch-manipulation"
+                                    title="Eliminar insumo"
                                   >
-                                    {metrics.manualRegs.length > 0 ? `${metrics.manualRegs.length} reg. físico` : '+ Registrar físico'}
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
-                                <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
-                                  Fórmula: Ap ({metrics.aperturaQty}) + Tras ({metrics.trasladosQty}) - Dev ({metrics.devolucionesQty})
-                                </div>
-                              </div>
-
-                              <div className="sm:col-span-2 sm:text-right font-mono font-medium text-blue-700">
-                                {metrics.autoQty} {item.unit}
-                                <div className="text-[10px] text-slate-400 font-normal">${metrics.autoTotal.toLocaleString('es-CO')}</div>
-                              </div>
-
-                              <div className="sm:col-span-2 sm:text-right font-mono font-medium text-slate-900">
-                                {metrics.hasManualEntries ? (
-                                  <>
-                                    <span>{metrics.manualQty} {item.unit}</span>
-                                    <div className="text-[10px] text-slate-400 font-normal">${metrics.manualTotal.toLocaleString('es-CO')}</div>
-                                  </>
-                                ) : (
-                                  <span className="text-slate-400 italic text-[11px]">Sin conteo</span>
-                                )}
-                              </div>
-
-                              <div className="sm:col-span-2 sm:text-right font-mono font-bold">
-                                {!metrics.hasManualEntries ? (
-                                  <span className="text-slate-300">-</span>
-                                ) : metrics.diffQty === 0 ? (
-                                  <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[11px]">
-                                    ✓ Cuadrado
-                                  </span>
-                                ) : metrics.diffQty < 0 ? (
-                                  <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 text-[11px]">
-                                    ⚠️ {metrics.diffQty} {item.unit}
-                                  </span>
-                                ) : (
-                                  <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
-                                    +{metrics.diffQty} {item.unit}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="sm:col-span-2 sm:text-right font-mono font-bold">
-                                {!metrics.hasManualEntries ? (
-                                  <span className="text-slate-300">-</span>
-                                ) : metrics.diffTotal === 0 ? (
-                                  <span className="text-emerald-700">$0</span>
-                                ) : metrics.diffTotal < 0 ? (
-                                  <span className="text-rose-600">
-                                    -${Math.abs(metrics.diffTotal).toLocaleString('es-CO')}
-                                  </span>
-                                ) : (
-                                  <span className="text-blue-700">
-                                    +${metrics.diffTotal.toLocaleString('es-CO')}
-                                  </span>
-                                )}
                               </div>
                             </div>
-                          );
-                        }
 
-                        return (
-                          <div
-                            key={item.id}
-                            className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 px-4 hover:bg-slate-50 items-center transition-colors text-xs"
-                          >
-                            {/* Nombre Clicable - Abre Administrador Lateral */}
-                            <div className="sm:col-span-6 flex items-center gap-2 min-w-0">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
-                                className="text-left font-semibold text-slate-900 hover:text-orange-600 flex items-center gap-2 transition-colors group cursor-pointer truncate"
-                                title="Click para ver desglose de registros e ingresar más cantidades"
-                              >
-                                <span className="group-hover:underline truncate">{item.name}</span>
-                                {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO' ? (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
-                                    Auto: Ap {metrics.aperturaQty} + Tras {metrics.trasladosQty} - Dev {metrics.devolucionesQty}
-                                  </span>
-                                ) : (
+                            {/* VISTA DESKTOP (>= sm): Tabla Grid de 12 Columnas */}
+                            <div className="hidden sm:grid sm:grid-cols-12 gap-2 p-2.5 px-4 items-center text-xs">
+                              {/* Nombre Clicable - Abre Administrador Lateral */}
+                              <div className="sm:col-span-6 flex items-center gap-2 min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                  className="text-left font-semibold text-slate-900 hover:text-orange-600 flex items-center gap-2 transition-colors group cursor-pointer truncate"
+                                  title="Click para ver desglose de registros e ingresar más cantidades"
+                                >
+                                  <span className="group-hover:underline truncate">{item.name}</span>
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 group-hover:bg-orange-50 group-hover:text-orange-700 transition-colors shrink-0">
                                     {metrics.filteredRegs.length} {metrics.filteredRegs.length === 1 ? 'registro' : 'registros'}
                                   </span>
+                                </button>
+                                {item.isInitialInventory && activeOperationalView === 'TRASLADOS' && incluirCocinaApertura && (
+                                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200 shrink-0">
+                                    Apertura
+                                  </span>
                                 )}
-                              </button>
-                              {item.isInitialInventory && activeOperationalView === 'TRASLADOS' && incluirCocinaApertura && (
-                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200 shrink-0">
-                                  Apertura
+                              </div>
+
+                              {/* Cantidad y Unidad */}
+                              <div className="sm:col-span-2 sm:text-right font-medium text-slate-900 font-mono">
+                                {metrics.qty} {item.unit}
+                              </div>
+
+                              {/* Costo Factura */}
+                              <div className="sm:col-span-2 sm:text-right text-slate-600 font-mono">
+                                ${item.unitPrice.toLocaleString('es-CO')} /{item.unit}
+                              </div>
+
+                              {/* Subtotal y Eliminar */}
+                              <div className="sm:col-span-2 flex items-center justify-between sm:justify-end gap-3">
+                                <span className="font-semibold text-slate-900 font-mono">
+                                  ${metrics.total.toLocaleString('es-CO')}
                                 </span>
-                              )}
-                            </div>
-
-                            {/* Cantidad y Unidad */}
-                            <div className="sm:col-span-2 sm:text-right font-medium text-slate-900 font-mono">
-                              {metrics.qty} {item.unit}
-                            </div>
-
-                            {/* Costo Factura */}
-                            <div className="sm:col-span-2 sm:text-right text-slate-600 font-mono">
-                              ${item.unitPrice.toLocaleString('es-CO')} /{item.unit}
-                            </div>
-
-                            {/* Subtotal y Eliminar */}
-                            <div className="sm:col-span-2 flex items-center justify-between sm:justify-end gap-3">
-                              <span className="font-semibold text-slate-900 font-mono">
-                                ${metrics.total.toLocaleString('es-CO')}
-                              </span>
-                              {activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO' ? (
-                                <span className="w-5" />
-                              ) : (
                                 <button
                                   onClick={() => handleDeleteItem(cat.id, item.id)}
                                   className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors cursor-pointer"
@@ -2968,7 +3285,7 @@ Trucha 8`;
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
-                              )}
+                              </div>
                             </div>
                           </div>
                         );
@@ -3183,9 +3500,6 @@ Trucha 8`;
                             const defUnits = getAllowedUnitsForInsumo();
                             setAvailableUnits(defUnits);
                             setNewInsumoUnit(defUnits[0].value);
-                            if (activeOperationalView === 'COCINA_CIERRE' && cierreViewMode === 'AUTO') {
-                              setCierreViewMode('MANUAL');
-                            }
                           }}
                           className="w-full p-2.5 px-4 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center gap-1.5 transition-colors border-t border-slate-100 text-left cursor-pointer"
                         >
@@ -3215,38 +3529,67 @@ Trucha 8`;
 
                 {/* Cifras Operativas */}
                 <div className="space-y-2.5 text-xs">
+                  {/* 1. Costo Cocina Apertura */}
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Total Costo Cocina Bruto del dia</span>
+                    <span className="text-slate-600">Costo Cocina Apertura :</span>
                     <span className="font-mono font-medium text-slate-900">
-                      ${costoCocinaBruto.toLocaleString('es-CO')}
+                      ${costoApertura.toLocaleString('es-CO')}
                     </span>
                   </div>
 
+                  {/* 2. Costo Movimientos a Cocina (suma) */}
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Total Devoluciones</span>
-                    <span className="font-mono font-medium text-slate-700">
-                      -${totalDevoluciones.toLocaleString('es-CO')}
+                    <span className="text-slate-600">Costo Movimientos a Cocina :</span>
+                    <span className="font-mono font-medium text-emerald-700">
+                      +${costoTraslados.toLocaleString('es-CO')} <span className="text-[10px] text-emerald-600 font-sans font-normal">(suma)</span>
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-dashed border-slate-200">
-                    <span className="font-semibold text-slate-800">Total Neto Cocina del día</span>
-                    <span className="font-mono font-bold text-slate-900">
-                      ${costoNetoCocina.toLocaleString('es-CO')}
+                  {/* 3. Costo Devoluciones a Bodega (resta) */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Costo Devoluciones a Bodega :</span>
+                    <span className="font-mono font-medium text-amber-700">
+                      -${totalDevoluciones.toLocaleString('es-CO')} <span className="text-[10px] text-amber-600 font-sans font-normal">(resta)</span>
                     </span>
                   </div>
 
+                  {/* 4. Costo Cocina Cierre (resta) */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Costo Cocina Cierre :</span>
+                    <span className="font-mono font-medium text-blue-700">
+                      -${costoCierre.toLocaleString('es-CO')} <span className="text-[10px] text-blue-600 font-sans font-normal">(resta)</span>
+                    </span>
+                  </div>
+
+                  {/* 5. Costo Consumo Real Total */}
+                  <div className="flex items-center justify-between pt-2.5 pb-2.5 border-t border-b border-slate-200 bg-slate-50/80 -mx-4 px-4 my-1">
+                    <span className="font-bold text-slate-900">Costo Consumo Real :</span>
+                    <span className="font-mono font-black text-slate-900 text-sm">
+                      ${consumoReal.toLocaleString('es-CO')} <span className="text-[10px] text-slate-500 font-sans font-normal">(Total)</span>
+                    </span>
+                  </div>
+
+                  {/* Ventas del Día */}
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-slate-600">Total de Ventas del dia</span>
+                    <span className="text-slate-600">Total de Ventas del día :</span>
                     <span className="font-mono font-medium text-slate-900">
                       ${ventasDia.toLocaleString('es-CO')}
                     </span>
                   </div>
 
+                  {/* Rendimiento */}
                   <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                    <span className="font-bold text-slate-900">Rendimiento</span>
-                    <span className="font-mono font-bold text-slate-900">
+                    <span className="font-bold text-slate-900">Rendimiento :</span>
+                    <span className={`font-mono font-bold ${rendimientoDia >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                       ${rendimientoDia >= 0 ? '+' : ''}${rendimientoDia.toLocaleString('es-CO')} COP
+                    </span>
+                  </div>
+
+                  {/* Food Cost */}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-slate-600">Food Cost :</span>
+                    <span className={`font-mono font-semibold ${foodCostPct <= 35 ? 'text-emerald-700' : foodCostPct <= 45 ? 'text-amber-700' : 'text-rose-600'}`}>
+                      {foodCostPct.toFixed(1)}%
                     </span>
                   </div>
                 </div>
@@ -3362,8 +3705,8 @@ Trucha 8`;
       {/* 3. MODAL: "+ NUEVA HOJA DE COSTEO" (Sobrio)                  */}
       {/* ============================================================ */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-2xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-5 shadow-xl border border-slate-200">
+        <div className="fixed inset-0 z-[80] bg-slate-950/50 backdrop-blur-2xs flex items-center justify-center p-4 pb-20 sm:pb-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Nueva Hoja de Costeo</h3>
@@ -3421,20 +3764,230 @@ Trucha 8`;
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={isCreatingSheet}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 rounded-md transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-colors shadow-2xs flex items-center gap-1.5"
+                  disabled={isCreatingSheet}
+                  className="px-3.5 py-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 rounded-md transition-colors shadow-2xs flex items-center gap-1.5"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Crear y Abrir Hoja</span>
+                  {isCreatingSheet ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Creando y sincronizando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Crear y Abrir Hoja</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación para Limpiar / Resetear Hoja con Checkboxes */}
+      {isClearModalOpen && activeSheet && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[80] flex items-center justify-center p-3 sm:p-4 pb-20 sm:pb-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900">Limpiar Hoja de Costeo</h3>
+                  <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    {activeSheet.dateStr}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  Selecciona cuál o cuáles hojas deseas vaciar para la fecha <strong>{activeSheet.dateStr}</strong>:
+                </p>
+              </div>
+            </div>
+
+            {/* Selector rápido: Marcar / Desmarcar todas */}
+            <div className="flex items-center justify-between px-1 text-xs">
+              <span className="text-slate-500 font-medium">Hojas a eliminar:</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setClearSheetsSelection({ apertura: true, movimientos: true, devoluciones: true, cierre: true })}
+                  className="text-[11px] text-blue-600 hover:text-blue-800 font-medium cursor-pointer hover:underline"
+                >
+                  Seleccionar todas
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setClearSheetsSelection({ apertura: false, movimientos: false, devoluciones: false, cierre: false })}
+                  className="text-[11px] text-slate-500 hover:text-slate-700 font-medium cursor-pointer hover:underline"
+                >
+                  Deseleccionar todas
+                </button>
+              </div>
+            </div>
+
+            {/* Listado de Checkboxes de Hojas */}
+            <div className="space-y-2 border border-slate-200 rounded-lg p-2.5 bg-slate-50/50">
+              {/* 1. Cocina Apertura */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                clearSheetsSelection.apertura
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={clearSheetsSelection.apertura}
+                    onChange={(e) => setClearSheetsSelection(prev => ({ ...prev, apertura: e.target.checked }))}
+                    className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Cocina Apertura</span>
+                    <span className="text-[10px] text-slate-500">Inventario inicial con el que amaneció cocina</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.apertura.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.apertura.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 2. Cocina Movimientos */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                clearSheetsSelection.movimientos
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={clearSheetsSelection.movimientos}
+                    onChange={(e) => setClearSheetsSelection(prev => ({ ...prev, movimientos: e.target.checked }))}
+                    className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Cocina Movimientos</span>
+                    <span className="text-[10px] text-slate-500">Traslados de insumos bajados de Bodega a Cocina</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.movimientos.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.movimientos.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 3. Cocina Devoluciones */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                clearSheetsSelection.devoluciones
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={clearSheetsSelection.devoluciones}
+                    onChange={(e) => setClearSheetsSelection(prev => ({ ...prev, devoluciones: e.target.checked }))}
+                    className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Cocina Devoluciones</span>
+                    <span className="text-[10px] text-slate-500">Devoluciones de insumos devueltos de Cocina a Bodega</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.devoluciones.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.devoluciones.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 4. Cocina Cierre */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                clearSheetsSelection.cierre
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={clearSheetsSelection.cierre}
+                    onChange={(e) => setClearSheetsSelection(prev => ({ ...prev, cierre: e.target.checked }))}
+                    className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Cocina Cierre</span>
+                    <span className="text-[10px] text-slate-500">Inventario físico final de cierre de cocina</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.cierre.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.cierre.count} registros
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* Aviso de seguridad */}
+            <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200/80 p-2.5 rounded-md leading-relaxed">
+              <strong>Aviso:</strong> Solo se borrarán de la base de datos las hojas que mantengas seleccionadas. Las no seleccionadas permanecerán intactas.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isResettingSheet}
+                onClick={() => setIsClearModalOpen(false)}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isResettingSheet || Object.values(clearSheetsSelection).filter(Boolean).length === 0}
+                onClick={handleResetActiveSheet}
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-md transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
+              >
+                {isResettingSheet ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Limpiando base de datos...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>
+                      {Object.values(clearSheetsSelection).filter(Boolean).length === 4
+                        ? 'Limpiar todas las hojas'
+                        : `Limpiar (${Object.values(clearSheetsSelection).filter(Boolean).length}) seleccionadas`}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3447,14 +4000,14 @@ Trucha 8`;
       {/* Backdrop con desenfoque */}
       {activeDrawerInsumo && (
         <div
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-40 transition-opacity"
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[65] transition-opacity"
           onClick={() => setActiveDrawerInsumo(null)}
         />
       )}
 
       {/* Contenedor Drawer deslizante de DERECHA A IZQUIERDA */}
       <aside
-        className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[500px] md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 z-[70] w-full sm:w-[500px] md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
           activeDrawerInsumo ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
         aria-label="Administrador de Insumo"
@@ -3845,8 +4398,8 @@ Trucha 8`;
 
             </div>
 
-            {/* Footer con botón de cerrar */}
-            <div className="p-3 px-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs shrink-0">
+            {/* Footer con botón de cerrar (con padding inferior para barra móvil) */}
+            <div className="p-3 px-4 pb-20 sm:pb-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs shrink-0">
               <span className="text-slate-500 text-[11px]">
                 Cambios reflejados automáticamente en la hoja activa
               </span>
@@ -3867,7 +4420,7 @@ Trucha 8`;
       {/* 4. MODAL: PREVISUALIZACIÓN DEL DOCUMENTO                     */}
       {/* ============================================================ */}
       {showPreviewModal && activeSheet && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-2xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-2xs flex items-center justify-center p-3 sm:p-4 pb-20 sm:pb-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             
             {/* Cabecera Modal */}
@@ -3954,19 +4507,18 @@ Trucha 8`;
         </div>
       )}
 
-
       {/* ============================================================ */}
       {/* 3.3. SLIDE-OVER DRAWER: AÑADIR CONTEOS (Derecha a Izquierda) */}
       {/* ============================================================ */}
       {isConteosDrawerOpen && (
         <div
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-40 transition-opacity"
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[65] transition-opacity"
           onClick={() => setIsConteosDrawerOpen(false)}
         />
       )}
 
       <aside
-        className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[700px] md:w-[820px] lg:w-[880px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 z-[70] w-full sm:w-[700px] md:w-[820px] lg:w-[880px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
           isConteosDrawerOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
         aria-label="Panel Añadir Conteos"
@@ -4093,13 +4645,28 @@ Trucha 8`;
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-md text-xs font-mono text-slate-800 focus:outline-none focus:border-slate-500 transition-colors resize-y placeholder:text-slate-400"
             />
             <div className="flex items-center justify-between text-[11px] text-slate-500">
-              <span>Detecta automáticamente insumos, cantidades y unidades.</span>
+              <div className="flex items-center gap-2">
+                <span>Detecta automáticamente insumos, cantidades y unidades.</span>
+                <button
+                  type="button"
+                  onClick={() => refreshCatalog(conteosRawText)}
+                  disabled={isRefreshingCatalog}
+                  className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                  title="Recargar catálogo maestro desde la base de datos sin recargar la página"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshingCatalog ? 'animate-spin text-orange-600' : 'text-slate-400'}`} />
+                  <span>{isRefreshingCatalog ? 'Sincronizando...' : `${catalogItems.length} insumos`}</span>
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => handleParseConteos(conteosRawText)}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium transition-colors cursor-pointer"
+                onClick={() => refreshCatalog(conteosRawText)}
+                disabled={isRefreshingCatalog}
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Re-analizar texto y refrescar catálogo"
               >
-                Re-analizar
+                <RefreshCw className={`w-3 h-3 ${isRefreshingCatalog ? 'animate-spin text-orange-600' : ''}`} />
+                <span>Re-analizar</span>
               </button>
             </div>
           </div>
@@ -4116,43 +4683,140 @@ Trucha 8`;
                 </span>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100 overflow-x-auto shadow-2xs">
-                <div className="min-w-[660px]">
-                  {/* Encabezado con 5 columnas exactamente simétricas del mismo ancho (20% cada una) */}
-                  <div className="grid grid-cols-5 gap-3 p-2.5 px-3 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider items-center select-none">
-                    <div className="text-left">Insumo Identificado</div>
-                    <div className="text-left">Presentación</div>
-                    <div className="text-center">Cantidad</div>
-                    <div className="text-right">Equiv. Total</div>
-                    <div className="text-right">Subtotal / Acc.</div>
+              {/* ========================================================= */}
+              {/* VISTA MÓVIL (< sm): Tarjetas Nativas para Dispositivos     */}
+              {/* ========================================================= */}
+              <div className="sm:hidden space-y-2">
+                {parsedConteosList.map((item) => {
+                  const allowedUnits = getUnitsForItem(item.itemName, item.category, item.stdPortionWeight, item.catalogItem);
+
+                  return (
+                    <div key={item.id} className="p-3 bg-white border border-slate-200 rounded-lg space-y-2 shadow-2xs">
+                      {/* Fila 1: Nombre + Badges + Botón Eliminar */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs">{item.itemName}</span>
+                            {!item.isMatched ? (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-600" />
+                                Nuevo
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                Catálogo
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {item.category} {item.catalogItem?.codigo && `(${item.catalogItem.codigo})`}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveParsedItem(item.id)}
+                          className="p-1 text-slate-400 hover:text-rose-600 active:scale-90 rounded hover:bg-rose-50 cursor-pointer"
+                          title="Quitar este item"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Fila 2: Inputs táctiles de Presentación y Cantidad */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-0.5">Presentación</label>
+                          <select
+                            value={item.inputUnit}
+                            onChange={(e) => handleUpdateParsedItemUnit(item.id, e.target.value)}
+                            className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded text-xs font-semibold text-slate-800"
+                          >
+                            {allowedUnits.map((u) => (
+                              <option key={u.value} value={u.value}>{u.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-0.5">Cantidad</label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.rawQtyStr !== undefined ? item.rawQtyStr : item.rawQty}
+                            onChange={(e) => {
+                              const textVal = e.target.value;
+                              const sanitized = textVal.replace(/[^0-9.,+]/g, '');
+                              const num = parseFloat(sanitized.replace(',', '.')) || 0;
+                              handleUpdateParsedItemQty(item.id, num, sanitized);
+                            }}
+                            className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded text-xs font-mono font-bold text-slate-900 text-center"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Fila 3: Precio unitario, Equivalencia y Subtotal */}
+                      <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 text-[11px] font-mono">
+                        <span className="text-slate-500">${item.unitPrice.toLocaleString('es-CO')}/{item.baseUnit}</span>
+                        <span className="text-slate-600 font-semibold">{item.weightKg} {item.baseUnit}</span>
+                        <span className="font-extrabold text-slate-900 text-xs">${item.estimatedTotal.toLocaleString('es-CO')}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ========================================================= */}
+              {/* VISTA DESKTOP (>= sm): Tabla Grid de 12 Columnas          */}
+              {/* ========================================================= */}
+              <div className="hidden sm:block bg-white border border-slate-200 rounded-lg divide-y divide-slate-100 overflow-x-auto shadow-2xs">
+                <div className="min-w-[820px]">
+                  {/* Encabezado con 6 columnas simétricas y columna de Precio Unitario real de BD */}
+                  <div className="grid grid-cols-12 gap-2.5 p-2.5 px-3 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider items-center select-none">
+                    <div className="col-span-3 text-left">Insumo Identificado</div>
+                    <div className="col-span-2 text-left">Presentación</div>
+                    <div className="col-span-2 text-center">Cantidad</div>
+                    <div className="col-span-2 text-right">Precio Unitario</div>
+                    <div className="col-span-1 text-right">Equiv. Total</div>
+                    <div className="col-span-2 text-right">Subtotal / Acc.</div>
                   </div>
 
-                  {/* Filas: exactamente 5 columnas simétricas, sin distorsión de paddings ni movimientos */}
+                  {/* Filas de insumos analizados con información del catálogo */}
                   {parsedConteosList.map((item) => {
-                    const allowedUnits = getUnitsForItem(item.itemName, item.category, item.stdPortionWeight);
+                    const allowedUnits = getUnitsForItem(item.itemName, item.category, item.stdPortionWeight, item.catalogItem);
 
                     return (
                       <div
                         key={item.id}
-                        className="p-2.5 px-3 hover:bg-slate-50/80 transition-colors grid grid-cols-5 gap-3 items-center text-xs"
+                        className="p-2.5 px-3 hover:bg-slate-50/80 transition-colors grid grid-cols-12 gap-2.5 items-center text-xs"
                       >
-                        {/* Columna 1: Insumo Identificado */}
-                        <div className="min-w-0 pr-1">
+                        {/* Columna 1: Insumo Identificado (col-span-3) */}
+                        <div className="col-span-3 min-w-0 pr-1">
                           <div className="font-semibold text-slate-900 truncate flex items-center gap-1.5" title={item.itemName}>
                             <span className="truncate">{item.itemName}</span>
-                            {!item.isMatched && (
-                              <span className="text-[9px] bg-amber-50 text-amber-800 px-1 py-0.2 rounded font-medium shrink-0 border border-amber-200">
-                                Nuevo
+                            {!item.isMatched ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs shrink-0" title="Insumo no encontrado en catálogo de base de datos. Se guardará con categoría inferida.">
+                                <Sparkles className="w-3 h-3 text-amber-600 shrink-0" />
+                                Insumo Nuevo
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+                                Catálogo
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap truncate">
+                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap truncate mt-0.5">
                             <span className="truncate">{item.category}</span>
+                            {item.catalogItem?.codigo ? (
+                              <span className="font-mono text-[9px] text-slate-500 font-medium">({item.catalogItem.codigo})</span>
+                            ) : (
+                              <span className="text-[9px] text-amber-700 font-semibold italic">No registrado en BD</span>
+                            )}
                           </div>
                         </div>
 
-                        {/* Columna 2: Presentación (Dropdown sin badge, estilo Git sobrio) */}
-                        <div className="min-w-0">
+                        {/* Columna 2: Presentación (col-span-2) */}
+                        <div className="col-span-2 min-w-0">
                           <select
                             value={item.inputUnit}
                             onChange={(e) => handleUpdateParsedItemUnit(item.id, e.target.value)}
@@ -4166,8 +4830,8 @@ Trucha 8`;
                           </select>
                         </div>
 
-                        {/* Columna 3: Cantidad (Input centrado que soporta coma y punto decimal) */}
-                        <div className="flex items-center justify-center">
+                        {/* Columna 3: Cantidad (col-span-2) */}
+                        <div className="col-span-2 flex items-center justify-center">
                           <input
                             type="text"
                             inputMode="decimal"
@@ -4178,17 +4842,36 @@ Trucha 8`;
                               const num = parseFloat(sanitized.replace(',', '.')) || 0;
                               handleUpdateParsedItemQty(item.id, num, sanitized);
                             }}
-                            className="w-20 px-2 py-1 bg-white border border-slate-300 rounded text-center text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-500 shadow-2xs hover:border-slate-400 transition-colors"
+                            className="w-full max-w-[85px] px-2 py-1 bg-white border border-slate-300 rounded text-center text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-500 shadow-2xs hover:border-slate-400 transition-colors"
                           />
                         </div>
 
-                        {/* Columna 4: Equivalente Total (Alineado a la derecha, siempre en Kg para carnes) */}
-                        <div className="text-right font-mono font-semibold text-slate-800 text-xs">
+                        {/* Columna 4: PRECIO UNITARIO REAL (col-span-2) - NUEVA COLUMNA */}
+                        <div className="col-span-2 flex items-center justify-end">
+                          <div className="relative w-full max-w-[110px]">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">$</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={item.unitPrice ? item.unitPrice.toLocaleString('es-CO') : '0'}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/[^0-9]/g, '');
+                                const val = parseInt(raw, 10) || 0;
+                                handleUpdateParsedItemPrice(item.id, val);
+                              }}
+                              title={`Precio unitario oficial del catálogo por ${item.baseUnit}`}
+                              className="w-full pl-5 pr-2 py-1 bg-white border border-slate-300 rounded text-right text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-slate-500 shadow-2xs hover:border-slate-400 transition-colors"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Columna 5: Equivalente Total (col-span-1) */}
+                        <div className="col-span-1 text-right font-mono font-semibold text-slate-800 text-xs truncate" title={`${item.weightKg} ${item.baseUnit}`}>
                           {item.weightKg} {item.baseUnit}
                         </div>
 
-                        {/* Columna 5: Subtotal y Eliminar */}
-                        <div className="flex items-center justify-end gap-2.5">
+                        {/* Columna 6: Subtotal y Eliminar (col-span-2) */}
+                        <div className="col-span-2 flex items-center justify-end gap-2">
                           <span className="font-mono font-bold text-slate-900 text-xs">
                             ${item.estimatedTotal.toLocaleString('es-CO')}
                           </span>
@@ -4210,8 +4893,8 @@ Trucha 8`;
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/90 shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 select-none">
+        {/* Footer Actions con soporte táctil nativo móvil */}
+        <div className="p-3.5 sm:p-4 pb-20 sm:pb-4 border-t border-slate-200 bg-slate-50/95 backdrop-blur-xs shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 select-none">
           <div className="text-xs text-slate-600">
             {parsedConteosList.length > 0 ? (
               <span>
@@ -4229,11 +4912,11 @@ Trucha 8`;
             )}
           </div>
 
-          <div className="flex items-center gap-2 justify-end">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
             <button
               type="button"
               onClick={() => setIsConteosDrawerOpen(false)}
-              className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-md transition-colors cursor-pointer"
+              className="px-3 py-2.5 sm:py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg sm:rounded-md transition-colors cursor-pointer touch-manipulation text-center"
             >
               Cancelar
             </button>
@@ -4242,11 +4925,11 @@ Trucha 8`;
               type="button"
               disabled={parsedConteosList.length === 0}
               onClick={handleApplyConteos}
-              className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-bold rounded-md transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+              className="px-4 py-2.5 sm:py-1.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg sm:rounded-md transition-colors shadow-2xs cursor-pointer flex items-center justify-center gap-1.5 touch-manipulation active:scale-95"
             >
               <Check className="w-3.5 h-3.5" />
               <span>
-                {conteosActionMode === 'SUMAR' ? 'Sumar Conteos (+)' : 'Reemplazar Conteos (=)'} ({parsedConteosList.length})
+                {conteosActionMode === 'SUMAR' ? 'Sumar (+)' : 'Reemplazar (=)'} ({parsedConteosList.length})
               </span>
             </button>
           </div>

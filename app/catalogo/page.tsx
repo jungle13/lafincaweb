@@ -285,6 +285,15 @@ export default function CatalogoPage() {
 
       setModalMode(null);
       await loadCatalogo();
+      // Notificar a otras pestañas/pantallas (ej. Costeo Diario / Input Inteligente) para sincronización automática
+      try {
+        localStorage.setItem('catalogo_insumos_updated', Date.now().toString());
+        if (typeof BroadcastChannel !== 'undefined') {
+          const ch = new BroadcastChannel('catalogo_sync_channel');
+          ch.postMessage('reload');
+          ch.close();
+        }
+      } catch (e) {}
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -301,6 +310,15 @@ export default function CatalogoPage() {
       if (!res.ok || data.error) throw new Error(data.error || 'Error al eliminar');
 
       await loadCatalogo();
+      // Notificar a otras pestañas/pantallas para sincronización automática
+      try {
+        localStorage.setItem('catalogo_insumos_updated', Date.now().toString());
+        if (typeof BroadcastChannel !== 'undefined') {
+          const ch = new BroadcastChannel('catalogo_sync_channel');
+          ch.postMessage('reload');
+          ch.close();
+        }
+      } catch (e) {}
     } catch (err: any) {
       alert(err.message);
     }

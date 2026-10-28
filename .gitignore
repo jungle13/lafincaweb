@@ -38,7 +38,22 @@ scratch/
 /*.jpeg
 /*.xlsx
 /public/reports/
-scripts/*.py
+# Temporary inspection and test scripts
+scripts/inspect_*.*
+scripts/test_*.*
+scripts/check_*.*
+scripts/debug_*.*
+scripts/search_*.*
+scripts/verify_*.*
+scripts/analyze_*.*
+scripts/audit_*.*
+scripts/parse_*.*
+scripts/clean_*.*
+scripts/sanitize_*.*
+scripts/export_*.*
+scripts/*.mjs
+!scripts/telegram-bot-polling.mjs
+!scripts/antigravity-skill-converter.mjs
 DOCUMENTOS BASE/*.pdf
 DOCUMENTOS BASE/*.xlsx
 !DOCUMENTOS BASE/COSTOS_GASTOS_SEPTIEMBRE_2026.xlsx
