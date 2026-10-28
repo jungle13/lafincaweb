@@ -185,34 +185,208 @@ async function consultarInsumosPrecios(termino) {
 }
 
 // 4. Consultar Compras
-async function consultarCompras(insumo) {
+async function consultarCompras(params = {}) {
   try {
-    const { data: compras } = await supabase
-      .from('compras')
-      .select('id, fecha, numero_factura, proveedor, valor_total')
-      .order('fecha', { ascending: false })
-      .limit(5);
+    if (typeof params === 'string') params = { insumo: params };
+    const { insumo, categoria, proveedor, numero_factura, fecha } = params;
 
-    if (!compras || compras.length === 0) return { compras: [] };
+    // 1. Por Insumo específico
+    if (insumo && insumo.trim() !== '') {
+      const term = insumo.trim();
+      const { data, error } = await supabase
+        .from('compras_detalle')
+        .select('fecha, numero_factura, proveedor, categoria, nombre_insumo, detalle, cantidad, unidad, costo_unitario, valor_compra')
+        .or(`nombre_insumo.ilike.%${term}%,detalle.ilike.%${term}%`)
+        .order('fecha', { ascending: false })
+        .limit(30);
 
-    const ids = compras.map((c) => c.id);
-    const { data: detalles } = await supabase
-      .from('compras_detalle')
-      .select('compra_id, cantidad_kg, costo_unitario_kg, costo_total, insumo_id, catalogo_insumos(nombre)')
-      .in('compra_id', ids);
+      if (error) throw error;
+      if (!data || data.length === 0) return { mensaje: `No se encontraron compras para el insumo: ${term}` };
 
-    return compras.map((c) => ({
-      fecha: c.fecha,
-      factura: c.numero_factura,
-      proveedor: c.proveedor,
-      total: c.valor_total,
-      articulos: (detalles || []).filter((d) => d.compra_id === c.id).map((i) => ({
-        insumo: i.catalogo_insumos?.nombre,
-        cantidad_kg: i.cantidad_kg,
-        costo_unitario: i.costo_unitario_kg,
-        costo_total: i.costo_total,
+      const termLower = term.toLowerCase();
+      data.sort((a, b) => {
+        const aName = (a.nombre_insumo || '').toLowerCase();
+        const bName = (b.nombre_insumo || '').toLowerCase();
+        const aHas = aName.split(/\s+/).includes(termLower);
+        const bHas = bName.split(/\s+/).includes(termLower);
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        return new Date(b.fecha) - new Date(a.fecha);
+      });
+
+      const totalDinero = data.reduce((acc, r) => acc + Number(r.valor_compra || 0), 0);
+      const totalCantidad = data.reduce((acc, r) => acc + Number(r.cantidad || 0), 0);
+      const ultima = data[0];
+
+      return {
+        insumo_buscado: term,
+        compras_encontradas: data.length,
+        ultima_compra: {
+          fecha: ultima.fecha,
+          proveedor: ultima.proveedor,
+          factura: ultima.numero_factura,
+          insumo: ultima.nombre_insumo,
+          detalle_factura: ultima.detalle,
+          costo_unitario: Number(ultima.costo_unitario || 0),
+          cantidad: Number(ultima.cantidad || 0),
+          unidad: ultima.unidad,
+          total: Number(ultima.valor_compra || 0),
+        },
+        acumulado_mes: {
+          cantidad_total: Number(totalCantidad.toFixed(2)),
+          unidad: ultima.unidad,
+          dinero_total_cop: totalDinero,
+          costo_promedio_kg: totalCantidad > 0 ? Math.round(totalDinero / totalCantidad) : 0,
+        },
+        historial_reciente: data.slice(0, 5).map((r) => ({
+          fecha: r.fecha,
+          proveedor: r.proveedor,
+          factura: r.numero_factura,
+          insumo: r.nombre_insumo,
+          cantidad: Number(r.cantidad || 0),
+          unidad: r.unidad,
+          costo_unitario: Number(r.costo_unitario || 0),
+          total: Number(r.valor_compra || 0),
+        })),
+      };
+    }
+
+    // 2. Por Factura específica
+    if (numero_factura && numero_factura.trim() !== '') {
+      const fac = numero_factura.trim();
+      const { data, error } = await supabase
+        .from('compras_detalle')
+        .select('fecha, numero_factura, proveedor, categoria, nombre_insumo, detalle, cantidad, unidad, costo_unitario, valor_compra')
+        .ilike('numero_factura', `%${fac}%`)
+        .order('nombre_insumo', { ascending: true });
+
+      if (error) throw error;
+      if (!data || data.length === 0) return { mensaje: `No se encontró la factura: ${fac}` };
+
+      const totalDinero = data.reduce((acc, r) => acc + Number(r.valor_compra || 0), 0);
+      return {
+        factura: data[0].numero_factura,
+        proveedor: data[0].proveedor,
+        fecha: data[0].fecha,
+        categoria: data[0].categoria,
+        total_factura_cop: totalDinero,
+        total_articulos: data.length,
+        articulos: data.map((r) => ({
+          insumo: r.nombre_insumo,
+          detalle: r.detalle,
+          cantidad: Number(r.cantidad || 0),
+          unidad: r.unidad,
+          costo_unitario: Number(r.costo_unitario || 0),
+          valor_total: Number(r.valor_compra || 0),
+        })),
+      };
+    }
+
+    // 3. Por Proveedor específico
+    if (proveedor && proveedor.trim() !== '') {
+      const prov = proveedor.trim();
+      const { data: facturas, error } = await supabase
+        .from('compras')
+        .select('fecha, numero_factura, proveedor, categoria, valor_total, total_items')
+        .ilike('proveedor', `%${prov}%`)
+        .order('fecha', { ascending: false });
+
+      if (error) throw error;
+      if (!facturas || facturas.length === 0) return { mensaje: `No hay facturas para el proveedor: ${prov}` };
+
+      const totalDinero = facturas.reduce((acc, r) => acc + Number(r.valor_total || 0), 0);
+      return {
+        proveedor: prov,
+        total_facturas: facturas.length,
+        total_dinero_cop: totalDinero,
+        facturas: facturas.map((f) => ({
+          fecha: f.fecha,
+          factura: f.numero_factura,
+          categoria: f.categoria,
+          total: Number(f.valor_total || 0),
+          items: f.total_items,
+        })),
+      };
+    }
+
+    // 4. Por Categoría específica
+    if (categoria && categoria.trim() !== '') {
+      const cat = categoria.trim();
+      let catFilter = cat;
+      if (cat.toLowerCase().startsWith('carne')) catFilter = 'Carnes y Proteínas';
+      else if (cat.toLowerCase().startsWith('verd') || cat.toLowerCase().startsWith('frut')) catFilter = 'Verduras y Frutas';
+      else if (cat.toLowerCase().startsWith('gran') || cat.toLowerCase().startsWith('harin')) catFilter = 'Granos y Harinas';
+      else if (cat.toLowerCase().startsWith('desech') || cat.toLowerCase().startsWith('empaq')) catFilter = 'Desechables y Empaques';
+      else if (cat.toLowerCase().startsWith('beb') || cat.toLowerCase().startsWith('licor')) catFilter = 'Bebidas y Licores';
+
+      const { data, error } = await supabase
+        .from('compras_detalle')
+        .select('fecha, numero_factura, proveedor, categoria, nombre_insumo, cantidad, unidad, costo_unitario, valor_compra')
+        .ilike('categoria', `%${catFilter}%`)
+        .order('fecha', { ascending: false });
+
+      if (error) throw error;
+      const totalDinero = (data || []).reduce((acc, r) => acc + Number(r.valor_compra || 0), 0);
+
+      return {
+        categoria: catFilter,
+        total_compras_lineas: data?.length || 0,
+        total_dinero_cop: totalDinero,
+        compras_recientes: (data || []).slice(0, 8).map((r) => ({
+          fecha: r.fecha,
+          insumo: r.nombre_insumo,
+          cantidad: Number(r.cantidad || 0),
+          unidad: r.unidad,
+          costo_unitario: Number(r.costo_unitario || 0),
+          total: Number(r.valor_compra || 0),
+          proveedor: r.proveedor,
+          factura: r.numero_factura,
+        })),
+      };
+    }
+
+    // 5. Por Fecha específica
+    if (fecha && fecha.trim() !== '') {
+      const { data, error } = await supabase
+        .from('compras')
+        .select('fecha, numero_factura, proveedor, categoria, valor_total, total_items')
+        .eq('fecha', fecha.trim())
+        .order('valor_total', { ascending: false });
+
+      if (error) throw error;
+      const total = (data || []).reduce((acc, r) => acc + Number(r.valor_total || 0), 0);
+      return {
+        fecha: fecha.trim(),
+        total_facturas: data?.length || 0,
+        total_dinero_cop: total,
+        facturas: data || [],
+      };
+    }
+
+    // 6. Resumen General de Compras (Octubre 2026)
+    const { data: facturas } = await supabase.from('compras').select('valor_total');
+    const { data: detalles } = await supabase.from('compras_detalle').select('categoria, valor_compra');
+
+    const totalDinero = (facturas || []).reduce((acc, f) => acc + Number(f.valor_total || 0), 0);
+    const catSummary = {};
+    for (const d of detalles || []) {
+      catSummary[d.categoria] = catSummary[d.categoria] || { compras: 0, total: 0 };
+      catSummary[d.categoria].compras++;
+      catSummary[d.categoria].total += Number(d.valor_compra || 0);
+    }
+
+    return {
+      resumen: 'Total Compras Octubre 2026',
+      total_facturas: facturas?.length || 0,
+      total_lineas_compras: detalles?.length || 0,
+      gran_total_cop: totalDinero,
+      categorias: Object.entries(catSummary).map(([cat, stats]) => ({
+        categoria: cat,
+        num_compras: stats.compras,
+        total_cop: stats.total,
+        porcentaje: totalDinero > 0 ? Number(((stats.total / totalDinero) * 100).toFixed(1)) : 0,
       })),
-    }));
+    };
   } catch (e) {
     return { error: e.message };
   }
@@ -329,6 +503,11 @@ REGLAS DE FORMATO ESTRICTAS:
      Usa consultar_ventas buscando el producto para devolver el precio de venta al público en carta.
    - Si piden "costo de insumo" o "costo de catálogo" de materia prima:
      Usa consultar_insumos_precios.
+   - Para compras del restaurante (módulo Entradas por Compra):
+     * Total compras o resumen general: Usa consultar_compras sin parámetros. Devuelve total dinero ($COP), total facturas y desglose por categorías.
+     * Compras por categoría (ej: "cuánto se gastó en carnes", "total compras verduras"): Usa consultar_compras con categoria.
+     * Costo de compra de un insumo (ej: "a cómo compramos la sobrebarriga", "a cómo el pollo", "último costo de adquisición"): Usa consultar_compras con insumo. Devuelve último costo unitario, proveedor, factura, fecha y total acumulado.
+     * Compras por proveedor o factura: Usa consultar_compras con proveedor o numero_factura.
 5. OBLIGATORIO: Siempre consulta los datos reales de la base de datos usando las herramientas. NUNCA inventes números.
 `;
 
@@ -421,11 +600,15 @@ const tools = [
     type: 'function',
     function: {
       name: 'consultar_compras',
-      description: 'Consulta compras recientes, facturas y costos de adquisición.',
+      description: 'Consulta el módulo Entradas por Compra: total compras en dinero, facturas, compras por categoría (Carnes, Verduras, Granos, Desechables, Bebidas, etc.), costos de compra de insumos, proveedores y facturas.',
       parameters: {
         type: 'object',
         properties: {
-          insumo: { type: 'string', description: 'Nombre del insumo a buscar en compras.' },
+          insumo: { type: 'string', description: 'Nombre del insumo a buscar en compras (ej: posta, sobrebarriga, solomito, pollo, papa, aceite).' },
+          categoria: { type: 'string', description: 'Categoría de compras (ej: Carnes, Verduras, Granos, Desechables, Bebidas, Otros).' },
+          proveedor: { type: 'string', description: 'Nombre o parte del nombre del proveedor (ej: Valencia, Monos, Tobon, San Jerónimo).' },
+          numero_factura: { type: 'string', description: 'Número de factura específica (ej: FEBF-37, 985).' },
+          fecha: { type: 'string', description: 'Fecha YYYY-MM-DD.' },
         },
       },
     },
@@ -444,7 +627,7 @@ async function ejecutarTool(callName, args) {
   } else if (callName === 'consultar_insumos_precios') {
     return await consultarInsumosPrecios(args.termino);
   } else if (callName === 'consultar_compras') {
-    return await consultarCompras(args.insumo);
+    return await consultarCompras(args);
   }
   return { error: 'Herramienta desconocida' };
 }
