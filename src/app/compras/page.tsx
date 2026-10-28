@@ -1,674 +1,402 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Loader2, 
+  ShoppingCart, 
   Receipt, 
-  Check,
-  Calendar,
-  DollarSign,
-  Package,
-  FileText,
-  AlertTriangle,
-  Sparkles
+  Package, 
+  ListFilter, 
+  Search, 
+  X, 
+  Layers, 
+  Calendar, 
+  Building2,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
-import Modal from '@/components/ui/Modal';
-import { formatMoney, normalizeStr } from '@/lib/formatters';
 import { usePeriodo } from '@/context/PeriodoContext';
+import ComprasKPIHeader from '@/components/compras/ComprasKPIHeader';
+import ComprasFacturasView from '@/components/compras/ComprasFacturasView';
+import ComprasInsumosView from '@/components/compras/ComprasInsumosView';
+import ComprasLineasView from '@/components/compras/ComprasLineasView';
+import ComprasExportButtons from '@/components/compras/ComprasExportButtons';
+import { 
+  ComprasKPIs, 
+  CompraFacturaGroup, 
+  CompraInsumoGroup, 
+  CompraDetalleItem 
+} from '@/services/comprasService';
 
-interface CompraItem {
-  id: string;
-  compraId: number | string;
-  fecha: string;
-  factura: string;
-  proveedor: string;
-  insumo: string;
-  categoria: string;
-  cantidadKg: number;
-  costoUnitarioKg: number;
-  totalPesos: number;
-  estadoFactura: 'COMPLETA' | 'PENDIENTE';
-  observaciones?: string;
-}
-
-type SortField = 'fecha' | 'factura' | 'proveedor' | 'insumo' | 'cantidadKg' | 'costoUnitarioKg' | 'totalPesos';
+type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS';
 
 export default function ComprasPage() {
   const { currentPeriodo, selectedPeriodoId } = usePeriodo();
-  const [compras, setCompras] = useState<CompraItem[]>([]);
+  const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
+  const periodoNombre = currentPeriodo?.nombre || 'Octubre 2026';
+
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabView>('FACTURAS');
+
+  // Datos del backend
+  const [kpis, setKpis] = useState<ComprasKPIs>({
+    totalFacturas: 0,
+    totalDinero: 0,
+    totalItems: 0,
+    categorias: [],
+  });
+  const [facturas, setFacturas] = useState<CompraFacturaGroup[]>([]);
+  const [insumos, setInsumos] = useState<CompraInsumoGroup[]>([]);
+  const [lineas, setLineas] = useState<CompraDetalleItem[]>([]);
+  const [proveedores, setProveedores] = useState<string[]>([]);
+  const [categorias, setCategorias] = useState<string[]>([]);
+  const [fechas, setFechas] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filtros activos
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoria, setSelectedCategoria] = useState('');
+  const [selectedProveedor, setSelectedProveedor] = useState('');
+  const [selectedFecha, setSelectedFecha] = useState('');
 
-  // Sorting
-  const [sortField, setSortField] = useState<SortField>('fecha');
-  const [sortAsc, setSortAsc] = useState(false);
-
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 14;
-
-  // Modal de liquidación
-  const [selectedCompra, setSelectedCompra] = useState<CompraItem | null>(null);
-  const [modalFactura, setModalFactura] = useState('');
-  const [modalProveedor, setModalProveedor] = useState('');
-  const [modalCostoTotal, setModalCostoTotal] = useState('');
-  const [modalObs, setModalObs] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const loadCompras = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const startParam = currentPeriodo?.fecha_inicio ? `&fecha_inicio=${currentPeriodo.fecha_inicio}` : '';
-      const endParam = currentPeriodo?.fecha_fin ? `&fecha_fin=${currentPeriodo.fecha_fin}` : '';
-      const periodParam = selectedPeriodoId ? `&periodo_id=${selectedPeriodoId}` : '';
-
-      const res = await fetch(`/api/compras?t=${Date.now()}${startParam}${endParam}${periodParam}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.data) {
-        setCompras(data.data);
-      } else {
-        setCompras([]);
+      const res = await fetch(`/api/compras?periodo_id=${periodoId}&t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: No se pudo obtener la información de compras`);
       }
-    } catch (e) {
-      console.error('Error fetching compras:', e);
-      setCompras([]);
+      const json = await res.json();
+      if (json.success) {
+        if (json.kpis) setKpis(json.kpis);
+        if (json.facturas) setFacturas(json.facturas);
+        if (json.insumos) setInsumos(json.insumos);
+        if (json.lineas) setLineas(json.lineas);
+        if (json.proveedores) setProveedores(json.proveedores);
+        if (json.categorias) setCategorias(json.categorias);
+        if (json.fechas) setFechas(json.fechas);
+      } else {
+        throw new Error(json.error || 'Respuesta no exitosa');
+      }
+    } catch (err: any) {
+      console.error('Error cargando compras:', err);
+      setError(err?.message || 'Error de conexión');
     } finally {
       setLoading(false);
     }
-  };
+  }, [periodoId]);
 
   useEffect(() => {
-    loadCompras();
-    setCurrentPage(1);
-  }, [currentPeriodo?.id, currentPeriodo?.fecha_inicio, currentPeriodo?.fecha_fin, selectedPeriodoId]);
+    loadData();
+  }, [loadData]);
 
-  // Filtrado estricto por periodo como safeguard
-  const periodFilteredCompras = useMemo(() => {
-    if (!currentPeriodo) return compras;
-    const start = currentPeriodo.fecha_inicio;
-    const end = currentPeriodo.fecha_fin;
-    return compras.filter((c) => {
-      if (!c.fecha) return true;
-      if (start && c.fecha < start) return false;
-      if (end && c.fecha > end) return false;
+  // Limpiar todos los filtros
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategoria('');
+    setSelectedProveedor('');
+    setSelectedFecha('');
+  };
+
+  const hasActiveFilters = Boolean(
+    searchQuery || selectedCategoria || selectedProveedor || selectedFecha
+  );
+
+  // Normalizador para búsqueda inteligente
+  const normalize = (text: string) =>
+    (text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  // 1. Filtrado de Facturas
+  const filteredFacturas = useMemo(() => {
+    const q = normalize(searchQuery);
+    return facturas.filter((fac) => {
+      // Filtro Categoría
+      if (selectedCategoria && fac.categoria !== selectedCategoria && !fac.items.some((it) => it.categoria === selectedCategoria)) {
+        return false;
+      }
+      // Filtro Proveedor
+      if (selectedProveedor && fac.proveedor !== selectedProveedor) {
+        return false;
+      }
+      // Filtro Fecha
+      if (selectedFecha && fac.fecha !== selectedFecha) {
+        return false;
+      }
+      // Buscador Inteligente
+      if (q) {
+        const matchHeader =
+          normalize(fac.numero_factura).includes(q) ||
+          normalize(fac.proveedor).includes(q) ||
+          normalize(fac.origen).includes(q) ||
+          normalize(fac.observaciones).includes(q);
+        const matchItems = fac.items.some(
+          (it) =>
+            normalize(it.nombre_insumo).includes(q) ||
+            normalize(it.detalle).includes(q)
+        );
+        return matchHeader || matchItems;
+      }
       return true;
     });
-  }, [compras, currentPeriodo]);
+  }, [facturas, searchQuery, selectedCategoria, selectedProveedor, selectedFecha]);
 
-  // KPIs del periodo
-  const totalInvertido = useMemo(() => {
-    return periodFilteredCompras.reduce((acc, c) => acc + (c.totalPesos || 0), 0);
-  }, [periodFilteredCompras]);
-
-  const totalKgComprados = useMemo(() => {
-    return periodFilteredCompras.reduce((acc, c) => acc + (c.cantidadKg || 0), 0);
-  }, [periodFilteredCompras]);
-
-  const facturasPendientesCount = useMemo(() => {
-    return periodFilteredCompras.filter(
-      (c) =>
-        c.estadoFactura === 'PENDIENTE' ||
-        c.factura === 'Pendiente' ||
-        c.factura === 'PENDIENTE' ||
-        c.proveedor === 'Pendiente de Factura' ||
-        c.proveedor === 'Proveedor Local'
-    ).length;
-  }, [periodFilteredCompras]);
-
-  // Filtrado por buscador
-  const filteredCompras = useMemo(() => {
-    const cleanSearch = normalizeStr(searchQuery);
-    if (!cleanSearch) return periodFilteredCompras;
-    return periodFilteredCompras.filter((c) => {
-      const prov = normalizeStr(c.proveedor);
-      const fac = normalizeStr(c.factura);
-      const ins = normalizeStr(c.insumo);
-      return prov.includes(cleanSearch) || fac.includes(cleanSearch) || ins.includes(cleanSearch);
-    });
-  }, [periodFilteredCompras, searchQuery]);
-
-  // Ordenamiento
-  const sortedCompras = useMemo(() => {
-    const list = [...filteredCompras];
-    list.sort((a: any, b: any) => {
-      let valA = a[sortField];
-      let valB = b[sortField];
-
-      if (typeof valA === 'string') {
-        return sortAsc
-          ? String(valA).localeCompare(String(valB))
-          : String(valB).localeCompare(String(valA));
+  // 2. Filtrado de Insumos
+  const filteredInsumos = useMemo(() => {
+    const q = normalize(searchQuery);
+    return insumos.filter((ins) => {
+      if (selectedCategoria && ins.categoria !== selectedCategoria) return false;
+      if (selectedProveedor && !ins.proveedores.includes(selectedProveedor)) return false;
+      if (q) {
+        return (
+          normalize(ins.nombre_insumo).includes(q) ||
+          ins.proveedores.some((p) => normalize(p).includes(q))
+        );
       }
-      return sortAsc ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
+      return true;
     });
-    return list;
-  }, [filteredCompras, sortField, sortAsc]);
+  }, [insumos, searchQuery, selectedCategoria, selectedProveedor]);
 
-  // Paginación
-  const totalPages = Math.max(1, Math.ceil(sortedCompras.length / itemsPerPage));
-  const paginatedCompras = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return sortedCompras.slice(start, start + itemsPerPage);
-  }, [sortedCompras, currentPage]);
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortField(field);
-      setSortAsc(false);
-    }
-  };
-
-  const handleOpenModal = (compra: CompraItem) => {
-    setSelectedCompra(compra);
-    setModalFactura(compra.factura || 'PENDIENTE');
-    setModalProveedor(compra.proveedor === 'Pendiente de Factura' || compra.proveedor === 'Proveedor Local' ? '' : compra.proveedor);
-    setModalCostoTotal(compra.totalPesos ? String(compra.totalPesos) : '');
-    setModalObs(compra.observaciones || 'Ingreso registrado desde Terminal Bodeguero');
-  };
-
-  const handleSaveModal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCompra) return;
-
-    setSaving(true);
-    try {
-      const res = await fetch('/api/compras', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          compraId: selectedCompra.compraId,
-          numeroFactura: modalFactura.trim() || 'PENDIENTE',
-          proveedor: modalProveedor.trim() || 'Proveedor Local',
-          observaciones: modalObs.trim(),
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar');
-
-      setSelectedCompra(null);
-      await loadCompras();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-        <p className="text-xs font-normal">Cargando Compras del Periodo {currentPeriodo?.nombre || ''}...</p>
-      </div>
-    );
-  }
+  // 3. Filtrado de Líneas
+  const filteredLineas = useMemo(() => {
+    const q = normalize(searchQuery);
+    return lineas.filter((lin) => {
+      if (selectedCategoria && lin.categoria !== selectedCategoria) return false;
+      if (selectedProveedor && lin.proveedor !== selectedProveedor) return false;
+      if (selectedFecha && lin.fecha !== selectedFecha) return false;
+      if (q) {
+        return (
+          normalize(lin.numero_factura).includes(q) ||
+          normalize(lin.proveedor).includes(q) ||
+          normalize(lin.nombre_insumo).includes(q) ||
+          normalize(lin.detalle).includes(q) ||
+          normalize(lin.origen).includes(q)
+        );
+      }
+      return true;
+    });
+  }, [lineas, searchQuery, selectedCategoria, selectedProveedor, selectedFecha]);
 
   return (
-    <div className="w-full space-y-4 animate-fade-in font-normal">
-      {/* 🏷️ BANNER DEL PERIODO SELECCIONADO Y KPIS */}
-      <div className="p-4 bg-gradient-to-r from-orange-50/90 via-amber-50/70 to-slate-50 border border-orange-200/80 rounded-2xl shadow-sm space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 bg-orange-600 text-white rounded-xl shadow-sm">
-              <Receipt className="w-5 h-5" />
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">
-                  Registro de Compras
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-900 border border-orange-300">
-                  {currentPeriodo?.nombre || 'Periodo Activo'}
-                </span>
-                {currentPeriodo?.estado === 'CERRADO' ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-200 text-slate-700">
-                    🔒 Cerrado
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800">
-                    🟢 En Curso
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span>
-                  Rango del periodo: <strong>{currentPeriodo?.fecha_inicio || 'Inicio'}</strong> al <strong>{currentPeriodo?.fecha_fin || 'Fin'}</strong>
-                </span>
-              </p>
-            </div>
+    <div className="space-y-4 w-full px-2 sm:px-4 md:px-6 font-normal">
+      {/* 🏷️ Encabezado Principal Tipo Git */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-slate-900 text-white rounded-md">
+            <ShoppingCart className="w-4 h-4" />
           </div>
+          <div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+              Entradas por Compra
+            </h1>
+            <p className="text-xs text-slate-500">
+              Control de facturas de costo directo y materia prima • {periodoNombre}
+            </p>
+          </div>
+        </div>
 
-          {/* Buscador Rápido */}
-          <div className="relative w-full md:w-80">
+        {/* Acciones de Exportación */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <ComprasExportButtons
+            facturas={filteredFacturas}
+            insumos={filteredInsumos}
+            lineas={filteredLineas}
+            periodoNombre={periodoNombre}
+          />
+        </div>
+      </div>
+
+      {/* 📊 Tarjetas de KPIs y Categorías */}
+      <ComprasKPIHeader
+        kpis={kpis}
+        selectedCategory={selectedCategoria}
+        onSelectCategory={setSelectedCategoria}
+        periodoNombre={periodoNombre}
+      />
+
+      {/* 🔍 Barra de Búsqueda Inteligente y Filtros */}
+      <div className="bg-white rounded-lg p-3 border border-slate-200 space-y-2.5 shadow-2xs">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
+          {/* Buscador de texto */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              placeholder="Buscar por factura, proveedor, insumo o detalle original del PDF..."
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Buscar por insumo, factura o proveedor..."
-              className="w-full h-9 px-3 text-xs rounded-xl border border-slate-300 outline-none focus:border-orange-500 bg-white text-slate-800 placeholder-slate-400 shadow-sm"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 focus:bg-white text-slate-800"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-              >
-                &times;
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Mini KPIs del Periodo */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-          <div className="p-2.5 bg-white rounded-xl border border-orange-200/70 shadow-2xs">
-            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Inversión del Periodo</span>
-            <span className="text-sm md:text-base font-bold text-orange-600 mt-0.5 block">
-              $ {formatMoney(totalInvertido)}
-            </span>
-          </div>
-
-          <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Volumen Ingresado</span>
-            <span className="text-sm md:text-base font-bold text-slate-900 mt-0.5 block">
-              {totalKgComprados.toFixed(2)} Kg
-            </span>
-          </div>
-
-          <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Total Compras / Lotes</span>
-            <span className="text-sm md:text-base font-bold text-slate-800 mt-0.5 block">
-              {periodFilteredCompras.length} registros
-            </span>
-          </div>
-
-          <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Pendientes Liquidar</span>
-            <span className={`text-sm md:text-base font-bold mt-0.5 block ${facturasPendientesCount > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
-              {facturasPendientesCount > 0 ? `⚠️ ${facturasPendientesCount} facturas` : '✓ 0 pendientes'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 💻 Vista Tabla de Escritorio (hidden en móvil, visible en md+) */}
-      <div className="hidden md:block w-full border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden font-normal">
-        <div className="relative max-h-[calc(100vh-250px)] overflow-y-auto overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse font-normal">
-            <thead className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm text-slate-600 font-medium border-b border-slate-200 text-[11px] uppercase tracking-wider shadow-sm">
-              <tr>
-                <th
-                  onClick={() => handleSort('fecha')}
-                  className="py-3 px-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none whitespace-nowrap"
-                >
-                FECHA {sortField === 'fecha' ? (sortAsc ? '↑' : '↓') : '↑↓'}
-              </th>
-              <th
-                onClick={() => handleSort('factura')}
-                className="py-3 px-3 cursor-pointer hover:text-slate-900 select-none whitespace-nowrap"
-              >
-                Nº FACTURA {sortField === 'factura' ? (sortAsc ? '↑' : '↓') : '↑↓'}
-              </th>
-              <th
-                onClick={() => handleSort('proveedor')}
-                className="py-3 px-3 cursor-pointer hover:text-slate-900 select-none whitespace-nowrap"
-              >
-                PROVEEDOR {sortField === 'proveedor' ? (sortAsc ? '↑' : '↓') : '↑↓'}
-              </th>
-              <th
-                onClick={() => handleSort('insumo')}
-                className="py-3 px-3 cursor-pointer hover:text-slate-900 select-none"
-              >
-                INSUMO COMPRADO {sortField === 'insumo' ? (sortAsc ? '↑' : '↓') : '↑↓'}
-              </th>
-              <th
-                onClick={() => handleSort('cantidadKg')}
-                className="py-3 px-3 text-right cursor-pointer hover:text-slate-900 select-none whitespace-nowrap"
-              >
-                CANT. (KG) {sortField === 'cantidadKg' ? (sortAsc ? '↑' : '↓') : '↑↓'}
-              </th>
-              <th
-                onClick={() => handleSort('costoUnitarioKg')}
-                className="py-3 px-3 text-right cursor-pointer hover:text-slate-900 select-none whitespace-nowrap"
-              >
-                COSTO UNIT. {sortField === 'costoUnitarioKg' ? (sortAsc ? '↑' : '↓') : '↑↓'}
-              </th>
-              <th
-                onClick={() => handleSort('totalPesos')}
-                className="py-3 px-3 text-right cursor-pointer hover:text-slate-900 select-none whitespace-nowrap"
-              >
-                TOTAL {sortField === 'totalPesos' ? (sortAsc ? '↑' : '↓') : '↑↓'}
-              </th>
-              <th className="py-3 px-3 text-center whitespace-nowrap">
-                ACCIÓN
-              </th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-normal">
-            {paginatedCompras.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-14 text-center text-slate-400 font-normal">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Receipt className="w-8 h-8 text-slate-300" />
-                    <p className="text-xs text-slate-600 font-medium">
-                      No hay compras registradas en {currentPeriodo?.nombre || 'este periodo'}
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Rango: {currentPeriodo?.fecha_inicio || ''} al {currentPeriodo?.fecha_fin || ''}
-                      {searchQuery ? ` • Filtro: "${searchQuery}"` : ''}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              paginatedCompras.map((row) => {
-                const isPending =
-                  row.estadoFactura === 'PENDIENTE' ||
-                  row.factura === 'Pendiente' ||
-                  row.factura === 'PENDIENTE' ||
-                  row.proveedor === 'Pendiente de Factura' ||
-                  row.proveedor === 'Proveedor Local';
-
-                return (
-                  <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
-                    {/* Fecha */}
-                    <td className="py-3 px-3 text-slate-600 font-normal whitespace-nowrap text-xs">
-                      {row.fecha}
-                    </td>
-
-                    {/* Nº Factura */}
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      {isPending && (!row.factura || row.factura === 'Pendiente' || row.factura === 'PENDIENTE') ? (
-                        <span className="text-amber-600 font-normal italic inline-flex items-center gap-1 text-[11px]">
-                          ⚠️ Pendiente
-                        </span>
-                      ) : (
-                        <span className="text-slate-800 font-medium font-mono text-xs">
-                          {row.factura}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Proveedor */}
-                    <td className="py-3 px-3 whitespace-nowrap max-w-[160px] truncate">
-                      {!row.proveedor || row.proveedor === 'Pendiente de Factura' || row.proveedor === 'Proveedor Local' ? (
-                        <span className="text-slate-400 italic font-normal text-xs">
-                          {row.proveedor || 'Sin especificar'}
-                        </span>
-                      ) : (
-                        <span className="text-slate-700 font-normal text-xs">{row.proveedor}</span>
-                      )}
-                    </td>
-
-                    {/* Insumo Comprado */}
-                    <td className="py-3 px-3">
-                      <span className="text-slate-900 font-medium text-xs md:text-sm">
-                        {row.insumo}
-                      </span>
-                    </td>
-
-                    {/* Cantidad (Kg) */}
-                    <td className="py-3 px-3 text-right text-slate-700 font-normal whitespace-nowrap text-xs">
-                      {row.cantidadKg > 0 ? `${row.cantidadKg.toFixed(2)}` : '-'}
-                    </td>
-
-                    {/* Costo Unitario */}
-                    <td className="py-3 px-3 text-right text-slate-600 font-normal whitespace-nowrap text-xs">
-                      {row.costoUnitarioKg > 0 ? `$ ${formatMoney(row.costoUnitarioKg)}` : '-'}
-                    </td>
-
-                    {/* Total Factura */}
-                    <td className="py-3 px-3 text-right text-rose-600 font-medium text-xs md:text-sm whitespace-nowrap">
-                      $ {formatMoney(row.totalPesos)}
-                    </td>
-
-                    {/* Acción Button */}
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenModal(row)}
-                        className="px-3 py-1.5 bg-[#f59e0b] hover:bg-[#d97706] text-white rounded-lg text-xs font-normal shadow-sm inline-flex items-center gap-1.5 active:scale-95 transition-all"
-                      >
-                        <span>✏️</span>
-                        <span>Completar Factura</span>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-        </div>
-      </div>
-
-      {/* 📱 Vista de Tarjetas Móvil (visible en móvil, hidden en md+) */}
-      <div className="block md:hidden space-y-3 pt-1">
-        {paginatedCompras.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 font-normal text-xs">
-            <Receipt className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
-            <p className="font-medium text-slate-600">No hay compras en {currentPeriodo?.nombre || 'este periodo'}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">{currentPeriodo?.fecha_inicio} al {currentPeriodo?.fecha_fin}</p>
-          </div>
-        ) : (
-          paginatedCompras.map((row) => {
-            const isPending =
-              row.estadoFactura === 'PENDIENTE' ||
-              row.factura === 'Pendiente' ||
-              row.factura === 'PENDIENTE' ||
-              row.proveedor === 'Pendiente de Factura' ||
-              row.proveedor === 'Proveedor Local';
-
-            return (
-              <div
-                key={row.id}
-                className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2.5 shadow-sm text-xs font-normal"
-              >
-                {/* Header de la tarjeta: Insumo y Total */}
-                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
-                  <div>
-                    <span className="text-sm font-medium text-slate-900 block">{row.insumo}</span>
-                    <span className="text-[11px] text-slate-400">{row.fecha}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-medium text-rose-600 block">
-                      $ {formatMoney(row.totalPesos)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Grid de detalles */}
-                <div className="grid grid-cols-2 gap-2 text-xs py-0.5">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Factura</span>
-                    {isPending && (!row.factura || row.factura === 'Pendiente' || row.factura === 'PENDIENTE') ? (
-                      <span className="text-amber-600 font-normal italic text-[11px]">⚠️ Pendiente</span>
-                    ) : (
-                      <span className="text-slate-800 font-mono text-xs">{row.factura}</span>
-                    )}
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Proveedor</span>
-                    <span className="text-slate-700 truncate block text-xs">
-                      {row.proveedor || 'Sin especificar'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Cantidad</span>
-                    <span className="text-slate-800 font-medium text-xs">
-                      {row.cantidadKg > 0 ? `${row.cantidadKg.toFixed(2)} Kg` : '-'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Costo / Kg</span>
-                    <span className="text-slate-600 text-xs">
-                      {row.costoUnitarioKg > 0 ? `$ ${formatMoney(row.costoUnitarioKg)}` : '-'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Botón de acción móvil */}
-                <div className="pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenModal(row)}
-                    className="w-full py-2 bg-[#f59e0b] hover:bg-[#d97706] text-white rounded-lg text-xs font-medium shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all"
-                  >
-                    <span>✏️</span>
-                    <span>Completar Factura</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Paginación */}
-      <div className="flex items-center justify-between md:justify-end gap-3 text-xs text-slate-500 pt-2 font-normal">
-        <span>
-          Página {currentPage} de {totalPages}
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4 text-slate-600" />
-          </button>
-          <button
-            type="button"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronRight className="w-4 h-4 text-slate-600" />
-          </button>
-        </div>
-      </div>
-
-      {/* Modal Estandarizado */}
-      <Modal
-        isOpen={Boolean(selectedCompra)}
-        onClose={() => setSelectedCompra(null)}
-        title="Completar / Liquidar Factura"
-        icon={<Receipt className="w-5 h-5 text-orange-500" />}
-        maxWidth="max-w-md"
-      >
-        {selectedCompra && (
-          <form onSubmit={handleSaveModal} className="space-y-3.5 text-xs font-normal">
-            <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl space-y-1">
-              <div className="text-slate-500 text-[11px] font-normal">
-                Materia prima ingresada por Bodeguero:
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-900 font-medium text-sm">
-                  {selectedCompra.insumo}
-                </span>
-                <span className="text-blue-600 font-medium text-xs bg-blue-100/70 px-2 py-0.5 rounded-md">
-                  {selectedCompra.cantidadKg > 0 ? `${selectedCompra.cantidadKg.toFixed(2)} Kg` : 'Lote'}
-                </span>
-              </div>
-              <div className="text-slate-400 text-[11px] font-normal">
-                Fecha de recepción: {selectedCompra.fecha}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">
-                Nº de Factura Oficial / Remisión *
-              </label>
-              <input
-                type="text"
-                required
-                value={modalFactura}
-                onChange={(e) => setModalFactura(e.target.value)}
-                placeholder="PENDIENTE"
-                className="w-full h-9 px-3 rounded-lg border border-orange-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 text-slate-800 font-normal outline-none shadow-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">
-                Proveedor Real *
-              </label>
-              <input
-                type="text"
-                required
-                value={modalProveedor}
-                onChange={(e) => setModalProveedor(e.target.value)}
-                placeholder="Ej. Frigorífico Central S.A.S"
-                className="w-full h-9 px-3 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 text-slate-800 font-normal outline-none shadow-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">
-                Costo Total Factura ($ COP) *
-              </label>
-              <input
-                type="number"
-                required
-                value={modalCostoTotal}
-                onChange={(e) => setModalCostoTotal(e.target.value)}
-                placeholder="Ej. 40000"
-                className="w-full h-9 px-3 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 text-slate-800 font-normal outline-none shadow-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">
-                Observaciones Administrativas
-              </label>
-              <input
-                type="text"
-                value={modalObs}
-                onChange={(e) => setModalObs(e.target.value)}
-                placeholder="Ingreso registrado desde Terminal Bodeguero"
-                className="w-full h-9 px-3 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 text-slate-800 font-normal outline-none shadow-sm"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
-              <button
                 type="button"
-                onClick={() => setSelectedCompra(null)}
-                className="px-4 py-2 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 font-medium text-xs transition-colors"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                Cancelar
+                <X className="w-3.5 h-3.5" />
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 rounded-lg bg-[#10b981] hover:bg-[#059669] text-white font-medium text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-50"
-              >
-                {saving ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Guardar y Confirmar Factura</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
+            )}
+          </div>
+
+          {/* Filtro Proveedor */}
+          <div className="min-w-[180px]">
+            <select
+              value={selectedProveedor}
+              onChange={(e) => setSelectedProveedor(e.target.value)}
+              className="w-full py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer"
+            >
+              <option value="">Todos los Proveedores</option>
+              {proveedores.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Categoría */}
+          <div className="min-w-[170px]">
+            <select
+              value={selectedCategoria}
+              onChange={(e) => setSelectedCategoria(e.target.value)}
+              className="w-full py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer"
+            >
+              <option value="">Todas las Categorías</option>
+              {categorias.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Fecha */}
+          <div className="min-w-[140px]">
+            <select
+              value={selectedFecha}
+              onChange={(e) => setSelectedFecha(e.target.value)}
+              className="w-full py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-900 text-slate-800 cursor-pointer font-mono"
+            >
+              <option value="">Todas las Fechas</option>
+              {fechas.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Limpiar Filtros */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-md transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Limpiar</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 🗂️ Pestañas del Módulo */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 select-none">
+        {/* Pestaña Facturas (Default) */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('FACTURAS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'FACTURAS'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <Receipt className="w-3.5 h-3.5" />
+          <span>Por Factura</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+              activeTab === 'FACTURAS'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {filteredFacturas.length}
+          </span>
+        </button>
+
+        {/* Pestaña Insumos Consolidados */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('INSUMOS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'INSUMOS'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <Package className="w-3.5 h-3.5" />
+          <span>Por Insumo (Totales)</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+              activeTab === 'INSUMOS'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {filteredInsumos.length}
+          </span>
+        </button>
+
+        {/* Pestaña Líneas Detalladas */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('LINEAS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'LINEAS'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <ListFilter className="w-3.5 h-3.5" />
+          <span>Todas las Entradas (Líneas)</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+              activeTab === 'LINEAS'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {filteredLineas.length}
+          </span>
+        </button>
+      </div>
+
+      {/* 📄 Vistas según Pestaña Activa */}
+      {loading ? (
+        <div className="bg-white rounded-lg p-12 border border-slate-200 text-center text-slate-500">
+          <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400 mb-2" />
+          <p className="text-xs font-medium">Cargando facturas y compras de materia prima...</p>
+        </div>
+      ) : error ? (
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <div className="text-xs">
+            <div className="font-semibold">Error al cargar datos</div>
+            <div>{error}</div>
+          </div>
+        </div>
+      ) : activeTab === 'FACTURAS' ? (
+        <ComprasFacturasView facturas={filteredFacturas} />
+      ) : activeTab === 'INSUMOS' ? (
+        <ComprasInsumosView insumos={filteredInsumos} />
+      ) : (
+        <ComprasLineasView lineas={filteredLineas} />
+      )}
     </div>
   );
 }
