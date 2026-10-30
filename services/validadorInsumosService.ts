@@ -255,16 +255,25 @@ export async function aplicarBorradorEnCocina(borrador: BorradorIngesta) {
   const payload = borrador.items.map((it) => ({
     fecha: borrador.fecha,
     tipo: borrador.tipo,
+    insumo_id: it.insumo_id,
     nombre_insumo: it.nombre_catalogo,
     categoria: it.categoria || 'CARNES',
     cantidad: it.cantidad,
     unidad: it.unidad,
     costo_unitario: it.costo_unitario,
     valor_total: it.valor_total,
+    observaciones: 'Ingresado vía Telegram Bot (@Finca_Eliana_bot)',
   }));
 
   const { error } = await supabase.from('registros_costeo_cocina').insert(payload);
   if (error) throw new Error(`Error guardando en cocina: ${error.message}`);
+
+  // Sincronizar automáticamente el resumen y KPIs del día en costeo_diario
+  try {
+    await supabase.rpc('rpc_sync_costeo_diario', { p_fecha: borrador.fecha });
+  } catch (rpcErr) {
+    console.error('Error invocando rpc_sync_costeo_diario:', rpcErr);
+  }
 
   return {
     success: true,
