@@ -14,7 +14,7 @@ export const revalidate = 0;
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const periodoId = searchParams.get('periodo_id') || 'per-2026-09';
+    const periodoId = searchParams.get('periodo_id') || 'per-2026-10';
     const view = searchParams.get('view') || 'ALL';
     const fecha = searchParams.get('fecha') || 'ALL';
     const categoria = searchParams.get('categoria') || 'ALL';

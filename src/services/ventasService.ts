@@ -78,7 +78,7 @@ export interface VentasRentabilidad {
 /**
  * Obtener los KPIs consolidados de ventas para el periodo
  */
-export async function getVentasKPIs(periodoId: string = 'per-2026-09'): Promise<VentasKPIs> {
+export async function getVentasKPIs(periodoId: string = 'per-2026-10'): Promise<VentasKPIs> {
   const { data: diarias, error } = await supabase
     .from('ventas_diarias')
     .select('*')
@@ -150,7 +150,7 @@ export async function getVentasKPIs(periodoId: string = 'per-2026-09'): Promise<
 /**
  * Obtener el listado de ventas día a día
  */
-export async function getVentasDiarias(periodoId: string = 'per-2026-09'): Promise<VentaDiaria[]> {
+export async function getVentasDiarias(periodoId: string = 'per-2026-10'): Promise<VentaDiaria[]> {
   const { data, error } = await supabase
     .from('ventas_diarias')
     .select('*')
@@ -183,7 +183,7 @@ export async function getVentasDiarias(periodoId: string = 'per-2026-09'): Promi
  * Obtener ranking de platos del menú consolidado por periodo
  */
 export async function getVentasPorProducto(
-  periodoId: string = 'per-2026-09',
+  periodoId: string = 'per-2026-10',
   categoria: string = 'ALL',
   search: string = ''
 ): Promise<{ ranking: PlatoRanking[]; categorias: string[]; totalVentas: number }> {
@@ -287,7 +287,7 @@ export async function getVentasDetalle(params: {
   pageSize?: number;
 }): Promise<{ transacciones: VentaDetalle[]; total: number; page: number; totalPages: number }> {
   const {
-    periodoId = 'per-2026-09',
+    periodoId = 'per-2026-10',
     fecha = 'ALL',
     categoria = 'ALL',
     search = '',
@@ -354,7 +354,7 @@ export async function getVentasDetalle(params: {
 /**
  * Cruce financiero de Rentabilidad (Ventas vs Costos de Insumos)
  */
-export async function getVentasRentabilidad(periodoId: string = 'per-2026-09'): Promise<VentasRentabilidad> {
+export async function getVentasRentabilidad(periodoId: string = 'per-2026-10'): Promise<VentasRentabilidad> {
   // 1. Obtener totales de ventas
   const { data: diarias } = await supabase
     .from('ventas_diarias')
@@ -443,7 +443,7 @@ export interface ComparacionCuadreResult {
 }
 
 export async function getComparacionCuadreVentas(
-  periodoId: string = 'per-2026-09'
+  periodoId: string = 'per-2026-10'
 ): Promise<ComparacionCuadreResult> {
   // 1. Obtener ventas diarias
   const { data: ventasDiarias, error: errVentas } = await supabase
