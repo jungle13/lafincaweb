@@ -12,12 +12,6 @@ import {
   ShieldCheck,
   MessageSquare,
   Sparkles,
-  Phone,
-  Video,
-  MoreVertical,
-  SlidersHorizontal,
-  ChevronRight,
-  ExternalLink,
 } from 'lucide-react';
 
 interface ConversacionUsuario {
@@ -40,14 +34,14 @@ interface MensajeChat {
   created_at: string;
 }
 
-// Generador de color de avatar según nombre
 const AVATAR_COLORS = [
-  'bg-emerald-600',
-  'bg-teal-600',
+  'bg-[#00a884]',
+  'bg-emerald-700',
+  'bg-teal-700',
   'bg-amber-600',
   'bg-rose-600',
   'bg-indigo-600',
-  'bg-cyan-600',
+  'bg-cyan-700',
   'bg-purple-600',
   'bg-blue-600',
 ];
@@ -71,7 +65,7 @@ function formatFechaBadge(fechaIso?: string) {
   const d = new Date(fechaIso);
   if (isNaN(d.getTime())) return '';
   const hoy = new Date();
-  if (d.toDateString() === hoy.toDateString()) return 'Hoy';
+  if (d.toDateString() === hoy.toDateString()) return formatHora(fechaIso);
   const ayer = new Date();
   ayer.setDate(hoy.getDate() - 1);
   if (d.toDateString() === ayer.toDateString()) return 'Ayer';
@@ -88,41 +82,87 @@ export default function ChatBotPage() {
   const [filtroTab, setFiltroTab] = useState<'todos' | 'hoy'>('todos');
   const [nuevoMensaje, setNuevoMensaje] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const [actualizando, setActualizando] = useState(false);
+  const [manualSpin, setManualSpin] = useState(false);
 
+  // Registro de últimos mensajes leídos por chat para mostrar el indicador de nuevo mensaje sin saltar de pantalla
+  const [vistosMap, setVistosMap] = useState<Record<number, string>>({});
+
+  const conversacionActivaRef = useRef<ConversacionUsuario | null>(null);
+  conversacionActivaRef.current = conversacionActiva;
+
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. Cargar lista de conversaciones
+  // Cargar mapa de leídos desde localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('la_finca_bot_vistos');
+      if (saved) setVistosMap(JSON.parse(saved));
+    } catch (e) {}
+  }, []);
+
+  const marcarComoVisto = (chatId: number, fechaMsg?: string) => {
+    if (!fechaMsg) return;
+    setVistosMap((prev) => {
+      const updated = { ...prev, [chatId]: fechaMsg };
+      try {
+        localStorage.setItem('la_finca_bot_vistos', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  // 1. Cargar lista de conversaciones (NUNCA auto-selecciona chat ni mueve al usuario)
   const cargarConversaciones = async (silencioso = false) => {
     if (!silencioso) setCargandoLista(true);
-    setActualizando(true);
     try {
       const res = await fetch('/api/telegram/conversaciones');
       const data = await res.json();
       if (data.ok && Array.isArray(data.conversaciones)) {
         setConversaciones(data.conversaciones);
-        // Si no hay activa y hay conversaciones en desktop, seleccionar la primera
-        if (!conversacionActiva && data.conversaciones.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-          seleccionarConversacion(data.conversaciones[0]);
+
+        // Si ya hay un chat abierto por el usuario, actualizar sus mensajes en silencio si hubo cambios
+        const actual = conversacionActivaRef.current;
+        if (actual) {
+          const chatActualizado = data.conversaciones.find((c: any) => c.chat_id === actual.chat_id);
+          if (chatActualizado && chatActualizado.ultimo_mensaje_at !== actual.ultimo_mensaje_at) {
+            // Refrescar silenciosamente los mensajes del chat activo
+            cargarMensajesSilencioso(actual.chat_id);
+            marcarComoVisto(actual.chat_id, chatActualizado.ultimo_mensaje_at);
+          }
         }
       }
     } catch (e) {
       console.error('Error cargando conversaciones:', e);
     } finally {
-      setCargandoLista(false);
-      setActualizando(false);
+      if (!silencioso) setCargandoLista(false);
     }
   };
 
-  // 2. Cargar mensajes de la conversación seleccionada
+  // Refrescar silenciosamente mensajes del chat activo sin loaders intrusivos
+  const cargarMensajesSilencioso = async (chatId: number) => {
+    try {
+      const res = await fetch(`/api/telegram/conversaciones/${chatId}`);
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.mensajes)) {
+        setMensajes(data.mensajes);
+      }
+    } catch (e) {}
+  };
+
+  // 2. Selección explícita de conversación por parte del usuario
   const seleccionarConversacion = async (usuario: ConversacionUsuario) => {
     setConversacionActiva(usuario);
+    marcarComoVisto(usuario.chat_id, usuario.ultimo_mensaje_at);
     setCargandoMensajes(true);
     try {
       const res = await fetch(`/api/telegram/conversaciones/${usuario.chat_id}`);
       const data = await res.json();
       if (data.ok && Array.isArray(data.mensajes)) {
         setMensajes(data.mensajes);
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        }, 50);
       }
     } catch (e) {
       console.error('Error cargando mensajes:', e);
@@ -131,21 +171,16 @@ export default function ChatBotPage() {
     }
   };
 
+  // Carga inicial y sondeo periódico cada 10 segundos completamente invisible
   useEffect(() => {
-    cargarConversaciones();
-    // Auto-refresco silencioso cada 15 segundos
+    cargarConversaciones(false);
     const interval = setInterval(() => {
       cargarConversaciones(true);
-    }, 15000);
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Scroll automático hacia el último mensaje
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [mensajes]);
-
-  // Enviar respuesta administrativa manual al chat de Telegram
+  // Enviar mensaje manual
   const handleEnviarMensaje = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!nuevoMensaje.trim() || !conversacionActiva || enviando) return;
@@ -162,7 +197,6 @@ export default function ChatBotPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        // Añadir a mensajes en tiempo real
         setMensajes((prev) => [
           ...prev,
           {
@@ -173,6 +207,10 @@ export default function ChatBotPage() {
             created_at: new Date().toISOString(),
           },
         ]);
+        marcarComoVisto(conversacionActiva.chat_id, new Date().toISOString());
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 60);
         cargarConversaciones(true);
       } else {
         alert('Error enviando mensaje: ' + (data.error || 'Desconocido'));
@@ -182,6 +220,14 @@ export default function ChatBotPage() {
     } finally {
       setEnviando(false);
     }
+  };
+
+  const handleManualRefresh = () => {
+    setManualSpin(true);
+    cargarConversaciones(true).finally(() => {
+      if (conversacionActiva) cargarMensajesSilencioso(conversacionActiva.chat_id);
+      setTimeout(() => setManualSpin(false), 500);
+    });
   };
 
   // Filtrado de conversaciones
@@ -201,51 +247,46 @@ export default function ChatBotPage() {
   });
 
   return (
-    <div className="flex h-[calc(100vh-64px)] w-full overflow-hidden bg-[#0c1317] font-sans antialiased text-[#e9edef]">
+    <div className="flex h-full w-full overflow-hidden bg-[#0c1317] font-sans antialiased text-[#e9edef] select-none">
       {/* ========================================================================= */}
-      {/* 1. PANEL IZQUIERDO: LISTA DE CONVERSACIONES (ESTILO WHATSAPP WEB)         */}
+      {/* 1. PANEL IZQUIERDO: LISTA DE CHATS (WHATSAPP WEB THEME)                   */}
       {/* ========================================================================= */}
       <div
-        className={`w-full md:w-[380px] lg:w-[420px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] ${
+        className={`w-full md:w-[360px] lg:w-[410px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] h-full ${
           conversacionActiva ? 'hidden md:flex' : 'flex'
         }`}
       >
-        {/* Cabecera de la lista */}
-        <div className="h-16 px-4 bg-[#202c33] flex items-center justify-between border-b border-[#222d34]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-700/80 flex items-center justify-center text-white shadow-inner font-bold">
+        {/* Cabecera */}
+        <div className="h-14 px-4 bg-[#202c33] flex items-center justify-between border-b border-[#222d34] flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-emerald-700 flex items-center justify-center text-white text-base shadow font-bold">
               🥩
             </div>
             <div>
-              <h1 className="text-[15px] font-semibold text-slate-100 flex items-center gap-1.5 leading-tight">
+              <h1 className="text-[14px] font-semibold text-[#e9edef] leading-tight flex items-center gap-1.5">
                 Telegram Bot
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-mono px-1.5 py-0.5 rounded border border-emerald-500/30">
-                  En Vivo
-                </span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
               </h1>
-              <p className="text-[11px] text-[#8696a0] leading-tight">@Finca_Eliana_bot</p>
+              <p className="text-[11px] text-[#8696a0] leading-none">@Finca_Eliana_bot</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => cargarConversaciones()}
-              disabled={actualizando}
-              title="Refrescar conversaciones"
-              className="p-2 text-[#aebac1] hover:text-white hover:bg-[#374248] rounded-full transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${actualizando ? 'animate-spin text-emerald-400' : ''}`} />
-            </button>
-          </div>
+          <button
+            onClick={handleManualRefresh}
+            title="Refrescar chats"
+            className="p-2 text-[#aebac1] hover:text-white hover:bg-[#374248] rounded-full transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${manualSpin ? 'animate-spin text-emerald-400' : ''}`} />
+          </button>
         </div>
 
         {/* Buscador */}
-        <div className="p-2.5 bg-[#111b21]">
+        <div className="p-2 bg-[#111b21] flex-shrink-0">
           <div className="relative flex items-center bg-[#202c33] rounded-lg px-3 py-1.5 text-sm">
             <Search className="w-4 h-4 text-[#8696a0] mr-2 flex-shrink-0" />
             <input
               type="text"
-              placeholder="Buscar un chat o iniciar uno nuevo"
+              placeholder="Buscar un chat..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="w-full bg-transparent text-[#d1d7db] placeholder-[#8696a0] text-[13px] outline-none"
@@ -264,7 +305,7 @@ export default function ChatBotPage() {
           <div className="flex items-center gap-2 mt-2 px-1">
             <button
               onClick={() => setFiltroTab('todos')}
-              className={`text-xs px-3 py-1 rounded-full transition-colors font-medium ${
+              className={`text-xs px-3 py-0.5 rounded-full transition-colors font-medium ${
                 filtroTab === 'todos'
                   ? 'bg-[#00a884] text-[#111b21]'
                   : 'bg-[#202c33] text-[#8696a0] hover:bg-[#2a3942]'
@@ -274,7 +315,7 @@ export default function ChatBotPage() {
             </button>
             <button
               onClick={() => setFiltroTab('hoy')}
-              className={`text-xs px-3 py-1 rounded-full transition-colors font-medium ${
+              className={`text-xs px-3 py-0.5 rounded-full transition-colors font-medium ${
                 filtroTab === 'hoy'
                   ? 'bg-[#00a884] text-[#111b21]'
                   : 'bg-[#202c33] text-[#8696a0] hover:bg-[#2a3942]'
@@ -288,16 +329,16 @@ export default function ChatBotPage() {
           </div>
         </div>
 
-        {/* Lista de hilos de conversación */}
-        <div className="flex-1 overflow-y-auto divide-y divide-[#222d34]/60">
+        {/* Lista de hilos con scroll independiente */}
+        <div className="flex-1 overflow-y-auto divide-y divide-[#222d34]/60 min-h-0">
           {cargandoLista ? (
             <div className="flex flex-col items-center justify-center h-48 text-[#8696a0] text-xs gap-2">
-              <RefreshCw className="w-6 h-6 animate-spin text-emerald-500" />
+              <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
               <span>Cargando conversaciones...</span>
             </div>
           ) : conversacionesFiltradas.length === 0 ? (
             <div className="p-8 text-center text-[#8696a0] text-xs">
-              No se encontraron conversaciones que coincidan con la búsqueda.
+              No se encontraron conversaciones.
             </div>
           ) : (
             conversacionesFiltradas.map((c) => {
@@ -307,6 +348,12 @@ export default function ChatBotPage() {
                 (c.first_name?.[0] || '') + (c.last_name?.[0] || '')
               ).toUpperCase() || 'U';
 
+              // Puntito de nuevo mensaje si el último mensaje no ha sido visto por el usuario
+              const tieneMensajeNuevo =
+                c.ultimo_mensaje_at &&
+                (!vistosMap[c.chat_id] || c.ultimo_mensaje_at > vistosMap[c.chat_id]) &&
+                conversacionActiva?.chat_id !== c.chat_id;
+
               return (
                 <div
                   key={c.chat_id}
@@ -315,32 +362,46 @@ export default function ChatBotPage() {
                     estaSeleccionado ? 'bg-[#2a3942]' : 'hover:bg-[#202c33]'
                   }`}
                 >
-                  {/* Avatar con iniciales */}
+                  {/* Avatar */}
                   <div
-                    className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-semibold text-base shadow-sm ${getAvatarColor(
+                    className={`w-11 h-11 rounded-full flex-shrink-0 flex items-center justify-center text-white font-semibold text-[15px] shadow-sm relative ${getAvatarColor(
                       nombreCompleto
                     )}`}
                   >
                     {iniciales}
+                    {tieneMensajeNuevo && (
+                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-[#111b21]" />
+                    )}
                   </div>
 
-                  {/* Info del chat */}
+                  {/* Detalle */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between leading-tight mb-1">
-                      <h2 className="text-[15px] font-medium text-[#e9edef] truncate">
+                      <h2 className="text-[14px] font-medium text-[#e9edef] truncate flex items-center gap-1.5">
                         {nombreCompleto}
+                        {c.username && (
+                          <span className="text-[11px] text-[#8696a0] font-normal truncate">
+                            @{c.username}
+                          </span>
+                        )}
                       </h2>
-                      <span className="text-[11px] text-[#8696a0] flex-shrink-0">
+                      <span
+                        className={`text-[11px] flex-shrink-0 ${
+                          tieneMensajeNuevo ? 'text-emerald-400 font-semibold' : 'text-[#8696a0]'
+                        }`}
+                      >
                         {formatFechaBadge(c.ultimo_mensaje_at)}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-[13px] text-[#8696a0] leading-snug">
+                    <div className="flex items-center justify-between text-[12px] text-[#8696a0] leading-snug">
                       <p className="truncate flex-1 pr-2">
                         {c.ultimo_mensaje || 'Sin mensajes aún'}
                       </p>
-                      {c.total_mensajes ? (
-                        <span className="text-[10px] bg-[#202c33] text-emerald-400 font-medium px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      {tieneMensajeNuevo ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                      ) : c.total_mensajes ? (
+                        <span className="text-[10px] bg-[#202c33] text-[#8696a0] px-1.5 py-0.5 rounded-full border border-[#2a3942]">
                           {c.total_mensajes}
                         </span>
                       ) : null}
@@ -354,17 +415,17 @@ export default function ChatBotPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. PANEL DERECHO: VISOR DE CHAT Y MENSAJES (ESTILO WHATSAPP WEB)           */}
+      {/* 2. PANEL DERECHO: VISOR DE CHAT (WHATSAPP WEB THEME)                       */}
       {/* ========================================================================= */}
       <div
-        className={`flex-1 flex flex-col bg-[#0b141a] relative ${
+        className={`flex-1 flex flex-col bg-[#0b141a] h-full relative ${
           conversacionActiva ? 'flex' : 'hidden md:flex'
         }`}
       >
         {conversacionActiva ? (
           <>
-            {/* Header del Chat Activo */}
-            <div className="h-16 px-4 bg-[#202c33] flex items-center justify-between border-b border-[#222d34] flex-shrink-0 z-10">
+            {/* Header Chat Activo */}
+            <div className="h-14 px-4 bg-[#202c33] flex items-center justify-between border-b border-[#222d34] flex-shrink-0 z-10">
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   onClick={() => setConversacionActiva(null)}
@@ -374,7 +435,7 @@ export default function ChatBotPage() {
                 </button>
 
                 <div
-                  className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white font-semibold shadow-sm ${getAvatarColor(
+                  className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white font-semibold text-sm shadow-sm ${getAvatarColor(
                     `${conversacionActiva.first_name} ${conversacionActiva.last_name || ''}`
                   )}`}
                 >
@@ -385,11 +446,11 @@ export default function ChatBotPage() {
                 </div>
 
                 <div className="min-w-0">
-                  <h2 className="text-[15px] font-semibold text-[#e9edef] truncate leading-tight">
+                  <h2 className="text-[14px] font-semibold text-[#e9edef] truncate leading-tight">
                     {conversacionActiva.first_name} {conversacionActiva.last_name || ''}
                   </h2>
                   <p className="text-[11px] text-[#8696a0] truncate leading-tight flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                     <span>Chat ID: {conversacionActiva.chat_id}</span>
                     {conversacionActiva.username && (
                       <span className="text-emerald-400">@{conversacionActiva.username}</span>
@@ -398,43 +459,47 @@ export default function ChatBotPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => seleccionarConversacion(conversacionActiva)}
-                  title="Actualizar mensajes"
-                  className="p-2 text-[#aebac1] hover:text-white hover:bg-[#374248] rounded-full transition-colors"
-                >
-                  <RefreshCw className={`w-4 h-4 ${cargandoMensajes ? 'animate-spin text-emerald-400' : ''}`} />
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setCargandoMensajes(true);
+                  cargarMensajesSilencioso(conversacionActiva.chat_id).finally(() =>
+                    setCargandoMensajes(false)
+                  );
+                }}
+                title="Actualizar conversación"
+                className="p-2 text-[#aebac1] hover:text-white hover:bg-[#374248] rounded-full transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${cargandoMensajes ? 'animate-spin text-emerald-400' : ''}`} />
+              </button>
             </div>
 
-            {/* Contenedor de Mensajes con Fondo Tipo WhatsApp */}
+            {/* Mensajes del Chat con scroll independiente */}
             <div
-              className="flex-1 overflow-y-auto px-4 md:px-12 py-6 space-y-3 relative"
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto px-4 md:px-12 py-4 space-y-2.5 relative min-h-0"
               style={{
                 backgroundImage:
-                  'radial-gradient(circle at 50% 50%, rgba(17, 27, 33, 0.9) 0%, rgba(11, 20, 26, 0.98) 100%)',
+                  'radial-gradient(circle at 50% 50%, rgba(17, 27, 33, 0.95) 0%, rgba(11, 20, 26, 1) 100%)',
               }}
             >
-              {/* Aviso de Auditoría Segura */}
-              <div className="flex justify-center my-2">
-                <div className="bg-[#182229] border border-[#222d34] px-4 py-1.5 rounded-lg text-center max-w-md shadow-sm">
-                  <p className="text-[11px] text-[#ffd279] flex items-center justify-center gap-1.5 font-medium">
-                    <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
-                    Historial de auditoría conectado a Groq IA y Supabase en tiempo real.
+              {/* Badge sutil */}
+              <div className="flex justify-center my-1">
+                <div className="bg-[#182229] border border-[#222d34] px-3 py-1 rounded-md text-center max-w-md shadow-sm">
+                  <p className="text-[10px] text-[#ffd279] flex items-center justify-center gap-1.5 font-medium">
+                    <ShieldCheck className="w-3 h-3 flex-shrink-0 text-amber-400" />
+                    Auditoría de mensajes sincronizada en tiempo real con Supabase y Telegram.
                   </p>
                 </div>
               </div>
 
               {cargandoMensajes && mensajes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-[#8696a0] text-xs gap-2">
-                  <RefreshCw className="w-6 h-6 animate-spin text-emerald-500" />
-                  <span>Cargando mensajes del usuario...</span>
+                <div className="flex flex-col items-center justify-center h-48 text-[#8696a0] text-xs gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
+                  <span>Cargando mensajes...</span>
                 </div>
               ) : mensajes.length === 0 ? (
                 <div className="text-center text-[#8696a0] text-xs py-12">
-                  No hay mensajes registrados aún en este chat.
+                  No hay mensajes registrados en este chat.
                 </div>
               ) : (
                 mensajes.map((m, idx) => {
@@ -446,14 +511,14 @@ export default function ChatBotPage() {
                       className={`flex w-full ${esUsuario ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`relative max-w-[85%] md:max-w-[70%] rounded-lg px-3.5 py-2 text-[14px] leading-relaxed shadow-md ${
+                        className={`relative max-w-[85%] md:max-w-[72%] rounded-lg px-3 py-1.5 text-[13.5px] leading-relaxed shadow-sm ${
                           esUsuario
                             ? 'bg-[#005c4b] text-white rounded-tr-none'
                             : 'bg-[#202c33] text-[#e9edef] rounded-tl-none border border-[#2a3942]/60'
                         }`}
                       >
-                        {/* Etiqueta de emisor */}
-                        <div className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-75 flex items-center gap-1">
+                        {/* Remitente */}
+                        <div className="text-[10px] font-bold uppercase tracking-wider mb-0.5 opacity-80 flex items-center gap-1">
                           {esUsuario ? (
                             <>
                               <User className="w-2.5 h-2.5" />
@@ -467,13 +532,13 @@ export default function ChatBotPage() {
                           )}
                         </div>
 
-                        {/* Texto del mensaje */}
+                        {/* Contenido */}
                         <div className="whitespace-pre-wrap break-words font-normal">
                           {m.content}
                         </div>
 
-                        {/* Hora y checkmarks */}
-                        <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-white/60">
+                        {/* Hora y check */}
+                        <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px] text-white/60">
                           <span>{formatHora(m.created_at)}</span>
                           {esUsuario && <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />}
                         </div>
@@ -486,24 +551,24 @@ export default function ChatBotPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Barra Inferior: Respuesta Administrativa Manual */}
+            {/* Input Bar */}
             <form
               onSubmit={handleEnviarMensaje}
-              className="h-16 px-4 bg-[#202c33] flex items-center gap-3 border-t border-[#222d34] flex-shrink-0"
+              className="h-14 px-3 md:px-4 bg-[#202c33] flex items-center gap-2 md:gap-3 border-t border-[#222d34] flex-shrink-0"
             >
               <input
                 type="text"
-                placeholder={`Responder directamente a ${conversacionActiva.first_name} en Telegram...`}
+                placeholder={`Responder a ${conversacionActiva.first_name} en Telegram...`}
                 value={nuevoMensaje}
                 onChange={(e) => setNuevoMensaje(e.target.value)}
                 disabled={enviando}
-                className="flex-1 bg-[#2a3942] text-[#d1d7db] placeholder-[#8696a0] text-sm px-4 py-2.5 rounded-lg outline-none focus:ring-1 focus:ring-[#00a884] transition"
+                className="flex-1 bg-[#2a3942] text-[#d1d7db] placeholder-[#8696a0] text-sm px-4 py-2 rounded-lg outline-none focus:ring-1 focus:ring-[#00a884] transition"
               />
               <button
                 type="submit"
                 disabled={!nuevoMensaje.trim() || enviando}
-                className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] disabled:opacity-40 disabled:hover:bg-[#00a884] flex items-center justify-center text-[#111b21] transition shadow-md flex-shrink-0"
-                title="Enviar mensaje al chat de Telegram"
+                className="w-9 h-9 rounded-full bg-[#00a884] hover:bg-[#02906f] disabled:opacity-40 disabled:hover:bg-[#00a884] flex items-center justify-center text-[#111b21] transition shadow flex-shrink-0"
+                title="Enviar mensaje a Telegram"
               >
                 {enviando ? (
                   <RefreshCw className="w-4 h-4 animate-spin text-[#111b21]" />
@@ -514,22 +579,21 @@ export default function ChatBotPage() {
             </form>
           </>
         ) : (
-          /* Estado Vacío cuando no hay chat seleccionado (Estilo WhatsApp Web) */
+          /* Estado Vacío elegante cuando no hay chat seleccionado */
           <div className="flex-1 flex flex-col items-center justify-center px-6 text-center select-none bg-[#111b21]">
-            <div className="w-24 h-24 rounded-full bg-[#202c33] flex items-center justify-center text-4xl shadow-xl mb-6 border border-[#2a3942]">
+            <div className="w-20 h-20 rounded-full bg-[#202c33] flex items-center justify-center text-3xl shadow-xl mb-5 border border-[#2a3942]">
               💬
             </div>
-            <h2 className="text-2xl font-light text-[#e9edef] mb-2">
+            <h2 className="text-xl font-light text-[#e9edef] mb-2">
               Historial de Telegram de La Finca
             </h2>
-            <p className="text-sm text-[#8696a0] max-w-md leading-relaxed mb-8">
-              Audita en tiempo real las consultas operativas que hacen los administradores,
-              socios y colaboradores al Bot de Telegram. Selecciona un chat de la lista izquierda para comenzar.
+            <p className="text-xs text-[#8696a0] max-w-md leading-relaxed mb-6">
+              Audita las interacciones, preguntas operativas y respuestas emitidas por el asistente en tiempo real. Selecciona una persona de la lista izquierda para comenzar.
             </p>
 
-            <div className="flex items-center gap-2 text-xs text-[#8696a0] bg-[#202c33]/70 px-4 py-2 rounded-full border border-[#2a3942]/60">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Sincronizado de forma bidireccional con Telegram y Supabase</span>
+            <div className="flex items-center gap-2 text-[11px] text-[#8696a0] bg-[#202c33]/70 px-4 py-1.5 rounded-full border border-[#2a3942]/60">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Conexión cifrada con Telegram Bot API y Supabase</span>
             </div>
           </div>
         )}

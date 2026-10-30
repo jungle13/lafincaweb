@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
 import MobileBottomBar from '@/components/layout/MobileBottomBar';
 import NavigationProgressBar from '@/components/layout/NavigationProgressBar';
+import MainLayoutWrapper from '@/components/layout/MainLayoutWrapper';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { PeriodoProvider } from '@/context/PeriodoContext';
 import { NotificationProvider } from '@/context/NotificationContext';
@@ -55,9 +56,9 @@ export default function RootLayout({
                     <Sidebar />
                     <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
                       <TopHeader />
-                      <main className="flex-1 p-2.5 sm:p-4 md:p-6 pb-24 md:pb-6 w-full max-w-full overflow-x-hidden bg-white min-w-0">
+                      <MainLayoutWrapper>
                         {children}
-                      </main>
+                      </MainLayoutWrapper>
                     </div>
                   </div>
                   <MobileBottomBar />

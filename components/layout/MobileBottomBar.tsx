@@ -7,6 +7,9 @@ import { Truck, Boxes, LayoutDashboard, ShoppingCart, DollarSign } from 'lucide-
 export default function MobileBottomBar() {
   const pathname = usePathname();
 
+  // Ocultar barra inferior en /chat-bot para no tapar el teclado ni el input
+  if (pathname?.startsWith('/chat-bot')) return null;
+
   const NAV_ITEMS = [
     { label: 'Bodeguero', href: '/bodeguero', icon: Truck },
     { label: 'Inventario', href: '/inventario', icon: Boxes },

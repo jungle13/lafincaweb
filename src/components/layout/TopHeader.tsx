@@ -21,6 +21,7 @@ const VIEW_TITLES: Record<string, string> = {
   '/compras': 'Entradas por Compra',
   '/ventas': 'Salidas por Venta',
   '/productos-venta': 'Productos Para la Venta',
+  '/chat-bot': 'Historial Telegram Bot • Asistente IA',
 };
 
 export default function TopHeader() {
