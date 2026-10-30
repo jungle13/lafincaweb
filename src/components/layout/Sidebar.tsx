@@ -6,14 +6,14 @@ import { usePathname } from 'next/navigation';
 import { 
   ShoppingCart, 
   Beef,
-  PackageSearch,
   FileSpreadsheet,
   ClipboardCheck,
   BookOpen,
   TrendingUp,
   UtensilsCrossed,
   X,
-  Loader2
+  Loader2,
+  Wallet
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
@@ -38,6 +38,12 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'OPERACIONES DE COCINA',
     items: [
       { label: 'Costeo Diario Cocina', href: '/costeo-diario', icon: FileSpreadsheet },
+    ],
+  },
+  {
+    title: 'LIBROS DE APOYO',
+    items: [
+      { label: 'Libro de Caja Menor', href: '/libros-apoyo', icon: Wallet },
     ],
   },
   {
@@ -104,7 +110,7 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* Menú de Navegación organizado en 4 secciones */}
+        {/* Menú de Navegación organizado en secciones */}
         <nav className="flex-1 py-3 px-3 space-y-4 overflow-y-auto">
           {NAV_SECTIONS.map((section, sIdx) => (
             <div key={sIdx} className="space-y-1">

@@ -3,12 +3,14 @@
 import { usePathname } from 'next/navigation';
 import { Menu, User } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
+import { useAuth } from '@/context/AuthContext';
 import OperationalNotificationBell from '@/components/notifications/OperationalNotificationBell';
 
 const VIEW_TITLES: Record<string, string> = {
-  '/': 'Terminal del Bodeguero',
+  '/': 'Inicio',
   '/bodeguero': 'Terminal del Bodeguero',
   '/costeo-diario': 'Costeo Diario Cocina',
+  '/libros-apoyo': 'Libros de Apoyo • Libro de Caja Menor',
   '/auditoria-cocina': 'Auditoría Cocina',
   '/recetas': 'Fichas Técnicas / Recetas',
   '/inventario': 'Inventario de Carnes',
@@ -24,6 +26,7 @@ const VIEW_TITLES: Record<string, string> = {
 export default function TopHeader() {
   const pathname = usePathname();
   const { toggleSidebar } = useSidebar();
+  const { user, logout } = useAuth();
 
   // Obtener el título según la ruta activa o formatear fallback
   const getModuleTitle = () => {
@@ -32,7 +35,7 @@ export default function TopHeader() {
     if (matchedKey) return VIEW_TITLES[matchedKey];
     
     const cleaned = pathname.replace('/', '').replace(/-/g, ' ');
-    if (!cleaned) return 'Terminal del Bodeguero';
+    if (!cleaned) return 'Inicio';
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   };
 
@@ -56,20 +59,28 @@ export default function TopHeader() {
         </h1>
       </div>
 
-      {/* Lado Derecho: Campanita de Notificaciones Operativas + Perfil de Usuario */}
+      {/* Lado Derecho: Notificaciones + Perfil de Usuario con Nombre Dinámico */}
       <div className="flex items-center gap-2 md:gap-3 shrink-0 select-none">
         {/* Campanita de Notificaciones del Día */}
         <OperationalNotificationBell />
 
         <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
-        <div className="flex items-center gap-2.5">
-          <span className="text-xs font-medium text-slate-700 hidden sm:inline">
-            Usuario Administrador
-          </span>
+        <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
             <User className="w-4 h-4 text-slate-600" />
           </div>
+          <span className="text-xs font-semibold text-slate-800">
+            {user?.name || 'Usuario'}
+          </span>
+          <button
+            onClick={logout}
+            type="button"
+            title="Cerrar sesión"
+            className="ml-1 px-2 py-1 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+          >
+            Salir
+          </button>
         </div>
       </div>
     </header>

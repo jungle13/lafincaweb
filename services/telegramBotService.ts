@@ -360,6 +360,56 @@ export async function consultarCompras(params: any = {}) {
   }
 }
 
+export async function consultarLibroCaja(params: any = {}) {
+  try {
+    const { fecha, clasificacion, categoria, concepto, responsable } = params || {};
+
+    let q = supabase
+      .from('libro_caja_registros')
+      .select('fecha, dia_mes, clasificacion, categoria, concepto, descripcion_beneficiario, valor_pagado, soporte_factura, responsable_caja');
+
+    if (fecha && fecha.trim() !== '') q = q.eq('fecha', fecha.trim());
+    if (clasificacion && clasificacion.trim() !== '') q = q.ilike('clasificacion', `%${clasificacion.trim()}%`);
+    if (categoria && categoria.trim() !== '') q = q.ilike('categoria', `%${categoria.trim()}%`);
+    if (responsable && responsable.trim() !== '') q = q.ilike('responsable_caja', `%${responsable.trim()}%`);
+    if (concepto && concepto.trim() !== '') {
+      const term = concepto.trim();
+      q = q.or(`concepto.ilike.%${term}%,descripcion_beneficiario.ilike.%${term}%`);
+    }
+
+    const { data, error } = await q.order('fecha', { ascending: false });
+    if (error) throw error;
+
+    const rows = data || [];
+    const total = rows.reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+    const totalInsumos = rows.filter((r) => (r.clasificacion || '').includes('Insumo')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+    const totalOperativos = rows.filter((r) => (r.clasificacion || '').includes('Operativo')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+    const totalNomina = rows.filter((r) => (r.clasificacion || '').includes('Nómina') || (r.clasificacion || '').includes('Turno')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+
+    return {
+      modulo: 'Libro de Caja Menor (Octubre 2026)',
+      total_registros: rows.length,
+      total_salidas_cop: total,
+      desglose_bloques: {
+        costos_materia_prima_cop: totalInsumos,
+        gastos_operativos_cop: totalOperativos,
+        pago_turnos_nomina_cop: totalNomina,
+      },
+      registros: rows.slice(0, 35).map((r) => ({
+        fecha: r.fecha,
+        clasificacion: r.clasificacion,
+        categoria: r.categoria,
+        concepto: r.concepto,
+        descripcion: r.descripcion_beneficiario,
+        valor_cop: Number(r.valor_pagado || 0),
+        cajera: r.responsable_caja,
+      })),
+    };
+  } catch (err: any) {
+    return { exito: false, error: err.message };
+  }
+}
+
 function normalizarTerminoBusqueda(term: string): string[] {
   const limpio = term.trim().toLowerCase();
   if (limpio.startsWith('mazm') || limpio.startsWith('mazam')) return ['mazamorra', 'mazam'];
@@ -576,10 +626,10 @@ REGLAS DE FORMATO ESTRICTAS:
    - Si piden "costo de insumo" o "costo de catálogo" de materia prima:
      Usa consultar_insumos_precios.
    - Para compras del restaurante (módulo Entradas por Compra):
-     * Total compras o resumen general: Usa consultar_compras sin parámetros. Devuelve total dinero ($COP), total facturas y desglose por categorías.
-     * Compras por categoría (ej: "cuánto se gastó en carnes", "total compras verduras"): Usa consultar_compras con categoria.
-     * Costo de compra de un insumo (ej: "a cómo compramos la sobrebarriga", "a cómo el pollo", "último costo de adquisición"): Usa consultar_compras con insumo. Devuelve último costo unitario, proveedor, factura, fecha y total acumulado.
-     * Compras por proveedor o factura: Usa consultar_compras con proveedor o numero_factura.
+     * Total compras o resumen general: Usa consultar_compras sin parámetros.
+     * Compras por categoría o insumo: Usa consultar_compras con categoria o insumo.
+   - Para el Libro de Caja Menor (módulo Libros de Apoyo -> Libro de Caja Menor):
+     * Salidas de caja menor, pagos de turnos, vales, hielo, préstamos o gastos pagados por las cajeras (JOHANNA, MARIA, CAROLINA, DANIELA): Usa consultar_libro_caja.
 5. OBLIGATORIO: Siempre consulta los datos reales de la base de datos usando las herramientas. NUNCA inventes números.
 `;
 
@@ -618,7 +668,7 @@ const tools: any = [
   {
     type: 'function',
     function: {
-            name: 'consultar_ventas',
+      name: 'consultar_ventas',
       description: 'Consulta ventas y PRECIOS DE VENTA al público en la carta de platos terminados (ej: Tamal: $24.000 COP, Mazamorra: $8.000 COP, etc.), cantidades vendidas y desglose por fecha.',
       parameters: {
         type: 'object',
@@ -686,6 +736,23 @@ const tools: any = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'consultar_libro_caja',
+      description: 'Consulta el Libro de Caja Menor (328 registros de salidas de caja, pagos de turnos de personal, compras menores en efectivo, hielo, transporte, préstamos y cuadre por cajera).',
+      parameters: {
+        type: 'object',
+        properties: {
+          fecha: { type: 'string', description: 'Fecha YYYY-MM-DD. Opcional.' },
+          clasificacion: { type: 'string', description: 'Clasificación: "Costo / Insumo", "Gasto Operativo" o "Turno / Nómina". Opcional.' },
+          categoria: { type: 'string', description: 'Categoría (ej: Gastos Nómina, Servicios, Verduras, Bebidas, Grano, Gastos Generales, Gastos Transporte). Opcional.' },
+          concepto: { type: 'string', description: 'Concepto o beneficiario a buscar (ej: Hielo, Andrés, Turno, Aguacate, Préstamo). Opcional.' },
+          responsable: { type: 'string', description: 'Nombre de la cajera encargada (ej: JOHANNA, MARIA, CAROLINA, DANIELA). Opcional.' },
+        },
+      },
+    },
+  },
 ];
 
 async function ejecutarTool(callName: string, args: any) {
@@ -701,6 +768,8 @@ async function ejecutarTool(callName: string, args: any) {
     return await consultarInsumosPrecios(args.termino);
   } else if (callName === 'consultar_compras') {
     return await consultarCompras(args);
+  } else if (callName === 'consultar_libro_caja') {
+    return await consultarLibroCaja(args);
   }
   return { error: 'Herramienta desconocida' };
 }

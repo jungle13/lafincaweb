@@ -392,6 +392,58 @@ async function consultarCompras(params = {}) {
   }
 }
 
+
+// 4.1 Consultar Libro de Caja Menor (Salidas, Gastos, Nómina/Turnos, Compras Menores)
+export async function consultarLibroCaja(params = {}) {
+  try {
+    const { fecha, clasificacion, categoria, concepto, responsable } = params || {};
+
+    let q = supabase
+      .from('libro_caja_registros')
+      .select('fecha, dia_mes, clasificacion, categoria, concepto, descripcion_beneficiario, valor_pagado, soporte_factura, responsable_caja');
+
+    if (fecha && fecha.trim() !== '') q = q.eq('fecha', fecha.trim());
+    if (clasificacion && clasificacion.trim() !== '') q = q.ilike('clasificacion', '%' + clasificacion.trim() + '%');
+    if (categoria && categoria.trim() !== '') q = q.ilike('categoria', '%' + categoria.trim() + '%');
+    if (responsable && responsable.trim() !== '') q = q.ilike('responsable_caja', '%' + responsable.trim() + '%');
+    if (concepto && concepto.trim() !== '') {
+      const term = concepto.trim();
+      q = q.or('concepto.ilike.%' + term + '%,descripcion_beneficiario.ilike.%' + term + '%');
+    }
+
+    const { data, error } = await q.order('fecha', { ascending: false });
+    if (error) throw error;
+
+    const rows = data || [];
+    const total = rows.reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+    const totalInsumos = rows.filter((r) => (r.clasificacion || '').includes('Insumo')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+    const totalOperativos = rows.filter((r) => (r.clasificacion || '').includes('Operativo')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+    const totalNomina = rows.filter((r) => (r.clasificacion || '').includes('Nómina') || (r.clasificacion || '').includes('Turno')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+
+    return {
+      modulo: 'Libro de Caja Menor (Octubre 2026)',
+      total_registros: rows.length,
+      total_salidas_cop: total,
+      desglose_bloques: {
+        costos_materia_prima_cop: totalInsumos,
+        gastos_operativos_cop: totalOperativos,
+        pago_turnos_nomina_cop: totalNomina,
+      },
+      registros: rows.slice(0, 35).map((r) => ({
+        fecha: r.fecha,
+        clasificacion: r.clasificacion,
+        categoria: r.categoria,
+        concepto: r.concepto,
+        descripcion: r.descripcion_beneficiario,
+        valor_cop: Number(r.valor_pagado || 0),
+        cajera: r.responsable_caja,
+      })),
+    };
+  } catch (err) {
+    return { exito: false, error: err.message };
+  }
+}
+
 // 5. Consultar Ventas y Precios de Platos en Carta
 
 function normalizarTerminoBusqueda(term) {
@@ -569,6 +621,24 @@ const tools = [
   {
     type: 'function',
     function: {
+      name: 'consultar_libro_caja',
+      description: 'Consulta el Libro de Caja Menor (salidas de caja, pagos de turnos de personal, compras menores en efectivo, hielo, transporte, préstamos y gastos por cajera).',
+      parameters: {
+        type: 'object',
+        properties: {
+          fecha: { type: 'string', description: 'Fecha YYYY-MM-DD. Opcional.' },
+          clasificacion: { type: 'string', description: 'Clasificación: "Costo / Insumo", "Gasto Operativo" o "Turno / Nómina". Opcional.' },
+          categoria: { type: 'string', description: 'Categoría (ej: Gastos Nómina, Servicios, Verduras, Bebidas, Grano, Gastos Generales). Opcional.' },
+          concepto: { type: 'string', description: 'Concepto o beneficiario a buscar (ej: Hielo, Andrés, Turno, Aguacate, Préstamo). Opcional.' },
+          responsable: { type: 'string', description: 'Nombre de la cajera encargada (ej: JOHANNA, MARIA, CAROLINA, DANIELA). Opcional.' },
+        },
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
       name: 'consultar_movimientos_cocina',
       description: 'Consulta insumos y movimientos de cocina: CIERRES (con cuánto cerramos o inventario final), APERTURAS (con cuánto abrimos), TRASLADOS (bajadas a cocina de verduras, carnes o abarrotes) o DEVOLUCIONES.',
       parameters: {
@@ -682,6 +752,9 @@ async function ejecutarTool(callName, args) {
   } else if (callName === 'consultar_insumos_precios') {
     return await consultarInsumosPrecios(args.termino);
   } else if (callName === 'consultar_compras') {
+    return await consultarCompras(args);
+  } else if (callName === 'consultar_libro_caja') {
+    return await consultarLibroCaja(args);
     return await consultarCompras(args);
   }
   return { error: 'Herramienta desconocida' };
