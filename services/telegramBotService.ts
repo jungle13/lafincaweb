@@ -12,10 +12,11 @@ const groq = new Groq({ apiKey: GROQ_API_KEY });
 
 export function parsearFiltroFecha(fechaRaw?: string, fechaFinRaw?: string): { fechaExacta?: string; fechaInicio?: string; fechaFin?: string } {
   if (!fechaRaw) return {};
-  const f = fechaRaw.trim().toLowerCase();
+  let f = fechaRaw.trim().toLowerCase().replace(/^(202[0-5])-/, '2026-');
+  let fFin = fechaFinRaw ? fechaFinRaw.trim().toLowerCase().replace(/^(202[0-5])-/, '2026-') : undefined;
 
-  if (fechaFinRaw && /^\d{4}-\d{2}-\d{2}$/.test(f) && /^\d{4}-\d{2}-\d{2}$/.test(fechaFinRaw.trim())) {
-    return { fechaInicio: f, fechaFin: fechaFinRaw.trim() };
+  if (fFin && /^\d{4}-\d{2}-\d{2}$/.test(f) && /^\d{4}-\d{2}-\d{2}$/.test(fFin)) {
+    return { fechaInicio: f, fechaFin: fFin };
   }
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(f)) {
@@ -23,19 +24,22 @@ export function parsearFiltroFecha(fechaRaw?: string, fechaFinRaw?: string): { f
   }
 
   if (/^\d{4}-\d{2}$/.test(f)) {
-    const [y, m] = f.split('-');
+    const parts = f.split('-');
+    const y = parts[0], m = parts[1];
     const dias = new Date(Number(y), Number(m), 0).getDate();
     return { fechaInicio: `${f}-01`, fechaFin: `${f}-${String(dias).padStart(2, '0')}` };
   }
 
-  if (f.includes('oct')) return { fechaInicio: '2026-10-01', fechaFin: '2026-10-31' };
-  if (f.includes('sep') || f.includes('set')) return { fechaInicio: '2026-09-01', fechaFin: '2026-09-30' };
-  if (f.includes('nov')) return { fechaInicio: '2026-11-01', fechaFin: '2026-11-30' };
-  if (f.includes('dic')) return { fechaInicio: '2026-12-01', fechaFin: '2026-12-31' };
+  if (f.includes('oct') || f === '10') return { fechaInicio: '2026-10-01', fechaFin: '2026-10-31' };
+  if (f.includes('sep') || f.includes('set') || f === '09' || f === '9') return { fechaInicio: '2026-09-01', fechaFin: '2026-09-30' };
+  if (f.includes('nov') || f === '11') return { fechaInicio: '2026-11-01', fechaFin: '2026-11-30' };
+  if (f.includes('dic') || f === '12') return { fechaInicio: '2026-12-01', fechaFin: '2026-12-31' };
 
   const matchDmy = f.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (matchDmy) {
-    return { fechaExacta: `${matchDmy[3]}-${matchDmy[2].padStart(2, '0')}-${matchDmy[1].padStart(2, '0')}` };
+    let year = matchDmy[3];
+    if (Number(year) < 2026) year = '2026';
+    return { fechaExacta: `${year}-${matchDmy[2].padStart(2, '0')}-${matchDmy[1].padStart(2, '0')}` };
   }
 
   return {};
@@ -365,7 +369,7 @@ export async function consultarCompras(params: any = {}) {
         fecha: fecha.trim(),
         total_facturas: data?.length || 0,
         total_dinero_cop: total,
-        facturas: data || [],
+        facturas: (data || []).slice(0, 8),
       };
     }
 
@@ -407,10 +411,10 @@ export async function consultarLibroCaja(params: any = {}) {
       .from('libro_caja_registros')
       .select('fecha, dia_mes, clasificacion, categoria, concepto, descripcion_beneficiario, valor_pagado, soporte_factura, responsable_caja, es_ajuste');
 
-    if (fecha && fecha_fin && fecha.trim() !== '' && fecha_fin.trim() !== '') {
-      q = q.gte('fecha', fecha.trim()).lte('fecha', fecha_fin.trim());
-    } else if (fecha && fecha.trim() !== '') {
-      q = q.eq('fecha', fecha.trim());
+    if (fecha || fecha_fin) {
+      const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha, fecha_fin);
+      if (fechaExacta) q = q.eq('fecha', fechaExacta);
+      else if (fechaInicio && fechaFin) q = q.gte('fecha', fechaInicio).lte('fecha', fechaFin);
     }
 
     if (clasificacion && clasificacion.trim() !== '') {
@@ -478,13 +482,14 @@ export async function consultarLibroCaja(params: any = {}) {
     if (fecha || ver_resumen_diario) {
       let qDiario = supabase
         .from('libro_caja_diario')
-        .select('fecha, dia_mes, base_inicial, venta_pos_total, total_datafonos, efectivo_fisico_cierre, total_costos_insumos, total_gastos_operativos, total_turnos_nomina, total_salidas, diferencia_cuadre, responsables_dia, estado');
-      if (fecha && fecha_fin) {
-        qDiario = qDiario.gte('fecha', fecha.trim()).lte('fecha', fecha_fin.trim());
-      } else if (fecha) {
-        qDiario = qDiario.eq('fecha', fecha.trim());
+        .select('fecha, dia_mes, base_inicial, venta_pos_total, total_salidas, efectivo_fisico_cierre, total_costos_insumos, total_gastos_operativos, total_turnos_nomina, diferencia_cuadre, responsables_dia, estado');
+
+      if (fecha || fecha_fin) {
+        const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha, fecha_fin);
+        if (fechaExacta) qDiario = qDiario.eq('fecha', fechaExacta);
+        else if (fechaInicio && fechaFin) qDiario = qDiario.gte('fecha', fechaInicio).lte('fecha', fechaFin);
       }
-      const { data: diariosData } = await qDiario.order('fecha', { ascending: false }).limit(26);
+      const { data: diariosData } = await qDiario.order('fecha', { ascending: false }).limit(3);
       if (diariosData && diariosData.length > 0) {
         cuadreDiario = diariosData.map((d) => ({
           fecha: d.fecha,
@@ -494,37 +499,38 @@ export async function consultarLibroCaja(params: any = {}) {
           venta_pos_cop: Number(d.venta_pos_total || 0),
           total_salidas_caja_cop: Number(d.total_salidas || 0),
           efectivo_cierre_cop: Number(d.efectivo_fisico_cierre || 0),
-          datafonos_cop: Number(d.total_datafonos || 0),
           diferencia_cuadre_cop: Number(d.diferencia_cuadre || 0),
         }));
       }
     }
 
+    // Payload ultra-ligero (evita desborde de tokens TPM en Groq)
     return {
       modulo: 'Libro de Caja Menor (Octubre 2026)',
-      total_registros: rows.length,
+      total_registros_coincidentes: rows.length,
       total_salidas_cop: total,
-      desglose_bloques: {
+      desglose_3_bloques: {
         costos_materia_prima_cop: totalInsumos,
         gastos_operativos_cop: totalOperativos,
         pago_turnos_nomina_cop: totalNomina,
       },
-      resumen_por_categoria: Object.entries(porCategoriaMap)
+      top_categorias: Object.entries(porCategoriaMap)
         .map(([cat, st]) => ({ categoria: cat, registros: st.cantidad, total_cop: st.total_cop }))
-        .sort((a, b) => b.total_cop - a.total_cop),
-      resumen_por_cajera: Object.entries(porResponsableMap)
+        .sort((a, b) => b.total_cop - a.total_cop)
+        .slice(0, 5),
+      top_cajeras: Object.entries(porResponsableMap)
         .map(([resp, st]) => ({ cajera: resp, registros: st.cantidad, total_cop: st.total_cop }))
-        .sort((a, b) => b.total_cop - a.total_cop),
-      hojas_diarias_y_cuadre: cuadreDiario,
-      registros: rows.slice(0, 45).map((r) => ({
+        .sort((a, b) => b.total_cop - a.total_cop)
+        .slice(0, 4),
+      cuadre_diario: cuadreDiario,
+      muestra_registros: rows.slice(0, 8).map((r) => ({
         fecha: r.fecha,
         clasificacion: r.clasificacion,
         categoria: r.categoria,
         concepto: r.concepto,
-        descripcion: r.descripcion_beneficiario,
+        beneficiario: r.descripcion_beneficiario,
         valor_cop: Number(r.valor_pagado || 0),
         cajera: r.responsable_caja,
-        es_ajuste: Boolean(r.es_ajuste),
       })),
     };
   } catch (err: any) {
@@ -658,7 +664,7 @@ export async function consultarCosteoDiario(fecha?: string) {
 // 2. HISTORIAL DE CONTEXTO EN SUPABASE
 // ====================================================================
 
-export async function obtenerHistorialGroq(chatId: number, limite: number = 6) {
+export async function obtenerHistorialGroq(chatId: number, limite: number = 4) {
   try {
     const { data, error } = await supabase
       .from('telegram_mensajes_contexto')
@@ -671,7 +677,7 @@ export async function obtenerHistorialGroq(chatId: number, limite: number = 6) {
 
     return (data || []).reverse().map((m) => ({
       role: (m.role === 'model' ? 'assistant' : 'user') as 'user' | 'assistant',
-      content: m.content,
+      content: (m.content || '').slice(0, 350),
     }));
   } catch (err) {
     return [];
@@ -907,25 +913,43 @@ async function ejecutarTool(callName: string, args: any) {
 
 export async function procesarMensajeTelegram(chatId: number, textoUsuario: string) {
   try {
-    const historial = await obtenerHistorialGroq(chatId, 6);
+    // 1. Guardar mensaje del usuario INMEDIATAMENTE para trazabilidad absoluta
+    await guardarMensajeChat(chatId, 'user', textoUsuario);
+
+    const historial = await obtenerHistorialGroq(chatId, 4);
     const messages: any[] = [
       { role: 'system', content: systemPrompt },
       ...historial,
       { role: 'user', content: textoUsuario },
     ];
 
-    let res = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
-      messages,
-      tools,
-      tool_choice: 'auto',
-      temperature: 0.1,
-    });
+    // Helper resiliente: intenta openai/gpt-oss-120b y ante rate limit / TPM cambia automáticamente a openai/gpt-oss-20b
+    const llamarGroq = async (msgs: any[]) => {
+      try {
+        return await groq.chat.completions.create({
+          model: 'openai/gpt-oss-120b',
+          messages: msgs,
+          tools,
+          tool_choice: 'auto',
+          temperature: 0.1,
+        });
+      } catch (err: any) {
+        console.warn('Fallback a openai/gpt-oss-20b por error en 120b:', err?.message);
+        return await groq.chat.completions.create({
+          model: 'openai/gpt-oss-20b',
+          messages: msgs,
+          tools,
+          tool_choice: 'auto',
+          temperature: 0.1,
+        });
+      }
+    };
 
+    let res = await llamarGroq(messages);
     let assistantMsg = res.choices[0].message;
 
     let iter = 0;
-    while (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0 && iter < 6) {
+    while (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0 && iter < 4) {
       iter++;
       messages.push(assistantMsg);
 
@@ -944,26 +968,20 @@ export async function procesarMensajeTelegram(chatId: number, textoUsuario: stri
         });
       }
 
-      res = await groq.chat.completions.create({
-        model: 'openai/gpt-oss-120b',
-        messages,
-        tools,
-        tool_choice: 'auto',
-        temperature: 0.1,
-      });
-
+      res = await llamarGroq(messages);
       assistantMsg = res.choices[0].message;
     }
 
     const respuestaFinal = assistantMsg.content || 'Sin datos disponibles para esta consulta.';
 
-    await guardarMensajeChat(chatId, 'user', textoUsuario);
+    // 2. Guardar y despachar mensaje a Telegram
     await guardarMensajeChat(chatId, 'model', respuestaFinal);
     await enviarMensajeTelegram(chatId, respuestaFinal);
 
     return { exito: true, respuesta: respuestaFinal };
   } catch (err: any) {
     console.error('Error procesando mensaje de Telegram:', err);
+    await guardarMensajeChat(chatId, 'model', `[Error: ${err.message}]`);
     await enviarMensajeTelegram(chatId, 'Error consultando los datos del restaurante.');
     return { exito: false, error: err.message };
   }
