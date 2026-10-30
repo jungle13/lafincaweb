@@ -248,12 +248,12 @@ export default function ChatBotPage() {
   });
 
   return (
-    <div className="flex h-full max-h-full w-full overflow-hidden bg-[#0c1317] font-sans antialiased text-[#e9edef] select-none">
+    <div className="flex h-full max-h-full w-full overflow-hidden bg-[#0c1317] font-sans antialiased text-[#e9edef] select-none overscroll-none">
       {/* ========================================================================= */}
       {/* 1. PANEL IZQUIERDO: LISTA DE CHATS (SIEMPRE VISIBLE EN TABLET/DESKTOP)     */}
       {/* ========================================================================= */}
       <aside
-        className={`w-full sm:w-[320px] md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] h-full max-h-full overflow-hidden ${
+        className={`w-full sm:w-[320px] md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] h-full max-h-full overflow-hidden overscroll-none ${
           conversacionActiva ? 'hidden sm:flex' : 'flex'
         }`}
       >
@@ -418,7 +418,7 @@ export default function ChatBotPage() {
       {/* 2. PANEL DERECHO: VISOR DE CHAT Y MENSAJES                                 */}
       {/* ========================================================================= */}
       <section
-        className={`flex-1 flex flex-col bg-[#0b141a] h-full max-h-full overflow-hidden min-w-0 relative ${
+        className={`flex-1 flex flex-col bg-[#0b141a] h-full max-h-full overflow-hidden min-w-0 relative overscroll-none ${
           conversacionActiva ? 'flex' : 'hidden sm:flex'
         }`}
       >
