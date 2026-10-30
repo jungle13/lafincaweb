@@ -14,6 +14,8 @@ import VentasDiariasView from '@/components/ventas/VentasDiariasView';
 import VentasProductosRankingView from '@/components/ventas/VentasProductosRankingView';
 import VentasTransaccionesView from '@/components/ventas/VentasTransaccionesView';
 import VentasExportButtons from '@/components/ventas/VentasExportButtons';
+import VentasUploadModal from '@/components/ventas/VentasUploadModal';
+import { UploadCloud } from 'lucide-react';
 import { 
   VentasKPIs, 
   VentaDiaria, 
@@ -30,6 +32,7 @@ export default function VentasPage() {
 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabView>('TRANSACCIONES');
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   const [kpis, setKpis] = useState<VentasKPIs>({
     granTotalVentas: 0,
@@ -101,6 +104,14 @@ export default function VentasPage() {
 
         {/* Acciones de Exportación */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setUploadModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-colors cursor-pointer"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Importar Ventas (.txt)</span>
+          </button>
           <VentasExportButtons
             diarias={diarias}
             ranking={ranking}
@@ -109,6 +120,12 @@ export default function VentasPage() {
           />
         </div>
       </div>
+
+      <VentasUploadModal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        onSuccess={loadAllData}
+      />
 
       {/* 📊 Tarjetas de KPIs */}
       <VentasKPIHeader kpis={kpis} periodoNombre={periodoNombre} />
