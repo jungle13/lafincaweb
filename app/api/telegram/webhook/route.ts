@@ -35,78 +35,73 @@ export async function POST(req: Request) {
     // =========================================================================
     if (message.document) {
       const doc = message.document;
-      const fileName = doc.file_name || 'ventas.txt';
+      const fileName = doc.file_name || 'documento.txt';
+      const fileId = doc.file_id;
 
+      // Registrar interacción
       await registrarUsuarioTelegram(chatId, sender, `[Archivo adjunto: ${fileName}]`);
 
-      if (fileName.toLowerCase().endsWith('.txt')) {
-        const { parseVentasTxtContent, guardarVentasEnBaseDeDatos } = await import('@/services/ventasParserService');
-        const token = process.env.TELEGRAM_BOT_TOKEN;
-
-        try {
-          await enviarMensajeTelegram(chatId, `⏳ Procesando reporte de ventas \`${fileName}\`...`);
-
-          // 1. Obtener la ruta del archivo en Telegram
-          const fileInfoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${doc.file_id}`);
-          const fileInfo = await fileInfoRes.json();
-          if (!fileInfo.ok || !fileInfo.result?.file_path) {
-            throw new Error('No se pudo descargar el archivo desde los servidores de Telegram.');
-          }
-
-          // 2. Descargar el archivo
-          const fileDownloadUrl = `https://api.telegram.org/file/bot${token}/${fileInfo.result.file_path}`;
-          const downloadRes = await fetch(fileDownloadUrl);
-          const arrayBuffer = await downloadRes.arrayBuffer();
-
-          // 3. Decodificar en latin1 / ISO-8859-1 para caracteres de caja
-          const decoder = new TextDecoder('latin1');
-          const fileContent = decoder.decode(arrayBuffer);
-
-          // 4. Parsear con reglas de negocio POS
-          const parsed = parseVentasTxtContent(fileContent, fileName);
-
-          // 5. Guardar en Supabase
-          const guardado = await guardarVentasEnBaseDeDatos(parsed);
-
-          // 6. Confirmación ejecutiva formateada
-          const respuesta = `🧾 *¡Archivo de Ventas Procesado con Éxito!*
-          
-📁 *Archivo:* \`${fileName}\`
-📅 *Fecha:* ${parsed.fecha} (${parsed.dia_semana})
-📦 *Artículos Vendidos:* ${parsed.total_articulos.toLocaleString('es-CO')} und
-🍽️ *Platos Distintos:* ${parsed.total_platos_distintos}
-💰 *Venta Neta:* $${parsed.venta_neta.toLocaleString('es-CO')} COP
-🏷️ *Impoconsumo (8%):* $${parsed.impuesto.toLocaleString('es-CO')} COP
-💵 *Gran Total Ventas:* $${parsed.gran_total.toLocaleString('es-CO')} COP
-
-✅ Los datos se han guardado e integrado en el sistema. Ya están disponibles en los módulos de Ventas y Costeo.`;
-
-          await enviarMensajeTelegram(chatId, respuesta);
-          await guardarMensajeChat(chatId, 'model', respuesta);
-
-          return NextResponse.json({ ok: true, guardado });
-        } catch (err: any) {
-          const errRespuesta = `❌ *Error procesando archivo de ventas*\n\n⚠️ ${err.message}\n\nAsegúrate de enviar un archivo .txt con el reporte oficial de caja POS (con la cabecera 'Del: DD/MM/AA').`;
-          await enviarMensajeTelegram(chatId, errRespuesta);
-          await guardarMensajeChat(chatId, 'model', errRespuesta);
-          return NextResponse.json({ ok: false, error: err.message });
-        }
-      } else {
-        const warning = `⚠️ Formato no compatible: Enviaste \`${fileName}\`. Para ingresar ventas debes subir un archivo con extensión \`.txt\`.`;
+      // Validar si es un archivo de texto de ventas
+      if (!fileName.toLowerCase().endsWith('.txt')) {
+        const warning = `⚠️ *Formato no compatible:* Solo se admiten archivos de ventas en formato de texto plano (\`.txt\`). Recibí: \`${fileName}\`.`;
         await enviarMensajeTelegram(chatId, warning);
         await guardarMensajeChat(chatId, 'model', warning);
         return NextResponse.json({ ok: true });
       }
+
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (!botToken) {
+        throw new Error('TELEGRAM_BOT_TOKEN no configurado en variables de entorno');
+      }
+
+      // 1. Obtener la ruta de descarga desde Telegram Bot API
+      const fileInfoRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+      const fileInfo = await fileInfoRes.json();
+
+      if (!fileInfo.ok || !fileInfo.result?.file_path) {
+        throw new Error(`No se pudo obtener la ruta del archivo de Telegram: ${fileInfo.description || 'Desconocido'}`);
+      }
+
+      const filePath = fileInfo.result.file_path;
+      const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+
+      // 2. Descargar el archivo con decodificación Latin1/Windows-1252
+      const downloadRes = await fetch(downloadUrl);
+      const arrayBuffer = await downloadRes.arrayBuffer();
+      const decoder = new TextDecoder('latin1');
+      const textContent = decoder.decode(arrayBuffer);
+
+      // 3. Procesar mediante el servicio unificado de ventas (0 tokens de IA consumidos)
+      const { parseVentasTxtContent, guardarVentasEnBaseDeDatos } = await import('@/services/ventasParserService');
+      const parsed = parseVentasTxtContent(textContent, fileName);
+      await guardarVentasEnBaseDeDatos(parsed);
+
+      // 4. Formatear y enviar comprobante inmediato al chat
+      const formatCOP = (v: number) => `$${Math.round(v).toLocaleString('es-CO')}`;
+
+      const receipt = `🎉 *¡Ventas Registradas Exitosamente!*
+
+📅 *Fecha de Venta:* \`${parsed.fecha}\`
+📁 *Archivo:* \`${fileName}\`
+📊 *Artículos Vendidos:* ${parsed.total_articulos} und (${parsed.items.length} líneas)
+💰 *Total Venta Bruta:* ${formatCOP(parsed.gran_total)} COP
+🪙 *Impoconsumo (8%):* ${formatCOP(parsed.impuesto)} COP
+🏷️ *Venta Neta:* ${formatCOP(parsed.venta_neta)} COP
+
+Los datos ya están disponibles en el módulo de Ventas y el panel de Auditoría.`;
+
+      await enviarMensajeTelegram(chatId, receipt);
+      await guardarMensajeChat(chatId, 'model', receipt);
+      return NextResponse.json({ ok: true, ventas: true, fecha: parsed.fecha });
     }
 
     // =========================================================================
     // CASO 2: MENSAJE DE TEXTO NORMAL
     // =========================================================================
-    if (!message.text) {
-      return NextResponse.json({ ok: true, note: 'No text or supported document' });
+    const text = (message.text || '').trim();
+    if (!text) {
+      return NextResponse.json({ ok: true, note: 'Empty text' });
     }
-
-    const text = message.text.trim();
 
     // Registrar interacción del usuario
     await registrarUsuarioTelegram(chatId, sender, text);
@@ -122,10 +117,20 @@ Puedo responder consultas operativas en tiempo real:
 • 📊 *Ventas del día:* "¿Cuánto se vendió el 25 de octubre?" o "¿Cuántos churrascos se han vendido?"
 • 💼 *Libro de Caja Menor:* "¿Cuánto se ha gastado en caja menor en octubre?"
 • 📁 *Carga de Ventas:* Arrastra o adjunta el archivo \`.txt\` del día (ej: \`28.txt\`) y lo procesaré de inmediato.
+• 📝 *Conteo e Insumos:* Pega una lista (ej: *"Apertura de cocina del 29: Chorizo 6, Felipe 1..."*) para validarla interactivamente antes de guardarla.
 
 ¡Pregúntame lo que necesites!`;
       await enviarMensajeTelegram(chatId, welcome);
       return NextResponse.json({ ok: true });
+    }
+
+    // Interceptar flujo de borrador interactivo de conteos/insumos (0 tokens LLM)
+    const { procesarFlujoBorradorTelegram } = await import('@/services/gestorBorradoresTelegram');
+    const borradorRes = await procesarFlujoBorradorTelegram(chatId, text, sender.first_name);
+    if (borradorRes.interceptado && borradorRes.respuesta) {
+      await enviarMensajeTelegram(chatId, borradorRes.respuesta);
+      await guardarMensajeChat(chatId, 'model', borradorRes.respuesta);
+      return NextResponse.json({ ok: true, borrador: true });
     }
 
     // Procesar con Groq y las herramientas de La Finca

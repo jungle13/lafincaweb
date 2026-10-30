@@ -90,13 +90,11 @@ export default function ChatBotPage() {
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll interno seguro que NO mueve la ventana ni los paneles superiores
-  const scrollToBottom = (smooth = false) => {
+  // Scroll interno seguro que SOLO ajusta scrollTop del contenedor de mensajes
+  // NUNCA usa scrollIntoView ni desplaza la ventana o los paneles superiores
+  const scrollToBottom = () => {
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({
-        top: messagesContainerRef.current.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
-      });
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   };
 
@@ -152,7 +150,7 @@ export default function ChatBotPage() {
       const data = await res.json();
       if (data.ok && Array.isArray(data.mensajes)) {
         setMensajes(data.mensajes);
-        setTimeout(() => scrollToBottom(true), 50);
+        setTimeout(() => scrollToBottom(), 50);
       }
     } catch (e) {}
   };
@@ -167,7 +165,7 @@ export default function ChatBotPage() {
       const data = await res.json();
       if (data.ok && Array.isArray(data.mensajes)) {
         setMensajes(data.mensajes);
-        setTimeout(() => scrollToBottom(false), 50);
+        setTimeout(() => scrollToBottom(), 50);
       }
     } catch (e) {
       console.error('Error cargando mensajes:', e);
@@ -213,7 +211,7 @@ export default function ChatBotPage() {
           },
         ]);
         marcarComoVisto(conversacionActiva.chat_id, new Date().toISOString());
-        setTimeout(() => scrollToBottom(true), 60);
+        setTimeout(() => scrollToBottom(), 60);
         cargarConversaciones(true);
       } else {
         alert('Error enviando mensaje: ' + (data.error || 'Desconocido'));
@@ -250,12 +248,12 @@ export default function ChatBotPage() {
   });
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#0c1317] font-sans antialiased text-[#e9edef] select-none">
+    <div className="flex h-full max-h-full w-full overflow-hidden bg-[#0c1317] font-sans antialiased text-[#e9edef] select-none">
       {/* ========================================================================= */}
       {/* 1. PANEL IZQUIERDO: LISTA DE CHATS (SIEMPRE VISIBLE EN TABLET/DESKTOP)     */}
       {/* ========================================================================= */}
       <aside
-        className={`w-full sm:w-[320px] md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] h-full overflow-hidden ${
+        className={`w-full sm:w-[320px] md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] h-full max-h-full overflow-hidden ${
           conversacionActiva ? 'hidden sm:flex' : 'flex'
         }`}
       >
@@ -332,8 +330,8 @@ export default function ChatBotPage() {
           </div>
         </div>
 
-        {/* Lista de hilos con scroll interno independiente */}
-        <div className="flex-1 overflow-y-auto divide-y divide-[#222d34]/60 min-h-0">
+        {/* Lista de hilos con scroll interno independiente y overscroll contenido */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain divide-y divide-[#222d34]/60">
           {cargandoLista ? (
             <div className="flex flex-col items-center justify-center h-48 text-[#8696a0] text-xs gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
@@ -420,7 +418,7 @@ export default function ChatBotPage() {
       {/* 2. PANEL DERECHO: VISOR DE CHAT Y MENSAJES                                 */}
       {/* ========================================================================= */}
       <section
-        className={`flex-1 flex flex-col bg-[#0b141a] h-full overflow-hidden min-w-0 relative ${
+        className={`flex-1 flex flex-col bg-[#0b141a] h-full max-h-full overflow-hidden min-w-0 relative ${
           conversacionActiva ? 'flex' : 'hidden sm:flex'
         }`}
       >
@@ -448,15 +446,13 @@ export default function ChatBotPage() {
                 </div>
 
                 <div className="min-w-0">
-                  <h2 className="text-[14px] font-semibold text-[#e9edef] truncate leading-tight">
+                  <h2 className="text-[14px] font-medium text-[#e9edef] truncate leading-tight">
                     {conversacionActiva.first_name} {conversacionActiva.last_name || ''}
                   </h2>
-                  <p className="text-[11px] text-[#8696a0] truncate leading-tight flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    <span>Chat ID: {conversacionActiva.chat_id}</span>
-                    {conversacionActiva.username && (
-                      <span className="text-emerald-400">@{conversacionActiva.username}</span>
-                    )}
+                  <p className="text-[11px] text-[#8696a0] truncate leading-tight">
+                    {conversacionActiva.username
+                      ? `@${conversacionActiva.username}`
+                      : 'En línea • Telegram'}
                   </p>
                 </div>
               </div>
@@ -475,10 +471,10 @@ export default function ChatBotPage() {
               </button>
             </div>
 
-            {/* Mensajes del Chat con scroll interno seguro */}
+            {/* Mensajes del Chat con scroll interno seguro y overscroll contenido */}
             <div
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto px-4 md:px-10 py-4 space-y-2.5 relative min-h-0"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 md:px-10 py-4 space-y-2.5 relative"
               style={{
                 backgroundImage:
                   'radial-gradient(circle at 50% 50%, rgba(17, 27, 33, 0.95) 0%, rgba(11, 20, 26, 1) 100%)',
@@ -539,7 +535,7 @@ export default function ChatBotPage() {
                           {m.content}
                         </div>
 
-                        {/* Hora y checkmarks */}
+                        {/* Hora y check */}
                         <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px] text-white/60">
                           <span>{formatHora(m.created_at)}</span>
                           {esUsuario && <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />}
@@ -579,7 +575,7 @@ export default function ChatBotPage() {
             </form>
           </>
         ) : (
-          /* Estado Vacío elegante */
+          /* Estado Vacío elegante cuando no hay chat seleccionado */
           <div className="flex-1 flex flex-col items-center justify-center px-6 text-center select-none bg-[#111b21]">
             <div className="w-20 h-20 rounded-full bg-[#202c33] flex items-center justify-center text-3xl shadow-xl mb-5 border border-[#2a3942]">
               💬

@@ -11,6 +11,7 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
   // para que el scroll del chat sea 100% independiente y nunca mueva la pantalla ni el panel izquierdo
   useEffect(() => {
     if (isChatBot) {
+      window.scrollTo(0, 0);
       const prevBodyOverflow = document.body.style.overflow;
       const prevHtmlOverflow = document.documentElement.style.overflow;
       document.body.style.overflow = 'hidden';
@@ -25,7 +26,7 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
 
   if (isChatBot) {
     return (
-      <main className="fixed inset-0 top-[53px] bottom-0 left-0 right-0 z-20 w-full overflow-hidden bg-[#0c1317] p-0 m-0 flex flex-col select-none">
+      <main className="w-full flex-1 h-[calc(100dvh-53px)] max-h-[calc(100dvh-53px)] overflow-hidden bg-[#0c1317] p-0 m-0 flex flex-col select-none relative">
         {children}
       </main>
     );
