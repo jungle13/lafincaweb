@@ -694,6 +694,38 @@ export async function guardarMensajeChat(chatId: number, role: 'user' | 'model',
   } catch (err: any) {}
 }
 
+export async function registrarUsuarioTelegram(
+  chatId: number,
+  sender?: { first_name?: string; last_name?: string; username?: string },
+  ultimoTexto?: string
+) {
+  try {
+    const { data: existing } = await supabase
+      .from('telegram_usuarios')
+      .select('total_mensajes, first_name, last_name, username')
+      .eq('chat_id', chatId)
+      .maybeSingle();
+
+    const count = (existing?.total_mensajes || 0) + 1;
+
+    await supabase.from('telegram_usuarios').upsert(
+      {
+        chat_id: chatId,
+        first_name: sender?.first_name || existing?.first_name || 'Usuario',
+        last_name: sender?.last_name || existing?.last_name || '',
+        username: sender?.username || existing?.username || '',
+        ultimo_mensaje: (ultimoTexto || '').slice(0, 500),
+        ultimo_mensaje_at: new Date().toISOString(),
+        total_mensajes: count,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'chat_id' }
+    );
+  } catch (err: any) {
+    console.error('Error en registrarUsuarioTelegram:', err);
+  }
+}
+
 export async function enviarMensajeTelegram(chatId: number, texto: string) {
   if (!TELEGRAM_TOKEN) {
     console.error('TELEGRAM_BOT_TOKEN no configurado');
@@ -911,10 +943,17 @@ async function ejecutarTool(callName: string, args: any) {
   return { error: 'Herramienta desconocida' };
 }
 
-export async function procesarMensajeTelegram(chatId: number, textoUsuario: string) {
+export async function procesarMensajeTelegram(
+  chatId: number, 
+  textoUsuario: string, 
+  sender?: { first_name?: string; last_name?: string; username?: string }
+) {
   try {
     // 1. Guardar mensaje del usuario INMEDIATAMENTE para trazabilidad absoluta
     await guardarMensajeChat(chatId, 'user', textoUsuario);
+    if (sender) {
+      await registrarUsuarioTelegram(chatId, sender, textoUsuario);
+    }
 
     const historial = await obtenerHistorialGroq(chatId, 4);
     const messages: any[] = [

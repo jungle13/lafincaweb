@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { procesarMensajeTelegram } from '@/services/telegramBotService';
+import { procesarMensajeTelegram, registrarUsuarioTelegram } from '@/services/telegramBotService';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,9 +16,20 @@ export async function POST(req: Request) {
     const chatId = message.chat.id;
     const text = message.text.trim();
 
+    // Capturar datos del usuario que envía el mensaje
+    const from = message.from || message.chat || {};
+    const sender = {
+      first_name: from.first_name || message.chat?.first_name || 'Usuario',
+      last_name: from.last_name || message.chat?.last_name || '',
+      username: from.username || message.chat?.username || '',
+    };
+
+    // Registrar o actualizar datos del usuario
+    await registrarUsuarioTelegram(chatId, sender, text);
+
     // Comando /start o saludo
     if (text === '/start') {
-      const welcome = `🥩 *¡Hola! Bienvenido al Asistente de La Finca en Telegram.*
+      const welcome = `🥩 *¡Hola ${sender.first_name}! Bienvenido al Asistente de La Finca en Telegram.*
 
 Puedo responder consultas operativas en tiempo real:
 • 📦 *Existencias de carne:* "¿Cuánto lomo fino nos queda?"
@@ -34,7 +45,7 @@ Puedo responder consultas operativas en tiempo real:
     }
 
     // Procesar con Groq y las herramientas de La Finca
-    const result = await procesarMensajeTelegram(chatId, text);
+    const result = await procesarMensajeTelegram(chatId, text, sender);
 
     return NextResponse.json({ ok: true, result });
   } catch (error: any) {

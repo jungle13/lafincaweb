@@ -13,7 +13,8 @@ import {
   UtensilsCrossed,
   X,
   Loader2,
-  Wallet
+  Wallet,
+  Bot
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
@@ -47,9 +48,10 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'AUDITORÍA & CONTROL',
+    title: 'AUDITORÍA & ASISTENTE IA',
     items: [
       { label: 'Auditoría Cocina', href: '/auditoria-cocina', icon: ClipboardCheck },
+      { label: 'Historial Telegram Bot', href: '/chat-bot', icon: Bot },
     ],
   },
   {
