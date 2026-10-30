@@ -9,7 +9,7 @@ export default function NavigationProgressBar() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  // Cuando la ruta cambia efectivamente, completar la barra y desvanecerla
+  // Cuando la ruta cambia efectivamente, completar la barra al 100% y desvanecerla
   useEffect(() => {
     if (isNavigating) {
       setProgress(100);
@@ -20,6 +20,20 @@ export default function NavigationProgressBar() {
       return () => clearTimeout(timer);
     }
   }, [pathname, searchParams]);
+
+  // Safety fallback: si por alguna razón Next.js no disparó cambio de URL, completar y resetear en máx 700ms
+  useEffect(() => {
+    if (isNavigating) {
+      const safety = setTimeout(() => {
+        setProgress(100);
+        setTimeout(() => {
+          setIsNavigating(false);
+          setProgress(0);
+        }, 150);
+      }, 700);
+      return () => clearTimeout(safety);
+    }
+  }, [isNavigating]);
 
   // Interceptar clicks en enlaces locales para iniciar la barra en 0 ms
   useEffect(() => {
@@ -45,16 +59,10 @@ export default function NavigationProgressBar() {
         }
 
         setIsNavigating(true);
-        setProgress(30);
+        setProgress(35);
 
-        // Incrementar el progreso suavemente
-        const step1 = setTimeout(() => setProgress(65), 100);
-        const step2 = setTimeout(() => setProgress(85), 300);
-
-        return () => {
-          clearTimeout(step1);
-          clearTimeout(step2);
-        };
+        setTimeout(() => setProgress(75), 100);
+        setTimeout(() => setProgress(90), 250);
       }
     };
 
@@ -70,7 +78,7 @@ export default function NavigationProgressBar() {
         className="h-full bg-gradient-to-r from-orange-500 via-amber-400 to-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.8)] transition-all ease-out"
         style={{
           width: `${progress}%`,
-          transitionDuration: progress === 100 ? '150ms' : '250ms',
+          transitionDuration: progress === 100 ? '150ms' : '200ms',
         }}
       />
     </div>

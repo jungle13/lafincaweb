@@ -10,8 +10,6 @@ import {
   CheckCheck,
   ArrowLeft,
   ShieldCheck,
-  MessageSquare,
-  Sparkles,
 } from 'lucide-react';
 
 interface ConversacionUsuario {
@@ -84,14 +82,23 @@ export default function ChatBotPage() {
   const [enviando, setEnviando] = useState(false);
   const [manualSpin, setManualSpin] = useState(false);
 
-  // Registro de últimos mensajes leídos por chat para mostrar el indicador de nuevo mensaje sin saltar de pantalla
+  // Registro de últimos mensajes vistos
   const [vistosMap, setVistosMap] = useState<Record<number, string>>({});
 
   const conversacionActivaRef = useRef<ConversacionUsuario | null>(null);
   conversacionActivaRef.current = conversacionActiva;
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Scroll interno seguro que NO mueve la ventana ni los paneles superiores
+  const scrollToBottom = (smooth = false) => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    }
+  };
 
   // Cargar mapa de leídos desde localStorage
   useEffect(() => {
@@ -121,12 +128,11 @@ export default function ChatBotPage() {
       if (data.ok && Array.isArray(data.conversaciones)) {
         setConversaciones(data.conversaciones);
 
-        // Si ya hay un chat abierto por el usuario, actualizar sus mensajes en silencio si hubo cambios
+        // Si ya hay un chat abierto por el usuario, actualizar mensajes en silencio
         const actual = conversacionActivaRef.current;
         if (actual) {
           const chatActualizado = data.conversaciones.find((c: any) => c.chat_id === actual.chat_id);
           if (chatActualizado && chatActualizado.ultimo_mensaje_at !== actual.ultimo_mensaje_at) {
-            // Refrescar silenciosamente los mensajes del chat activo
             cargarMensajesSilencioso(actual.chat_id);
             marcarComoVisto(actual.chat_id, chatActualizado.ultimo_mensaje_at);
           }
@@ -146,6 +152,7 @@ export default function ChatBotPage() {
       const data = await res.json();
       if (data.ok && Array.isArray(data.mensajes)) {
         setMensajes(data.mensajes);
+        setTimeout(() => scrollToBottom(true), 50);
       }
     } catch (e) {}
   };
@@ -160,9 +167,7 @@ export default function ChatBotPage() {
       const data = await res.json();
       if (data.ok && Array.isArray(data.mensajes)) {
         setMensajes(data.mensajes);
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-        }, 50);
+        setTimeout(() => scrollToBottom(false), 50);
       }
     } catch (e) {
       console.error('Error cargando mensajes:', e);
@@ -171,7 +176,7 @@ export default function ChatBotPage() {
     }
   };
 
-  // Carga inicial y sondeo periódico cada 10 segundos completamente invisible
+  // Carga inicial y sondeo periódico silencioso cada 10 segundos
   useEffect(() => {
     cargarConversaciones(false);
     const interval = setInterval(() => {
@@ -208,9 +213,7 @@ export default function ChatBotPage() {
           },
         ]);
         marcarComoVisto(conversacionActiva.chat_id, new Date().toISOString());
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 60);
+        setTimeout(() => scrollToBottom(true), 60);
         cargarConversaciones(true);
       } else {
         alert('Error enviando mensaje: ' + (data.error || 'Desconocido'));
@@ -249,14 +252,14 @@ export default function ChatBotPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-[#0c1317] font-sans antialiased text-[#e9edef] select-none">
       {/* ========================================================================= */}
-      {/* 1. PANEL IZQUIERDO: LISTA DE CHATS (WHATSAPP WEB THEME)                   */}
+      {/* 1. PANEL IZQUIERDO: LISTA DE CHATS (SIEMPRE VISIBLE EN TABLET/DESKTOP)     */}
       {/* ========================================================================= */}
-      <div
-        className={`w-full md:w-[360px] lg:w-[410px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] h-full ${
-          conversacionActiva ? 'hidden md:flex' : 'flex'
+      <aside
+        className={`w-full sm:w-[320px] md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col bg-[#111b21] border-r border-[#222d34] h-full overflow-hidden ${
+          conversacionActiva ? 'hidden sm:flex' : 'flex'
         }`}
       >
-        {/* Cabecera */}
+        {/* Cabecera Izquierda Fija */}
         <div className="h-14 px-4 bg-[#202c33] flex items-center justify-between border-b border-[#222d34] flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full bg-emerald-700 flex items-center justify-center text-white text-base shadow font-bold">
@@ -280,8 +283,8 @@ export default function ChatBotPage() {
           </button>
         </div>
 
-        {/* Buscador */}
-        <div className="p-2 bg-[#111b21] flex-shrink-0">
+        {/* Buscador Fijo */}
+        <div className="p-2 bg-[#111b21] flex-shrink-0 border-b border-[#222d34]/40">
           <div className="relative flex items-center bg-[#202c33] rounded-lg px-3 py-1.5 text-sm">
             <Search className="w-4 h-4 text-[#8696a0] mr-2 flex-shrink-0" />
             <input
@@ -323,13 +326,13 @@ export default function ChatBotPage() {
             >
               Hoy
             </button>
-            <span className="text-[11px] text-[#8696a0] ml-auto">
+            <span className="text-[11px] text-[#8696a0] ml-auto font-mono">
               {conversacionesFiltradas.length} {conversacionesFiltradas.length === 1 ? 'chat' : 'chats'}
             </span>
           </div>
         </div>
 
-        {/* Lista de hilos con scroll independiente */}
+        {/* Lista de hilos con scroll interno independiente */}
         <div className="flex-1 overflow-y-auto divide-y divide-[#222d34]/60 min-h-0">
           {cargandoLista ? (
             <div className="flex flex-col items-center justify-center h-48 text-[#8696a0] text-xs gap-2">
@@ -348,7 +351,6 @@ export default function ChatBotPage() {
                 (c.first_name?.[0] || '') + (c.last_name?.[0] || '')
               ).toUpperCase() || 'U';
 
-              // Puntito de nuevo mensaje si el último mensaje no ha sido visto por el usuario
               const tieneMensajeNuevo =
                 c.ultimo_mensaje_at &&
                 (!vistosMap[c.chat_id] || c.ultimo_mensaje_at > vistosMap[c.chat_id]) &&
@@ -412,24 +414,24 @@ export default function ChatBotPage() {
             })
           )}
         </div>
-      </div>
+      </aside>
 
       {/* ========================================================================= */}
-      {/* 2. PANEL DERECHO: VISOR DE CHAT (WHATSAPP WEB THEME)                       */}
+      {/* 2. PANEL DERECHO: VISOR DE CHAT Y MENSAJES                                 */}
       {/* ========================================================================= */}
-      <div
-        className={`flex-1 flex flex-col bg-[#0b141a] h-full relative ${
-          conversacionActiva ? 'flex' : 'hidden md:flex'
+      <section
+        className={`flex-1 flex flex-col bg-[#0b141a] h-full overflow-hidden min-w-0 relative ${
+          conversacionActiva ? 'flex' : 'hidden sm:flex'
         }`}
       >
         {conversacionActiva ? (
           <>
-            {/* Header Chat Activo */}
+            {/* Header Chat Activo Fijo */}
             <div className="h-14 px-4 bg-[#202c33] flex items-center justify-between border-b border-[#222d34] flex-shrink-0 z-10">
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   onClick={() => setConversacionActiva(null)}
-                  className="md:hidden p-1.5 text-[#aebac1] hover:text-white hover:bg-[#374248] rounded-full mr-1"
+                  className="sm:hidden p-1.5 text-[#aebac1] hover:text-white hover:bg-[#374248] rounded-full mr-1"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -473,21 +475,21 @@ export default function ChatBotPage() {
               </button>
             </div>
 
-            {/* Mensajes del Chat con scroll independiente */}
+            {/* Mensajes del Chat con scroll interno seguro */}
             <div
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto px-4 md:px-12 py-4 space-y-2.5 relative min-h-0"
+              className="flex-1 overflow-y-auto px-4 md:px-10 py-4 space-y-2.5 relative min-h-0"
               style={{
                 backgroundImage:
                   'radial-gradient(circle at 50% 50%, rgba(17, 27, 33, 0.95) 0%, rgba(11, 20, 26, 1) 100%)',
               }}
             >
-              {/* Badge sutil */}
+              {/* Badge Informativo */}
               <div className="flex justify-center my-1">
                 <div className="bg-[#182229] border border-[#222d34] px-3 py-1 rounded-md text-center max-w-md shadow-sm">
                   <p className="text-[10px] text-[#ffd279] flex items-center justify-center gap-1.5 font-medium">
                     <ShieldCheck className="w-3 h-3 flex-shrink-0 text-amber-400" />
-                    Auditoría de mensajes sincronizada en tiempo real con Supabase y Telegram.
+                    Auditoría sincronizada en tiempo real con Supabase y Telegram Bot API.
                   </p>
                 </div>
               </div>
@@ -511,7 +513,7 @@ export default function ChatBotPage() {
                       className={`flex w-full ${esUsuario ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`relative max-w-[85%] md:max-w-[72%] rounded-lg px-3 py-1.5 text-[13.5px] leading-relaxed shadow-sm ${
+                        className={`relative max-w-[88%] md:max-w-[75%] rounded-lg px-3 py-1.5 text-[13.5px] leading-relaxed shadow-sm ${
                           esUsuario
                             ? 'bg-[#005c4b] text-white rounded-tr-none'
                             : 'bg-[#202c33] text-[#e9edef] rounded-tl-none border border-[#2a3942]/60'
@@ -537,7 +539,7 @@ export default function ChatBotPage() {
                           {m.content}
                         </div>
 
-                        {/* Hora y check */}
+                        {/* Hora y checkmarks */}
                         <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px] text-white/60">
                           <span>{formatHora(m.created_at)}</span>
                           {esUsuario && <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />}
@@ -547,11 +549,9 @@ export default function ChatBotPage() {
                   );
                 })
               )}
-
-              <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Bar */}
+            {/* Input Bar Fija */}
             <form
               onSubmit={handleEnviarMensaje}
               className="h-14 px-3 md:px-4 bg-[#202c33] flex items-center gap-2 md:gap-3 border-t border-[#222d34] flex-shrink-0"
@@ -579,7 +579,7 @@ export default function ChatBotPage() {
             </form>
           </>
         ) : (
-          /* Estado Vacío elegante cuando no hay chat seleccionado */
+          /* Estado Vacío elegante */
           <div className="flex-1 flex flex-col items-center justify-center px-6 text-center select-none bg-[#111b21]">
             <div className="w-20 h-20 rounded-full bg-[#202c33] flex items-center justify-center text-3xl shadow-xl mb-5 border border-[#2a3942]">
               💬
@@ -597,7 +597,7 @@ export default function ChatBotPage() {
             </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
