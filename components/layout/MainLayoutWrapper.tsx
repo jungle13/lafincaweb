@@ -1,15 +1,31 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 export default function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isChatBot = pathname?.startsWith('/chat-bot');
 
+  // Bloquear completamente el scroll del body y html cuando estamos en el chat-bot
+  // para que el scroll del chat sea 100% independiente y nunca mueva la pantalla ni el panel izquierdo
+  useEffect(() => {
+    if (isChatBot) {
+      const prevBodyOverflow = document.body.style.overflow;
+      const prevHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+
+      return () => {
+        document.body.style.overflow = prevBodyOverflow;
+        document.documentElement.style.overflow = prevHtmlOverflow;
+      };
+    }
+  }, [isChatBot]);
+
   if (isChatBot) {
     return (
-      <main className="flex-1 w-full max-w-full overflow-hidden bg-[#0c1317] min-w-0 h-[calc(100dvh-53px)] md:h-[calc(100dvh-57px)] p-0 m-0">
+      <main className="fixed inset-0 top-[53px] bottom-0 left-0 right-0 z-20 w-full overflow-hidden bg-[#0c1317] p-0 m-0 flex flex-col select-none">
         {children}
       </main>
     );
