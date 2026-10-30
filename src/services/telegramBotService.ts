@@ -10,13 +10,48 @@ const groq = new Groq({ apiKey: GROQ_API_KEY });
 // 1. FUNCIONES DE CONSULTA A BASE DE DATOS (HERRAMIENTAS PARA GROQ)
 // ====================================================================
 
+export function parsearFiltroFecha(fechaRaw?: string, fechaFinRaw?: string): { fechaExacta?: string; fechaInicio?: string; fechaFin?: string } {
+  if (!fechaRaw) return {};
+  const f = fechaRaw.trim().toLowerCase();
+
+  if (fechaFinRaw && /^\d{4}-\d{2}-\d{2}$/.test(f) && /^\d{4}-\d{2}-\d{2}$/.test(fechaFinRaw.trim())) {
+    return { fechaInicio: f, fechaFin: fechaFinRaw.trim() };
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+    return { fechaExacta: f };
+  }
+
+  if (/^\d{4}-\d{2}$/.test(f)) {
+    const [y, m] = f.split('-');
+    const dias = new Date(Number(y), Number(m), 0).getDate();
+    return { fechaInicio: `${f}-01`, fechaFin: `${f}-${String(dias).padStart(2, '0')}` };
+  }
+
+  if (f.includes('oct')) return { fechaInicio: '2026-10-01', fechaFin: '2026-10-31' };
+  if (f.includes('sep') || f.includes('set')) return { fechaInicio: '2026-09-01', fechaFin: '2026-09-30' };
+  if (f.includes('nov')) return { fechaInicio: '2026-11-01', fechaFin: '2026-11-30' };
+  if (f.includes('dic')) return { fechaInicio: '2026-12-01', fechaFin: '2026-12-31' };
+
+  const matchDmy = f.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (matchDmy) {
+    return { fechaExacta: `${matchDmy[3]}-${matchDmy[2].padStart(2, '0')}-${matchDmy[1].padStart(2, '0')}` };
+  }
+
+  return {};
+}
+
 export async function consultarMovimientosCocina(fecha?: string, tipo?: string, categoria?: string, insumo?: string) {
   try {
     let q = supabase
       .from('registros_costeo_cocina')
       .select('fecha, tipo, nombre_insumo, categoria, cantidad, unidad, costo_unitario, valor_total');
 
-    if (fecha) q = q.eq('fecha', fecha);
+    if (fecha) {
+      const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha);
+      if (fechaExacta) q = q.eq('fecha', fechaExacta);
+      else if (fechaInicio && fechaFin) q = q.gte('fecha', fechaInicio).lte('fecha', fechaFin);
+    }
 
     if (tipo && tipo.trim() !== '' && tipo.toUpperCase() !== 'TODOS') {
       const t = tipo.trim().toUpperCase();
@@ -314,11 +349,15 @@ export async function consultarCompras(params: any = {}) {
 
     // 5. Por Fecha específica
     if (fecha && fecha.trim() !== '') {
-      const { data, error } = await supabase
+      const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha);
+      let q = supabase
         .from('compras')
-        .select('fecha, numero_factura, proveedor, categoria, valor_total, total_items')
-        .eq('fecha', fecha.trim())
-        .order('valor_total', { ascending: false });
+        .select('fecha, numero_factura, proveedor, categoria, valor_total, total_items');
+
+      if (fechaExacta) q = q.eq('fecha', fechaExacta);
+      else if (fechaInicio && fechaFin) q = q.gte('fecha', fechaInicio).lte('fecha', fechaFin);
+
+      const { data, error } = await q.order('valor_total', { ascending: false });
 
       if (error) throw error;
       const total = (data || []).reduce((acc, r) => acc + Number(r.valor_total || 0), 0);
@@ -362,22 +401,57 @@ export async function consultarCompras(params: any = {}) {
 
 export async function consultarLibroCaja(params: any = {}) {
   try {
-    const { fecha, clasificacion, categoria, concepto, responsable } = params || {};
+    const { fecha, fecha_fin, clasificacion, categoria, concepto, responsable, ver_resumen_diario } = params || {};
 
     let q = supabase
       .from('libro_caja_registros')
-      .select('fecha, dia_mes, clasificacion, categoria, concepto, descripcion_beneficiario, valor_pagado, soporte_factura, responsable_caja');
+      .select('fecha, dia_mes, clasificacion, categoria, concepto, descripcion_beneficiario, valor_pagado, soporte_factura, responsable_caja, es_ajuste');
 
-    if (fecha && fecha.trim() !== '') q = q.eq('fecha', fecha.trim());
-    if (clasificacion && clasificacion.trim() !== '') q = q.ilike('clasificacion', `%${clasificacion.trim()}%`);
-    if (categoria && categoria.trim() !== '') q = q.ilike('categoria', `%${categoria.trim()}%`);
-    if (responsable && responsable.trim() !== '') q = q.ilike('responsable_caja', `%${responsable.trim()}%`);
-    if (concepto && concepto.trim() !== '') {
-      const term = concepto.trim();
-      q = q.or(`concepto.ilike.%${term}%,descripcion_beneficiario.ilike.%${term}%`);
+    if (fecha && fecha_fin && fecha.trim() !== '' && fecha_fin.trim() !== '') {
+      q = q.gte('fecha', fecha.trim()).lte('fecha', fecha_fin.trim());
+    } else if (fecha && fecha.trim() !== '') {
+      q = q.eq('fecha', fecha.trim());
     }
 
-    const { data, error } = await q.order('fecha', { ascending: false });
+    if (clasificacion && clasificacion.trim() !== '') {
+      const cl = clasificacion.trim().toLowerCase();
+      if (cl.includes('insumo') || cl.includes('costo')) q = q.ilike('clasificacion', '%Insumo%');
+      else if (cl.includes('turno') || cl.includes('nomina') || cl.includes('nómina')) q = q.or('clasificacion.ilike.%Turno%,clasificacion.ilike.%Nómina%,clasificacion.ilike.%Nomina%');
+      else if (cl.includes('operativo') || cl.includes('gasto')) q = q.ilike('clasificacion', '%Operativo%');
+      else q = q.ilike('clasificacion', `%${clasificacion.trim()}%`);
+    }
+
+    if (categoria && categoria.trim() !== '') {
+      const cat = categoria.trim().toLowerCase().replace(/[\u0300-\u036f]/g, '');
+      if (cat.includes('nomina') || cat.includes('turno')) q = q.ilike('categoria', '%Nómina%');
+      else if (cat.includes('verdur') || cat.includes('frut')) q = q.ilike('categoria', '%Verdur%');
+      else if (cat.includes('carn')) q = q.ilike('categoria', '%Carn%');
+      else if (cat.includes('bebid') || cat.includes('licor') || cat.includes('gaseos')) q = q.ilike('categoria', '%Bebid%');
+      else if (cat.includes('gran') || cat.includes('abarrot')) q = q.ilike('categoria', '%Gran%');
+      else if (cat.includes('desech')) q = q.ilike('categoria', '%Desech%');
+      else if (cat.includes('servic') || cat.includes('hielo') || cat.includes('gas')) q = q.ilike('categoria', '%Servic%');
+      else if (cat.includes('transp') || cat.includes('taxi') || cat.includes('domicil')) q = q.ilike('categoria', '%Transp%');
+      else if (cat.includes('manten')) q = q.ilike('categoria', '%Manten%');
+      else if (cat.includes('limpiez') || cat.includes('aseo')) q = q.ilike('categoria', '%Limpiez%');
+      else if (cat.includes('general')) q = q.ilike('categoria', '%General%');
+      else q = q.ilike('categoria', `%${categoria.trim()}%`);
+    }
+
+    if (responsable && responsable.trim() !== '') {
+      q = q.ilike('responsable_caja', `%${responsable.trim()}%`);
+    }
+
+    if (concepto && concepto.trim() !== '') {
+      const term = concepto.trim();
+      const sinTildes = term.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (term !== sinTildes) {
+        q = q.or(`concepto.ilike.%${term}%,descripcion_beneficiario.ilike.%${term}%,concepto.ilike.%${sinTildes}%,descripcion_beneficiario.ilike.%${sinTildes}%`);
+      } else {
+        q = q.or(`concepto.ilike.%${term}%,descripcion_beneficiario.ilike.%${term}%`);
+      }
+    }
+
+    const { data, error } = await q.order('fecha', { ascending: false }).order('orden_item', { ascending: true });
     if (error) throw error;
 
     const rows = data || [];
@@ -385,6 +459,46 @@ export async function consultarLibroCaja(params: any = {}) {
     const totalInsumos = rows.filter((r) => (r.clasificacion || '').includes('Insumo')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
     const totalOperativos = rows.filter((r) => (r.clasificacion || '').includes('Operativo')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
     const totalNomina = rows.filter((r) => (r.clasificacion || '').includes('Nómina') || (r.clasificacion || '').includes('Turno')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+
+    const porCategoriaMap: Record<string, { cantidad: number; total_cop: number }> = {};
+    const porResponsableMap: Record<string, { cantidad: number; total_cop: number }> = {};
+    for (const r of rows) {
+      const cKey = r.categoria || 'Otros';
+      porCategoriaMap[cKey] = porCategoriaMap[cKey] || { cantidad: 0, total_cop: 0 };
+      porCategoriaMap[cKey].cantidad += 1;
+      porCategoriaMap[cKey].total_cop += Number(r.valor_pagado || 0);
+
+      const rKey = r.responsable_caja || 'GENERAL';
+      porResponsableMap[rKey] = porResponsableMap[rKey] || { cantidad: 0, total_cop: 0 };
+      porResponsableMap[rKey].cantidad += 1;
+      porResponsableMap[rKey].total_cop += Number(r.valor_pagado || 0);
+    }
+
+    let cuadreDiario: any = undefined;
+    if (fecha || ver_resumen_diario) {
+      let qDiario = supabase
+        .from('libro_caja_diario')
+        .select('fecha, dia_mes, base_inicial, venta_pos_total, total_datafonos, efectivo_fisico_cierre, total_costos_insumos, total_gastos_operativos, total_turnos_nomina, total_salidas, diferencia_cuadre, responsables_dia, estado');
+      if (fecha && fecha_fin) {
+        qDiario = qDiario.gte('fecha', fecha.trim()).lte('fecha', fecha_fin.trim());
+      } else if (fecha) {
+        qDiario = qDiario.eq('fecha', fecha.trim());
+      }
+      const { data: diariosData } = await qDiario.order('fecha', { ascending: false }).limit(26);
+      if (diariosData && diariosData.length > 0) {
+        cuadreDiario = diariosData.map((d) => ({
+          fecha: d.fecha,
+          estado: d.estado,
+          cajeras_dia: d.responsables_dia,
+          base_inicial_cop: Number(d.base_inicial || 0),
+          venta_pos_cop: Number(d.venta_pos_total || 0),
+          total_salidas_caja_cop: Number(d.total_salidas || 0),
+          efectivo_cierre_cop: Number(d.efectivo_fisico_cierre || 0),
+          datafonos_cop: Number(d.total_datafonos || 0),
+          diferencia_cuadre_cop: Number(d.diferencia_cuadre || 0),
+        }));
+      }
+    }
 
     return {
       modulo: 'Libro de Caja Menor (Octubre 2026)',
@@ -395,7 +509,14 @@ export async function consultarLibroCaja(params: any = {}) {
         gastos_operativos_cop: totalOperativos,
         pago_turnos_nomina_cop: totalNomina,
       },
-      registros: rows.slice(0, 35).map((r) => ({
+      resumen_por_categoria: Object.entries(porCategoriaMap)
+        .map(([cat, st]) => ({ categoria: cat, registros: st.cantidad, total_cop: st.total_cop }))
+        .sort((a, b) => b.total_cop - a.total_cop),
+      resumen_por_cajera: Object.entries(porResponsableMap)
+        .map(([resp, st]) => ({ cajera: resp, registros: st.cantidad, total_cop: st.total_cop }))
+        .sort((a, b) => b.total_cop - a.total_cop),
+      hojas_diarias_y_cuadre: cuadreDiario,
+      registros: rows.slice(0, 45).map((r) => ({
         fecha: r.fecha,
         clasificacion: r.clasificacion,
         categoria: r.categoria,
@@ -403,6 +524,7 @@ export async function consultarLibroCaja(params: any = {}) {
         descripcion: r.descripcion_beneficiario,
         valor_cop: Number(r.valor_pagado || 0),
         cajera: r.responsable_caja,
+        es_ajuste: Boolean(r.es_ajuste),
       })),
     };
   } catch (err: any) {
@@ -444,11 +566,9 @@ export async function consultarVentas(fecha?: string, producto?: string, fecha_f
         .select('fecha, codigo_producto, nombre_producto, categoria, cantidad, valor_unitario, gran_total')
         .or(orFilter);
 
-      if (fecha && fecha_fin) {
-        q = q.gte('fecha', fecha).lte('fecha', fecha_fin);
-      } else if (fecha) {
-        q = q.eq('fecha', fecha);
-      }
+      const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha, fecha_fin);
+      if (fechaExacta) q = q.eq('fecha', fechaExacta);
+      else if (fechaInicio && fechaFin) q = q.gte('fecha', fechaInicio).lte('fecha', fechaFin);
       const { data, error } = await q.order('fecha', { ascending: false }).limit(60);
 
       if (error) throw error;
@@ -482,11 +602,9 @@ export async function consultarVentas(fecha?: string, producto?: string, fecha_f
       .order('fecha', { ascending: false })
       .limit(fecha ? (fecha_fin ? 7 : 1) : 7);
 
-    if (fecha && fecha_fin) {
-      query = query.gte('fecha', fecha).lte('fecha', fecha_fin);
-    } else if (fecha) {
-      query = query.eq('fecha', fecha);
-    }
+    const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha, fecha_fin);
+    if (fechaExacta) query = query.eq('fecha', fechaExacta);
+    else if (fechaInicio && fechaFin) query = query.gte('fecha', fechaInicio).lte('fecha', fechaFin);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -513,7 +631,11 @@ export async function consultarCosteoDiario(fecha?: string) {
       .order('fecha', { ascending: false })
       .limit(fecha ? 1 : 5);
 
-    if (fecha) query = query.eq('fecha', fecha);
+    if (fecha) {
+      const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha);
+      if (fechaExacta) query = query.eq('fecha', fechaExacta);
+      else if (fechaInicio && fechaFin) query = query.gte('fecha', fechaInicio).lte('fecha', fechaFin);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -567,12 +689,17 @@ export async function guardarMensajeChat(chatId: number, role: 'user' | 'model',
 }
 
 export async function enviarMensajeTelegram(chatId: number, texto: string) {
+  if (!TELEGRAM_TOKEN) {
+    console.error('TELEGRAM_BOT_TOKEN no configurado');
+    return;
+  }
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+  const cleanText = texto.length > 4000 ? texto.slice(0, 3950) + '\n\n...(información recortada)' : texto;
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' }),
+      body: JSON.stringify({ chat_id: chatId, text: cleanText, parse_mode: 'Markdown' }),
     });
 
     const data = await res.json();
@@ -580,10 +707,12 @@ export async function enviarMensajeTelegram(chatId: number, texto: string) {
       await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: texto }),
+        body: JSON.stringify({ chat_id: chatId, text: cleanText }),
       });
     }
-  } catch (err: any) {}
+  } catch (err: any) {
+    console.error('Error enviando mensaje telegram:', err);
+  }
 }
 
 // ====================================================================
@@ -740,15 +869,17 @@ const tools: any = [
     type: 'function',
     function: {
       name: 'consultar_libro_caja',
-      description: 'Consulta el Libro de Caja Menor (328 registros de salidas de caja, pagos de turnos de personal, compras menores en efectivo, hielo, transporte, préstamos y cuadre por cajera).',
+      description: 'Consulta el Libro de Caja Menor (330 registros de salidas de caja, pagos de turnos de personal, compras menores en efectivo, hielo, transporte, préstamos y cuadre por cajera).',
       parameters: {
         type: 'object',
         properties: {
-          fecha: { type: 'string', description: 'Fecha YYYY-MM-DD. Opcional.' },
+          fecha: { type: 'string', description: 'Fecha YYYY-MM-DD o mes YYYY-MM (ej: 2026-10 o 2026-10-25). Opcional.' },
+          fecha_fin: { type: 'string', description: 'Fecha fin YYYY-MM-DD para consultar un rango o fin de semana. Opcional.' },
           clasificacion: { type: 'string', description: 'Clasificación: "Costo / Insumo", "Gasto Operativo" o "Turno / Nómina". Opcional.' },
-          categoria: { type: 'string', description: 'Categoría (ej: Gastos Nómina, Servicios, Verduras, Bebidas, Grano, Gastos Generales, Gastos Transporte). Opcional.' },
+          categoria: { type: 'string', description: 'Categoría (ej: Gastos Nómina, Servicios, Verduras, Bebidas, Grano, Carnes, Desechables, Gastos Generales, Gastos Transporte). Opcional.' },
           concepto: { type: 'string', description: 'Concepto o beneficiario a buscar (ej: Hielo, Andrés, Turno, Aguacate, Préstamo). Opcional.' },
-          responsable: { type: 'string', description: 'Nombre de la cajera encargada (ej: JOHANNA, MARIA, CAROLINA, DANIELA). Opcional.' },
+          responsable: { type: 'string', description: 'Nombre de la cajera encargada (ej: JOHANNA, MARIA, CAROLINA, DANIELA, LUCERO). Opcional.' },
+          ver_resumen_diario: { type: 'boolean', description: 'True si preguntan por arqueo, cuadre de caja, venta POS del día, efectivo de cierre o sobrante/faltante de caja. Opcional.' },
         },
       },
     },
