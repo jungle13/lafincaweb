@@ -25,6 +25,7 @@ Puedo responder consultas operativas en tiempo real:
 • 💰 *Precios y Catálogo:* "¿A cómo está el kilo de costilla?"
 • 🧾 *Compras y Facturas:* "¿Cuáles fueron las últimas compras?"
 • 📊 *Ventas del día:* "¿Cuánto se vendió el 25 de octubre?" o "¿Cuántos churrascos se han vendido?"
+• 💼 *Libro de Caja Menor:* "¿Cuánto se ha gastado en caja menor en octubre?" o "¿Qué gastos se pagaron el 25 de octubre?"
 
 ¡Pregúntame lo que necesites!`;
       const { enviarMensajeTelegram } = await import('@/services/telegramBotService');
@@ -32,10 +33,10 @@ Puedo responder consultas operativas en tiempo real:
       return NextResponse.json({ ok: true });
     }
 
-    // Procesar con Gemini y las herramientas de La Finca
-    await procesarMensajeTelegram(chatId, text);
+    // Procesar con Groq y las herramientas de La Finca
+    const result = await procesarMensajeTelegram(chatId, text);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, result });
   } catch (error: any) {
     console.error('Error en webhook de Telegram:', error);
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -46,6 +47,8 @@ export async function GET() {
   return NextResponse.json({
     status: 'online',
     servicio: 'La Finca Telegram Bot Webhook',
+    hasTelegramToken: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+    hasGroqKey: Boolean(process.env.GROQ_API_KEY),
     timestamp: new Date().toISOString(),
   });
 }
