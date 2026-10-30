@@ -49,10 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         } else {
           localStorage.removeItem(STORAGE_KEY);
+          document.cookie = 'la_finca_session=; path=/; max-age=0; SameSite=Lax';
         }
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
+      document.cookie = 'la_finca_session=; path=/; max-age=0; SameSite=Lax';
     } finally {
       setIsLoading(false);
     }
@@ -71,6 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(authUser);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+        // Sincronizar cookie de sesión de larga duración (30 días)
+        document.cookie = `la_finca_session=${cleanUser}; path=/; max-age=2592000; SameSite=Lax`;
       } catch (e) {
         console.error('Error al guardar sesión:', e);
       }
@@ -83,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
+      document.cookie = 'la_finca_session=; path=/; max-age=0; SameSite=Lax';
     } catch (e) {
       console.error('Error al remover sesión:', e);
     }

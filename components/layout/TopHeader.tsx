@@ -1,13 +1,14 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { Menu, User } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 import { useAuth } from '@/context/AuthContext';
 import OperationalNotificationBell from '@/components/notifications/OperationalNotificationBell';
 
 const VIEW_TITLES: Record<string, string> = {
-  '/': 'Inicio',
+  '/': 'Bienvenida • Inicio',
   '/bodeguero': 'Terminal del Bodeguero',
   '/costeo-diario': 'Costeo Diario Cocina',
   '/libros-apoyo': 'Libros de Apoyo • Libro de Caja Menor',
@@ -26,6 +27,7 @@ const VIEW_TITLES: Record<string, string> = {
 
 export default function TopHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const { toggleSidebar } = useSidebar();
   const { user, logout } = useAuth();
 
@@ -36,14 +38,19 @@ export default function TopHeader() {
     if (matchedKey) return VIEW_TITLES[matchedKey];
     
     const cleaned = pathname.replace('/', '').replace(/-/g, ' ');
-    if (!cleaned) return 'Inicio';
+    if (!cleaned) return 'Bienvenida • Inicio';
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   };
 
   const currentTitle = getModuleTitle();
 
+  const handleLogout = () => {
+    logout();
+    router.replace('/');
+  };
+
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-3 md:px-6 py-2.5 flex items-center justify-between shadow-2xs">
+    <header className="sticky top-0 z-30 h-14 bg-white border-b border-slate-200 px-3 md:px-6 py-2.5 flex items-center justify-between shadow-2xs">
       {/* Botón de Menú y Título del Módulo */}
       <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
         <button
@@ -55,9 +62,15 @@ export default function TopHeader() {
           <Menu className="w-5 h-5" />
         </button>
 
-        <h1 className="text-sm md:text-base font-bold text-slate-900 tracking-tight truncate">
-          {currentTitle}
-        </h1>
+        <Link
+          href="/"
+          title="Ir a Inicio / Bienvenida"
+          className="group flex items-center gap-1.5 min-w-0 hover:opacity-80 transition-opacity"
+        >
+          <h1 className="text-sm md:text-base font-bold text-slate-900 tracking-tight truncate group-hover:text-orange-600 transition-colors">
+            {currentTitle}
+          </h1>
+        </Link>
       </div>
 
       {/* Lado Derecho: Notificaciones + Perfil de Usuario con Nombre Dinámico */}
@@ -75,7 +88,7 @@ export default function TopHeader() {
             {user?.name || 'Usuario'}
           </span>
           <button
-            onClick={logout}
+            onClick={handleLogout}
             type="button"
             title="Cerrar sesión"
             className="ml-1 px-2 py-1 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"

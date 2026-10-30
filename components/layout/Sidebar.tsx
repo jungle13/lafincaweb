@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
+  Home,
   ShoppingCart, 
   Beef,
   FileSpreadsheet,
@@ -28,6 +29,12 @@ interface NavSection {
 }
 
 const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'GENERAL',
+    items: [
+      { label: 'Bienvenida / Inicio', href: '/', icon: Home },
+    ],
+  },
   {
     title: 'INVENTARIO & BODEGA',
     items: [
