@@ -205,7 +205,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
   }, [availableMonths, selectedMonth]);
 
   // Control para Contraer / Desplegar contenedor lateral izquierdo de Hojas por Fecha
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!modoCajeroHermetico);
 
   // Sistema de Pestañas
   const [openTabs, setOpenTabs] = useState<string[]>([]);
@@ -744,7 +744,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
   const diferenciaCuadreCajero = dineroRecaudadoCajero - ventaPosReal;
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 -mb-20 md:mb-0 bg-slate-50 overflow-hidden font-normal text-xs">
+    <div className="flex flex-col h-full max-h-full w-full overflow-hidden bg-slate-50 font-normal text-xs p-0 m-0">
       {/* 1. BARRA SUPERIOR: Hermética para Portal Cajero o Estándar SheetTabsBar para Administrador */}
       {modoCajeroHermetico ? (
         <header className="shrink-0 h-14 bg-slate-900 border-b border-slate-800 px-3 md:px-6 flex items-center justify-between text-white z-20 select-none">
@@ -874,6 +874,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
         {activeTabId === null ? (
           <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white overflow-hidden">
             {/* Panel Izquierdo: Lista de Meses (idéntico a Costeo Diario Cocina) */}
+            {!modoCajeroHermetico && (
             <aside className="w-full md:w-56 p-4 border-r border-slate-200 bg-slate-50/60 shrink-0 space-y-1">
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">
                 Meses
@@ -904,6 +905,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
                 </div>
               )}
             </aside>
+            )}
 
             {/* Panel Derecho: Lista de Hojas de Libro de Caja Menor */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">

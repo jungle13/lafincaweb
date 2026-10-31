@@ -216,7 +216,7 @@ export default function Sidebar() {
                       }
                       closeSidebar();
                     }}
-                    className={`group flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all select-none ${
+                    className={`group flex items-center justify-between px-3 py-1.5 rounded-lg text-[12px] font-normal transition-all select-none ${
                       isActive
                         ? 'bg-orange-500/15 text-orange-400 font-semibold border-l-[3px] border-orange-500 rounded-l-none'
                         : 'text-slate-400 hover:text-orange-300 hover:bg-orange-500/10'
