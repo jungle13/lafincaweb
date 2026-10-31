@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 export interface VentaItemParsed {
   codigo: string;
   producto: string;
+  unidad?: string;
   cantidad: number;
   venta_bruta: number;
   descuento: number;
@@ -113,7 +114,6 @@ export function parseVentasTxtContent(content: string, fileName: string = 'venta
   }
 
   const lines = content.split(/\r?\n/);
-  let inData = false;
   let dayTotalArticles = 0;
   let dayBruta = 0;
   let dayDesc = 0;
@@ -123,65 +123,62 @@ export function parseVentasTxtContent(content: string, fileName: string = 'venta
   const distinctPlatos = new Set<string>();
   const items: VentaItemParsed[] = [];
 
+  const parseColValue = (str: string | undefined): number => {
+    if (!str || str.includes('*')) return 0;
+    // En reportes POS de La Finca, las comas son separadores de miles (ej: 36,296 o 1,324,074)
+    const clean = str.replace(/,/g, '').trim();
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : num;
+  };
+
+  const lineRegex = /^\s*(\d+)\s+(.+?)\s+([a-zA-Z]{2})\s+([\d\.\,]+)\s+([\d\.\,]+)\s+([\d\.\,]+)\s+([\d\.\,]+)\s+([\d\.\,]+)\s+([\d\.\,]+)\s+([\d\.\,\*]+)\s+([\d\.\,]+%?)/;
+
   for (const line of lines) {
-    if (line.includes('=====')) {
-      inData = true;
-      continue;
+    if (line.includes('TOTALES') || line.includes('Total :') || line.includes('TOTAL :')) {
+      break;
     }
-    if (!inData || !line.trim()) continue;
-    if (line.includes('TOTALES') || line.includes('Total :') || line.includes('TOTAL :')) break;
 
-    const trimmed = line.trim();
-    const parts = trimmed.split(/\s{2,}/);
-    if (parts.length >= 7) {
-      const codigo = parts[0].trim();
-      const producto = parts[1].trim();
-      const nums = trimmed.match(/[\d\.\,]+/g);
+    const match = line.match(lineRegex);
+    if (match) {
+      const codigo = match[1].trim();
+      const producto = match[2].trim();
+      const unidad = match[3].trim().toLowerCase();
+      const cant = parseColValue(match[4]);
+      const vBruta = parseColValue(match[5]);
+      const desc = parseColValue(match[6]);
+      const vNeta = parseColValue(match[7]);
+      const imp = parseColValue(match[8]);
+      const granTot = parseColValue(match[9]);
+      const vUnit = parseColValue(match[10]);
+      const pct = parseFloat(match[11].replace('%', '')) || 0;
 
-      if (nums && nums.length >= 7) {
-        const cleanNumber = (s: string | undefined): number => {
-          if (!s) return 0;
-          const cleanStr = String(s).replace(/\./g, '').replace(',', '.');
-          const n = parseFloat(cleanStr);
-          return isNaN(n) ? 0 : n;
-        };
+      if (cant > 0 || granTot > 0) {
+        const classification = classifyProduct(producto, codigo);
 
-        const cant = cleanNumber(nums[nums.length - 7]);
-        const vBruta = cleanNumber(nums[nums.length - 6]);
-        const desc = cleanNumber(nums[nums.length - 5]);
-        const vNeta = cleanNumber(nums[nums.length - 4]);
-        const imp = cleanNumber(nums[nums.length - 3]);
-        const granTot = cleanNumber(nums[nums.length - 2]);
-        const vUnit = cleanNumber(nums[nums.length - 1]);
-        const pct = 0;
+        dayTotalArticles += cant;
+        dayBruta += vBruta;
+        dayDesc += desc;
+        dayNeta += vNeta;
+        dayImp += imp;
+        dayGranTotal += granTot;
+        distinctPlatos.add(producto);
 
-        if (cant > 0 || granTot > 0) {
-          const classification = classifyProduct(producto, codigo);
-
-          dayTotalArticles += cant;
-          dayBruta += vBruta;
-          dayDesc += desc;
-          dayNeta += vNeta;
-          dayImp += imp;
-          dayGranTotal += granTot;
-          distinctPlatos.add(producto);
-
-          items.push({
-            codigo,
-            producto,
-            cantidad: cant,
-            venta_bruta: vBruta,
-            descuento: desc,
-            venta_neta: vNeta,
-            impuesto: imp,
-            gran_total: granTot,
-            valor_unitario: vUnit,
-            porcentaje_participacion: pct,
-            categoria: classification.categoria,
-            subcategoria: classification.subcategoria,
-            es_receta: classification.es_receta,
-          });
-        }
+        items.push({
+          codigo,
+          producto,
+          unidad,
+          cantidad: cant,
+          venta_bruta: vBruta,
+          descuento: desc,
+          venta_neta: vNeta,
+          impuesto: imp,
+          gran_total: granTot,
+          valor_unitario: vUnit,
+          porcentaje_participacion: pct,
+          categoria: classification.categoria,
+          subcategoria: classification.subcategoria,
+          es_receta: classification.es_receta,
+        });
       }
     }
   }
@@ -207,9 +204,6 @@ export function parseVentasTxtContent(content: string, fileName: string = 'venta
   };
 }
 
-/**
- * Guarda las ventas parseadas en Supabase (ventas_diarias, ventas_detalle, productos_venta y platos)
- */
 export async function guardarVentasEnBaseDeDatos(parsed: VentasParsedData) {
   // 1. Sincronizar productos_venta
   const productosMap = new Map<string, any>();
@@ -224,7 +218,7 @@ export async function guardarVentasEnBaseDeDatos(parsed: VentasParsedData) {
         nombre: it.producto,
         categoria: it.categoria,
         subcategoria: it.subcategoria,
-        unidad: 'ud',
+        unidad: it.unidad || 'ud',
         precio_neto: netoUnit,
         tarifa_impoconsumo: 8.0,
         impoconsumo: impUnit,
