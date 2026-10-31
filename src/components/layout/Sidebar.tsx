@@ -73,40 +73,53 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 /**
- * Icono de Mazorquita / Choclo en blanco con líneas internas nítidas
+ * Logo Oficial de La Finca en formato vectorial SVG
+ * Tomado de: E:\RESTAURANTE LA FINCA\SVG\Recurso 1.svg
  */
-function MazorquitaIcon({ className = "w-5 h-5" }: { className?: string }) {
+function LaFincaLogoSvg({ className = "w-full h-auto" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      {/* Cuerpo Mazorca Blanco */}
-      <path
-        d="M32 6 C25 14 21 24 21 38 C21 48 26 55 32 57 C38 55 43 48 43 38 C43 24 39 14 32 6 Z"
-        fill="white"
-      />
-      {/* Granos y líneas de separación en azul oscuro para contraste */}
-      <path d="M27 16 C26 24 26 34 28 47" stroke="#050811" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M32 9 C32 21 32 35 32 53" stroke="#050811" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M37 16 C38 24 38 34 36 47" stroke="#050811" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M25 19 Q32 21 39 19" stroke="#050811" strokeWidth="1.4" />
-      <path d="M23 26 Q32 28 41 26" stroke="#050811" strokeWidth="1.4" />
-      <path d="M22 33 Q32 35 42 33" stroke="#050811" strokeWidth="1.4" />
-      <path d="M22 40 Q32 42 42 40" stroke="#050811" strokeWidth="1.4" />
-      <path d="M24 47 Q32 49 40 47" stroke="#050811" strokeWidth="1.4" />
-      {/* Hojas laterales blancas con contorno */}
-      <path
-        d="M32 57 C22 55 12 47 10 32 C9 24 13 18 13 18 C13 18 16 28 22 36 C27 43 30 51 32 57 Z"
-        fill="white"
-        stroke="#050811"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M32 57 C42 55 52 47 54 32 C55 24 51 18 51 18 C51 18 48 28 42 36 C37 43 34 51 32 57 Z"
-        fill="white"
-        stroke="#050811"
-        strokeWidth="1.5"
-      />
-      {/* Tallo base */}
-      <path d="M29 56 L29 62 C29 63 35 63 35 62 L35 56 Z" fill="white" />
+    <svg
+      id="Capa_2"
+      data-name="Capa 2"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 447.88 120.59"
+      className={className}
+      aria-label="La Finca Choclos y Asados"
+    >
+      <defs>
+        <style>{`
+          .finca-svg-sub {
+            font-family: 'Century Gothic', CenturyGothic-Bold, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 35.74px;
+            font-weight: 700;
+            letter-spacing: .15em;
+            fill: #e2e8f0;
+          }
+          .finca-svg-title {
+            font-family: 'Acumin Variable Concept', AcuminConcept-Black, 'Century Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 94.22px;
+            font-variation-settings: 'wght' 800, 'wdth' 100, 'slnt' 0;
+            font-weight: 800;
+            fill: #ffffff;
+          }
+          .finca-svg-l { letter-spacing: .03em; }
+          .finca-svg-f { letter-spacing: 0em; }
+          .finca-svg-c { letter-spacing: 0em; }
+        `}</style>
+      </defs>
+      <g id="Capa_1-2" data-name="Capa 1">
+        <text className="finca-svg-title" transform="translate(0 80.18)">
+          <tspan className="finca-svg-l" x="0" y="0">L</tspan>
+          <tspan x="60.39" y="0">A </tspan>
+          <tspan className="finca-svg-f" x="148.67" y="0">F</tspan>
+          <tspan x="206.71" y="0">IN</tspan>
+          <tspan className="finca-svg-c" x="311.57" y="0">C</tspan>
+          <tspan x="379.5" y="0">A</tspan>
+        </text>
+        <text className="finca-svg-sub" transform="translate(5.84 109.63)">
+          <tspan x="0" y="0">CHOCLOS Y ASADOS</tspan>
+        </text>
+      </g>
     </svg>
   );
 }
@@ -157,22 +170,14 @@ export default function Sidebar() {
               <Menu className="w-5 h-5" />
             </button>
 
-            {/* Mazorquita blanca integrada a FINCA (F un poco más alta, tipografía más fina y elegante) */}
+            {/* Logo Oficial de La Finca SVG (E:\RESTAURANTE LA FINCA\SVG\Recurso 1.svg) */}
             <Link
               href="/"
               onClick={closeSidebar}
               title="Ir a Principal"
-              className="flex items-center gap-2 select-none hover:opacity-90 transition-opacity"
+              className="flex items-center select-none hover:opacity-90 transition-opacity w-[118px] max-w-[125px]"
             >
-              <MazorquitaIcon className="w-5 h-5 shrink-0" />
-              <div className="flex items-baseline tracking-tight">
-                <span className="text-[19px] font-bold text-white font-sans leading-none tracking-tight">
-                  F
-                </span>
-                <span className="text-[15px] font-medium text-slate-100 font-sans tracking-wide">
-                  INCA
-                </span>
-              </div>
+              <LaFincaLogoSvg className="w-full h-auto" />
             </Link>
           </div>
 
