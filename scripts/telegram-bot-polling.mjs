@@ -755,7 +755,6 @@ async function ejecutarTool(callName, args) {
     return await consultarCompras(args);
   } else if (callName === 'consultar_libro_caja') {
     return await consultarLibroCaja(args);
-    return await consultarCompras(args);
   }
   return { error: 'Herramienta desconocida' };
 }
