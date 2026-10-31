@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { User, Lock, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { User, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -36,35 +36,39 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-xs px-4 select-none">
-      <div className="w-full max-w-sm bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-2xl animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs px-4 select-none">
+      {/* Container principal con el azul oscuro del sidebar (#050811) */}
+      <div className="w-full max-w-sm bg-[#050811] border border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-2xl animate-fade-in text-white">
         {/* Cabecera con Logo Oficial de La Finca */}
         <div className="flex flex-col items-center justify-center mb-6 text-center">
-          <div className="bg-[#050811] px-6 py-3.5 rounded-2xl shadow-md border border-slate-900 mb-3.5 flex items-center justify-center">
+          <div className="mb-4 flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/Logo_Letras_Vectorizadas.svg"
+              src="/rf2.png"
               alt="La Finca Choclos y Asados"
-              className="w-44 sm:w-48 h-auto max-h-14 object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
+              className="w-48 sm:w-52 h-auto max-h-16 object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
             />
           </div>
 
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-tight">
-            Sistema de Control & Costeo
+          <h1 className="text-lg font-bold text-white tracking-tight leading-tight">
+            Sistema de Seguimiento de Costeo
           </h1>
-          <p className="text-[12px] text-slate-500 mt-1 leading-normal">
-            Ingresa tus credenciales para acceder a la plataforma operativa
+          <p className="text-xs font-semibold text-slate-300 mt-1.5 leading-normal">
+            La Finca Choclos y Asados
+          </p>
+          <p className="text-[12px] text-orange-400 font-medium mt-0.5 tracking-wide">
+            Eliana Garces
           </p>
         </div>
 
         {/* Formulario de Login */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+            <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
               Usuario
             </label>
             <div className="relative flex items-center">
-              <User className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
+              <User className="w-4 h-4 text-slate-500 absolute left-3.5 pointer-events-none" />
               <input
                 type="text"
                 value={username}
@@ -72,31 +76,31 @@ export default function LoginForm() {
                 placeholder="Ej: admin, eliana o arturo"
                 autoFocus
                 disabled={loading}
-                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-xl outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-slate-900 placeholder-slate-400 transition"
+                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-900/90 border border-slate-700/80 rounded-xl outline-none focus:bg-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-white placeholder-slate-500 transition"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+            <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
               Contraseña
             </label>
             <div className="relative flex items-center">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
+              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 pointer-events-none" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 disabled={loading}
-                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-xl outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-slate-900 placeholder-slate-400 transition"
+                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-900/90 border border-slate-700/80 rounded-xl outline-none focus:bg-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-white placeholder-slate-500 transition"
               />
             </div>
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+            <div className="flex items-center gap-2 p-2.5 bg-red-950/60 border border-red-800/80 rounded-lg text-xs text-red-200 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
               <span>{error}</span>
             </div>
           )}
@@ -112,12 +116,6 @@ export default function LoginForm() {
             </button>
           </div>
         </form>
-
-        {/* Footer de Seguridad */}
-        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span>Acceso seguro • La Finca Choclos y Asados</span>
-        </div>
       </div>
     </div>
   );

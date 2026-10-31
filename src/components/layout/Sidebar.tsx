@@ -72,58 +72,6 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-/**
- * Logo Oficial de La Finca en formato vectorial SVG
- * Tomado de: E:\RESTAURANTE LA FINCA\SVG\Recurso 1.svg
- */
-function LaFincaLogoSvg({ className = "w-full h-auto" }: { className?: string }) {
-  return (
-    <svg
-      id="Capa_2"
-      data-name="Capa 2"
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 447.88 120.59"
-      className={className}
-      aria-label="La Finca Choclos y Asados"
-    >
-      <defs>
-        <style>{`
-          .finca-svg-sub {
-            font-family: 'Century Gothic', CenturyGothic-Bold, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 35.74px;
-            font-weight: 700;
-            letter-spacing: .15em;
-            fill: #e2e8f0;
-          }
-          .finca-svg-title {
-            font-family: 'Acumin Variable Concept', AcuminConcept-Black, 'Century Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 94.22px;
-            font-variation-settings: 'wght' 800, 'wdth' 100, 'slnt' 0;
-            font-weight: 800;
-            fill: #ffffff;
-          }
-          .finca-svg-l { letter-spacing: .03em; }
-          .finca-svg-f { letter-spacing: 0em; }
-          .finca-svg-c { letter-spacing: 0em; }
-        `}</style>
-      </defs>
-      <g id="Capa_1-2" data-name="Capa 1">
-        <text className="finca-svg-title" transform="translate(0 80.18)">
-          <tspan className="finca-svg-l" x="0" y="0">L</tspan>
-          <tspan x="60.39" y="0">A </tspan>
-          <tspan className="finca-svg-f" x="148.67" y="0">F</tspan>
-          <tspan x="206.71" y="0">IN</tspan>
-          <tspan className="finca-svg-c" x="311.57" y="0">C</tspan>
-          <tspan x="379.5" y="0">A</tspan>
-        </text>
-        <text className="finca-svg-sub" transform="translate(5.84 109.63)">
-          <tspan x="0" y="0">CHOCLOS Y ASADOS</tspan>
-        </text>
-      </g>
-    </svg>
-  );
-}
-
 export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen, closeSidebar } = useSidebar();
@@ -175,9 +123,14 @@ export default function Sidebar() {
               href="/"
               onClick={closeSidebar}
               title="Ir a Principal"
-              className="flex items-center select-none hover:opacity-90 transition-opacity w-[118px] max-w-[125px]"
+              className="flex items-center select-none hover:opacity-90 transition-opacity"
             >
-              <LaFincaLogoSvg className="w-full h-auto" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/rf2.png"
+                alt="La Finca Choclos y Asados"
+                className="h-7 w-auto object-contain max-w-[120px]"
+              />
             </Link>
           </div>
 

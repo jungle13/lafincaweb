@@ -57,16 +57,23 @@ export default function AccesoCajeroPage() {
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 overflow-y-auto">
       <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
         {/* Cabecera */}
-        <div className="bg-slate-900 p-6 text-white text-center space-y-2">
-          <div className="w-12 h-12 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center mx-auto text-orange-400">
-            <Wallet className="w-6 h-6" />
+        <div className="bg-[#050811] p-6 text-white text-center space-y-3">
+          <div className="flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/rf2.png"
+              alt="La Finca Choclos y Asados"
+              className="h-10 w-auto object-contain mx-auto filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
+            />
           </div>
-          <h1 className="text-lg font-bold tracking-tight">
-            Portal de Caja Menor • La Finca
-          </h1>
-          <p className="text-xs text-slate-400">
-            Ingresa tu usuario y contraseña para abrir o consultar tu Flujo de Caja del día
-          </p>
+          <div>
+            <h1 className="text-base font-bold tracking-tight text-white">
+              Portal de Caja Menor
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Ingresa tu usuario y contraseña para abrir o consultar tu Flujo de Caja del día
+            </p>
+          </div>
         </div>
 
         {/* Formulario */}
