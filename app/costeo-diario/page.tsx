@@ -1341,10 +1341,96 @@ export default function CosteoDiarioPage() {
   const [selectedMonth, setSelectedMonth] = useState<'2026-10' | '2026-09'>('2026-10');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Modal State
+  // Modal State (+ Nueva Hoja de Costeo)
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newDate, setNewDate] = useState('2026-10-24');
-  const [newCarryOver, setNewCarryOver] = useState(true);
+  const [newDate, setNewDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [importCocinaCierre, setImportCocinaCierre] = useState(true);
+  const [importBodegaCierre, setImportBodegaCierre] = useState(true);
+  const [prevCierreStatus, setPrevCierreStatus] = useState<{
+    prevDate: string;
+    hasCocinaCierre: boolean;
+    cocinaCount: number;
+    hasBodegaCierre: boolean;
+    bodegaCount: number;
+    loading: boolean;
+  }>({
+    prevDate: '',
+    hasCocinaCierre: false,
+    cocinaCount: 0,
+    hasBodegaCierre: false,
+    bodegaCount: 0,
+    loading: false
+  });
+
+  // Detección condicional de cierres del día anterior para el modal de nueva hoja
+  useEffect(() => {
+    if (!isModalOpen || !newDate) return;
+
+    let isMounted = true;
+    const [y, m, d] = newDate.split('-').map(Number);
+    const prevDt = new Date(Date.UTC(y, m - 1, d));
+    prevDt.setUTCDate(prevDt.getUTCDate() - 1);
+    const prevDateStr = prevDt.toISOString().split('T')[0];
+
+    // Chequeo preliminar inmediato en el estado sheets en memoria
+    const prevSheet = sheets.find(s => s.dateStr === prevDateStr);
+    let initialCocinaCount = 0;
+    let initialBodegaCount = 0;
+    if (prevSheet) {
+      prevSheet.categories.forEach(cat => {
+        cat.items.forEach(it => {
+          if (it.registros?.some(r => r.tipo === 'COCINA_CIERRE' && Number(r.cantidad) > 0)) {
+            initialCocinaCount++;
+          }
+          if (it.registros?.some(r => r.tipo === 'BODEGA_CIERRE' && Number(r.cantidad) > 0)) {
+            initialBodegaCount++;
+          }
+        });
+      });
+    }
+
+    setPrevCierreStatus({
+      prevDate: prevDateStr,
+      hasCocinaCierre: initialCocinaCount > 0,
+      cocinaCount: initialCocinaCount,
+      hasBodegaCierre: initialBodegaCount > 0,
+      bodegaCount: initialBodegaCount,
+      loading: true
+    });
+    setImportCocinaCierre(initialCocinaCount > 0);
+    setImportBodegaCierre(initialBodegaCount > 0);
+
+    // Consulta en vivo al backend para validar con base de datos
+    fetch(`/api/costeo-diario?checkPrevCierresFor=${newDate}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted) return;
+        const hasCocina = Boolean(data.hasCocinaCierre);
+        const hasBodega = Boolean(data.hasBodegaCierre);
+        setPrevCierreStatus({
+          prevDate: data.prevDate || prevDateStr,
+          hasCocinaCierre: hasCocina,
+          cocinaCount: data.cocinaCierreCount || 0,
+          hasBodegaCierre: hasBodega,
+          bodegaCount: data.bodegaCierreCount || 0,
+          loading: false
+        });
+        setImportCocinaCierre(hasCocina);
+        setImportBodegaCierre(hasBodega);
+      })
+      .catch(err => {
+        if (!isMounted) return;
+        console.error('Error al verificar cierres anteriores:', err);
+        setPrevCierreStatus(prev => ({ ...prev, loading: false }));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isModalOpen, newDate, sheets]);
 
   // Modal para Limpiar y Resetear Hoja
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
@@ -1354,11 +1440,15 @@ export default function CosteoDiarioPage() {
     movimientos: boolean;
     devoluciones: boolean;
     cierre: boolean;
+    bodegaApertura: boolean;
+    bodegaCierre: boolean;
   }>({
     apertura: true,
     movimientos: true,
     devoluciones: true,
     cierre: true,
+    bodegaApertura: true,
+    bodegaCierre: true,
   });
 
   // Modos operativos y switches de inclusión
@@ -1972,7 +2062,7 @@ export default function CosteoDiarioPage() {
   const rendimientoDia = ventasDia - consumoReal;
   const foodCostPct = ventasDia > 0 ? (consumoReal / ventasDia) * 100 : 0;
 
-  // Estadísticas detalladas para el modal de limpiar hojas
+  // Estadísticas detalladas para el modal de limpiar hojas (Cocina y Bodega)
   const clearSheetStats = useMemo(() => {
     if (!activeSheet) {
       return {
@@ -1980,6 +2070,8 @@ export default function CosteoDiarioPage() {
         movimientos: { count: 0, total: 0 },
         devoluciones: { count: 0, total: 0 },
         cierre: { count: 0, total: 0 },
+        bodegaApertura: { count: 0, total: 0 },
+        bodegaCierre: { count: 0, total: 0 },
       };
     }
 
@@ -1987,6 +2079,8 @@ export default function CosteoDiarioPage() {
     let movCount = 0, movTotal = 0;
     let devCount = 0, devTotal = 0;
     let cieCount = 0, cieTotal = 0;
+    let bodApCount = 0, bodApTotal = 0;
+    let bodCieCount = 0, bodCieTotal = 0;
 
     activeSheet.categories.forEach(cat => {
       cat.items.forEach(it => {
@@ -2003,6 +2097,12 @@ export default function CosteoDiarioPage() {
           } else if (r.tipo === 'COCINA_CIERRE') {
             cieCount++;
             cieTotal += Number(r.total || 0);
+          } else if (r.tipo === 'BODEGA_APERTURA') {
+            bodApCount++;
+            bodApTotal += Number(r.total || 0);
+          } else if (r.tipo === 'BODEGA_CIERRE') {
+            bodCieCount++;
+            bodCieTotal += Number(r.total || 0);
           }
         });
       });
@@ -2013,6 +2113,8 @@ export default function CosteoDiarioPage() {
       movimientos: { count: movCount, total: Math.round(movTotal) },
       devoluciones: { count: devCount, total: Math.round(devTotal) },
       cierre: { count: cieCount, total: Math.round(cieTotal) },
+      bodegaApertura: { count: bodApCount, total: Math.round(bodApTotal) },
+      bodegaCierre: { count: bodCieCount, total: Math.round(bodCieTotal) },
     };
   }, [activeSheet]);
 
@@ -2075,7 +2177,8 @@ export default function CosteoDiarioPage() {
           action: 'CREATE_SHEET',
           fecha: newDate,
           titulo: formatDateToTitle(newDate),
-          importCarryOver: newCarryOver
+          importCocinaCierre: prevCierreStatus.hasCocinaCierre && importCocinaCierre,
+          importBodegaCierre: prevCierreStatus.hasBodegaCierre && importBodegaCierre
         })
       });
 
@@ -2313,6 +2416,8 @@ export default function CosteoDiarioPage() {
     if (clearSheetsSelection.movimientos) selectedTipos.push('TRASLADO');
     if (clearSheetsSelection.devoluciones) selectedTipos.push('DEVOLUCION');
     if (clearSheetsSelection.cierre) selectedTipos.push('CIERRE');
+    if (clearSheetsSelection.bodegaApertura) selectedTipos.push('BODEGA_APERTURA');
+    if (clearSheetsSelection.bodegaCierre) selectedTipos.push('BODEGA_CIERRE');
 
     if (selectedTipos.length === 0) {
       alert('Por favor selecciona al menos una hoja para limpiar.');
@@ -3747,18 +3852,65 @@ Trucha 8`;
                 </div>
               </div>
 
-              {/* Checkbox Importar Cierre */}
-              <label className="flex items-start gap-2 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={newCarryOver}
-                  onChange={(e) => setNewCarryOver(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                />
-                <span className="text-xs text-slate-600 leading-tight">
-                  Importar existencias de cierre de cocina como inventario que amanece
-                </span>
-              </label>
+              {/* Sección Condicional: Importar Cierres del Día Anterior */}
+              <div className="space-y-2 pt-1 border-t border-slate-100">
+                {prevCierreStatus.loading && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500 py-1">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
+                    <span>Verificando cierres del día anterior ({prevCierreStatus.prevDate})...</span>
+                  </div>
+                )}
+
+                {/* Checkbox 1: Importar Cierre de Cocina (Solo si hay cierre de cocina registrado en el día anterior) */}
+                {!prevCierreStatus.loading && prevCierreStatus.hasCocinaCierre && (
+                  <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg bg-orange-50/70 border border-orange-200/80 hover:bg-orange-100/60 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={importCocinaCierre}
+                      onChange={(e) => setImportCocinaCierre(e.target.checked)}
+                      className="mt-0.5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                    />
+                    <div className="text-xs select-none">
+                      <span className="font-semibold text-slate-900 block leading-tight">
+                        Importar cierre de cocina del día anterior ({prevCierreStatus.prevDate})
+                      </span>
+                      <span className="text-[11px] text-slate-600 block mt-0.5 leading-snug">
+                        Ingresa como inventario que amanece en cocina ({prevCierreStatus.cocinaCount} insumos contados).
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                {/* Checkbox 2: Importar Cierre de Bodega (Solo si hay insumos contados en cierre de bodega del día anterior) */}
+                {!prevCierreStatus.loading && prevCierreStatus.hasBodegaCierre && (
+                  <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200/80 hover:bg-emerald-100/60 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={importBodegaCierre}
+                      onChange={(e) => setImportBodegaCierre(e.target.checked)}
+                      className="mt-0.5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <div className="text-xs select-none">
+                      <span className="font-semibold text-slate-900 block leading-tight">
+                        Importar cierre de bodega del día anterior ({prevCierreStatus.prevDate})
+                      </span>
+                      <span className="text-[11px] text-slate-600 block mt-0.5 leading-snug">
+                        Ingresa como inventario inicial en bodega ({prevCierreStatus.bodegaCount} insumos contados).
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                {/* Mensaje informativo si el día anterior NO tiene ningún cierre diligenciado */}
+                {!prevCierreStatus.loading && !prevCierreStatus.hasCocinaCierre && !prevCierreStatus.hasBodegaCierre && (
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                    <p className="font-semibold text-slate-700">Sin inventario de cierre previo</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      El día inmediatamente anterior ({prevCierreStatus.prevDate}) no tiene inventario de cierre de cocina ni de bodega diligenciado. La nueva hoja iniciará sin existencias arrastradas.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* Botones de Acción */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
@@ -3820,7 +3972,7 @@ Trucha 8`;
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setClearSheetsSelection({ apertura: true, movimientos: true, devoluciones: true, cierre: true })}
+                  onClick={() => setClearSheetsSelection({ apertura: true, movimientos: true, devoluciones: true, cierre: true, bodegaApertura: true, bodegaCierre: true })}
                   className="text-[11px] text-blue-600 hover:text-blue-800 font-medium cursor-pointer hover:underline"
                 >
                   Seleccionar todas
@@ -3828,7 +3980,7 @@ Trucha 8`;
                 <span className="text-slate-300">|</span>
                 <button
                   type="button"
-                  onClick={() => setClearSheetsSelection({ apertura: false, movimientos: false, devoluciones: false, cierre: false })}
+                  onClick={() => setClearSheetsSelection({ apertura: false, movimientos: false, devoluciones: false, cierre: false, bodegaApertura: false, bodegaCierre: false })}
                   className="text-[11px] text-slate-500 hover:text-slate-700 font-medium cursor-pointer hover:underline"
                 >
                   Deseleccionar todas
@@ -3949,6 +4101,62 @@ Trucha 8`;
                   </span>
                 </div>
               </label>
+
+              {/* 5. Bodega Apertura */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                clearSheetsSelection.bodegaApertura
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={clearSheetsSelection.bodegaApertura}
+                    onChange={(e) => setClearSheetsSelection(prev => ({ ...prev, bodegaApertura: e.target.checked }))}
+                    className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Bodega Apertura</span>
+                    <span className="text-[10px] text-slate-500">Inventario inicial con el que amaneció bodega general</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.bodegaApertura.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.bodegaApertura.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 6. Bodega Cierre */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                clearSheetsSelection.bodegaCierre
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={clearSheetsSelection.bodegaCierre}
+                    onChange={(e) => setClearSheetsSelection(prev => ({ ...prev, bodegaCierre: e.target.checked }))}
+                    className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Bodega Cierre</span>
+                    <span className="text-[10px] text-slate-500">Inventario físico final de cierre de bodega general</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.bodegaCierre.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.bodegaCierre.count} registros
+                  </span>
+                </div>
+              </label>
             </div>
 
             {/* Aviso de seguridad */}
@@ -3980,7 +4188,7 @@ Trucha 8`;
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>
-                      {Object.values(clearSheetsSelection).filter(Boolean).length === 4
+                      {Object.values(clearSheetsSelection).filter(Boolean).length === 6
                         ? 'Limpiar todas las hojas'
                         : `Limpiar (${Object.values(clearSheetsSelection).filter(Boolean).length}) seleccionadas`}
                     </span>

@@ -1,0 +1,101 @@
+Carbón vegetal para asador (Bulto)	2	Bulto
+Papa capira (Kilo)	48.9	Kg
+Plátano verde	30.5	Kg
+Plátano maduro	84.0	Kg
+Cebolla cabezona blanca	5.2	Kg
+Papa criolla / amarilla	7.1	Kg
+Pepino cohombro	4.3	Kg
+Repollo morado	1	Kg
+Papa pollera / pastusa	21.9	Kg
+Limón Tahití (Kilo)	65.5	Kg
+Cebolla larga / junca	15	Kg (Atado)
+Yuca	20	Kg
+Lechuga Batavia	24	Kg
+Zanahoria	8	Kg
+Cilantro	3	Atado
+Cimarrón	5	Atado
+Tomillo	1	Atado
+Pimentón rojo	4.1	Kg
+Tomate chonto	12.1	Kg
+Mazorca choclo	6.1	Kg
+Tomate milano	3.7	Kg
+Arracacha	1	Kg
+Ajo pelado institucional	4	Kg
+Huevos frescos AA	180	Und
+Milo en polvo	1	Paquete
+Chocolate de mesa	0.5	Libra
+Azúcar blanca institucional	37.8	Kg
+Sal refinada institucional	27.1	Kg
+Panela	148	Und
+Pasta La Muñeca	1	Paquete
+Lenteja importada seleccionada	5	Libra
+Zumo de limón en tarro	4	Frasco (1000 ml)
+Limón en polvo	2	Paquete
+Aceite vegetal fritura (Bidón 20L)	10	Bidón (20 Litros)
+Fríjol cargamanto	20	Kg
+Maicena fécula de maíz	1	Libra
+Pimienta molida	1	Libra
+Arroz blanco (Kilo)	150	Kg
+Leche entera institucional (1100 ml)	45	Bolsa (1.1 Litros)
+Café molido tradicional (x Libra)	3	Libra
+Ají pasta / tubos	3	Und
+Salsa de tomate en sobre (x 120)	8	Paquete (120 Und)
+Azúcar en sobre (Paq x 200)	3	Paquete (200 Und)
+Vinagre blanco	2	Frasco (1000 ml)
+Salsa negra	2	Galón
+Humo líquido	2	Galón
+Salsa Mostaza institucional (4000g)	2	Galón
+Salsa Mayonesa institucional (4000g)	2	Galón
+Salsa Tomate institucional (4000g)	1	Galón
+Acento / Aji-no-moto	3	Libra
+Harina para apanar	26	Kg
+Harina de trigo	12	Libra
+Color Azafrán condimento	1	Paquete (250g)
+Aromática surtida sobre	2	Caja
+Tarrina 14 oz con tapa	3	Paquete
+Papel higiénico institucional jumbo 250m	6	Rollo (250m)
+Bolsa manigueta T40	4	Paquete (100 Und)
+Bolsa manigueta T25	7	Paquete (100 Und)
+Bolsa manigueta T15	2	Paquete (100 Und)
+Cubierto grande x 3 (Tenedor/Cuchillo/Serv)	4	Paquete / Set
+Vaso plástico 3.5 oz	5	Paquete (50 Und)
+Tapa vaso 3.5 oz	5	Paquete (50 Und)
+Vaso plástico Tami 12 oz	11	Paquete (50 Und)
+Tapa vaso Tami 12 oz	6	Paquete (50 Und)
+Copa degustación 1/2 oz con tapa	9	Paquete (50 Und)
+Toalla de mano Z Natural	15	Paquete (150 Und)
+Bolsa tina x 100	1	Bolsa
+Rollos de papel térmico POS	36	Und
+Vaso plástico 9 oz vacón	53	Paquete (50 Und)
+Portacomida Darnel T.1	80	Und
+Portacomida térmico J1	200	Und
+Portacomida térmico J2	400	Und
+Portacomida térmico C1	300	Und
+Portacomida térmico Bananas	7	Paq
+Contenedor térmico sopero 8 oz	16	Paquete (25 Und)
+Contenedor térmico sopero 16 oz	21	Paquete (25 Und)
+Contenedor P3 negro con tapa	50	Und
+Bolsa #2 verde	10	Und
+Bolsa #2 blanca	10	Und
+Bolsa #2 negra	20	Und
+Bolsa basura industrial 90x120	30	Und
+Esponjilla Sabra verde	14	Und
+Esponjilla brillo industrial	3	Paquete (3 Und)
+Pato limpiador tanque azul	5	Und
+Servilletas Familia Tork	22	Paquete
+Servilletas dispensador 1 a 1 largas	12	Paquete (100 Und)
+Cloro / Límpido desinfectante galón	1	Galón
+Desengrasante industrial Tak Tax	3	Galón
+Alcohol antiséptico galón	1	Galón
+Ambientador concentrado canela	1	Galón
+Jabón de manos líquido institucional	1	Galón
+Desmanchador industrial	2	Galón
+Jabón en polvo Dersa limón (1000g)	8	Kilo (1000g)
+Cinta impronta / embalaje	11	Und
+Palillos para dientes (Caja)	11	Caja
+Servilletas 44 x 44	2	Paquete
+Guantes desechables (Caja)	1	Caja
+Tapabocas desechables (Caja)	1	Caja
+Pitillo forrado bio	0.5	Und
+Gorro oruga / cofia desechable	2	Paquete
+Resma de papel tamaño carta	1	Paquete

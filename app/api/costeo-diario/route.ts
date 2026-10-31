@@ -144,6 +144,62 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get('fecha');
+    const checkPrevFor = searchParams.get('checkPrevCierresFor');
+
+    // Verificación condicional rápida de cierres del día inmediatamente anterior
+    if (checkPrevFor) {
+      const [y, m, d] = checkPrevFor.split('-').map(Number);
+      const prevDt = new Date(Date.UTC(y, m - 1, d));
+      prevDt.setUTCDate(prevDt.getUTCDate() - 1);
+      const prevDate = prevDt.toISOString().split('T')[0];
+
+      // 1. Comprobar registros_costeo_cocina
+      const { data: regRows } = await supabase
+        .from('registros_costeo_cocina')
+        .select('tipo, cantidad')
+        .eq('fecha', prevDate)
+        .in('tipo', ['CIERRE', 'BODEGA_CIERRE'])
+        .gt('cantidad', 0);
+
+      let cocinaCount = (regRows || []).filter(r => r.tipo === 'CIERRE').length;
+      let bodegaCount = (regRows || []).filter(r => r.tipo === 'BODEGA_CIERRE').length;
+
+      // 2. Si no hay en registros_costeo_cocina, verificar conteos_fisicos
+      if (cocinaCount === 0 || bodegaCount === 0) {
+        const { data: conteos } = await supabase
+          .from('conteos_fisicos')
+          .select('id, tipo')
+          .eq('fecha', prevDate)
+          .in('tipo', ['COCINA_CIERRE', 'CIERRE', 'BODEGA_CIERRE', 'CIERRE_BODEGA']);
+
+        if (conteos && conteos.length > 0) {
+          for (const c of conteos) {
+            const isCocina = c.tipo === 'COCINA_CIERRE' || c.tipo === 'CIERRE';
+            const isBodega = c.tipo === 'BODEGA_CIERRE' || c.tipo === 'CIERRE_BODEGA';
+
+            if ((isCocina && cocinaCount === 0) || (isBodega && bodegaCount === 0)) {
+              const { count } = await supabase
+                .from('conteos_fisicos_detalle')
+                .select('*', { count: 'exact', head: true })
+                .eq('conteo_id', c.id)
+                .gt('cantidad', 0);
+
+              if (isCocina && cocinaCount === 0) cocinaCount = count || 0;
+              if (isBodega && bodegaCount === 0) bodegaCount = count || 0;
+            }
+          }
+        }
+      }
+
+      return NextResponse.json({
+        targetDate: checkPrevFor,
+        prevDate,
+        hasCocinaCierre: cocinaCount > 0,
+        cocinaCierreCount: cocinaCount,
+        hasBodegaCierre: bodegaCount > 0,
+        bodegaCierreCount: bodegaCount
+      });
+    }
 
     // 1. Fetch catalog in parallel with headers
     let headerQuery = supabase
@@ -367,6 +423,8 @@ export async function POST(request: Request) {
       bulkConteos,
       action,
       importCarryOver,
+      importCocinaCierre,
+      importBodegaCierre,
       tipos,
       targetTypes
     } = body;
@@ -382,7 +440,7 @@ export async function POST(request: Request) {
       .select('id, nombre, categoria, costo_unitario_kg');
     const catalog = catInsumos || [];
 
-    // 0. Manejo de Creación de Hoja de Costeo e Importación de Existencias
+    // 0. Manejo de Creación de Hoja de Costeo e Importación Condicional de Existencias (Cocina y Bodega)
     if (action === 'CREATE_SHEET') {
       const { data: existingSheet } = await supabase
         .from('costeo_diario')
@@ -407,22 +465,28 @@ export async function POST(request: Request) {
           });
       }
 
-      let importedItemsCount = 0;
-      let sourceDate = '';
+      // Calcular el día inmediatamente anterior
+      const [y, m, d] = targetDate.split('-').map(Number);
+      const prevDt = new Date(Date.UTC(y, m - 1, d));
+      prevDt.setUTCDate(prevDt.getUTCDate() - 1);
+      const prevDate = prevDt.toISOString().split('T')[0];
 
-      if (importCarryOver) {
-        // Buscar registros de CIERRE en la fecha inmediatamente anterior
-        const { data: prevCierreRows } = await supabase
+      let importedCocinaCount = 0;
+      let importedBodegaCount = 0;
+
+      const shouldImportCocina = Boolean(importCocinaCierre !== undefined ? importCocinaCierre : importCarryOver);
+      const shouldImportBodega = Boolean(importBodegaCierre);
+
+      // 1. Importar Cierre de Cocina del día anterior como APERTURA (Inventario Cocina Amanece)
+      if (shouldImportCocina) {
+        const { data: prevCocinaRows } = await supabase
           .from('registros_costeo_cocina')
           .select('*')
+          .eq('fecha', prevDate)
           .eq('tipo', 'CIERRE')
-          .lt('fecha', targetDate)
-          .order('fecha', { ascending: false });
+          .gt('cantidad', 0);
 
-        if (prevCierreRows && prevCierreRows.length > 0) {
-          sourceDate = prevCierreRows[0].fecha;
-          const rowsFromPrev = prevCierreRows.filter(r => r.fecha === sourceDate);
-
+        if (prevCocinaRows && prevCocinaRows.length > 0) {
           // Eliminar si ya existía apertura en targetDate para evitar duplicar
           await supabase
             .from('registros_costeo_cocina')
@@ -430,24 +494,161 @@ export async function POST(request: Request) {
             .eq('fecha', targetDate)
             .eq('tipo', 'APERTURA');
 
-          const newAperturaRows = rowsFromPrev.map((r: any) => ({
+          const newAperturaRows = prevCocinaRows.map((r: any) => ({
             fecha: targetDate,
             tipo: 'APERTURA',
             insumo_id: r.insumo_id,
             nombre_insumo: r.nombre_insumo,
             categoria: r.categoria,
             cantidad: r.cantidad,
-            unidad: r.unidad,
+            unidad: r.unidad || 'Kg',
             costo_unitario: r.costo_unitario,
-            valor_total: r.valor_total,
-            observaciones: `Inventario amanece importado del cierre ${sourceDate}`
+            valor_total: r.valor_total || (Number(r.cantidad || 0) * Number(r.costo_unitario || 0)),
+            observaciones: `Inventario amanece importado del cierre de cocina ${prevDate}`
           }));
 
           if (newAperturaRows.length > 0) {
             await supabase
               .from('registros_costeo_cocina')
               .insert(newAperturaRows);
-            importedItemsCount = newAperturaRows.length;
+            importedCocinaCount = newAperturaRows.length;
+          }
+        } else {
+          // Fallback a conteos_fisicos si no está en registros_costeo_cocina
+          const { data: conteoCocina } = await supabase
+            .from('conteos_fisicos')
+            .select('id')
+            .eq('fecha', prevDate)
+            .in('tipo', ['COCINA_CIERRE', 'CIERRE'])
+            .maybeSingle();
+
+          if (conteoCocina) {
+            const { data: detalles } = await supabase
+              .from('conteos_fisicos_detalle')
+              .select('*')
+              .eq('conteo_id', conteoCocina.id)
+              .gt('cantidad', 0);
+
+            if (detalles && detalles.length > 0) {
+              await supabase
+                .from('registros_costeo_cocina')
+                .delete()
+                .eq('fecha', targetDate)
+                .eq('tipo', 'APERTURA');
+
+              const newAperturaRows = detalles.map((dt: any) => {
+                const catItem = catalog.find((c: any) => c.nombre.toLowerCase() === (dt.nombre_insumo || '').toLowerCase());
+                const unitPrice = Number(dt.costo_unitario || catItem?.costo_unitario_kg || 0);
+                const qty = Number(dt.cantidad || 0);
+                return {
+                  fecha: targetDate,
+                  tipo: 'APERTURA',
+                  insumo_id: dt.insumo_id || catItem?.id || null,
+                  nombre_insumo: dt.nombre_insumo,
+                  categoria: dt.categoria || catItem?.categoria || 'Verduras e Insumos',
+                  cantidad: qty,
+                  unidad: dt.unidad || 'Kg',
+                  costo_unitario: unitPrice,
+                  valor_total: Number(dt.valor_total || (qty * unitPrice)),
+                  observaciones: `Inventario amanece importado del cierre físico cocina ${prevDate}`
+                };
+              });
+
+              if (newAperturaRows.length > 0) {
+                await supabase
+                  .from('registros_costeo_cocina')
+                  .insert(newAperturaRows);
+                importedCocinaCount = newAperturaRows.length;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Importar Cierre de Bodega del día anterior como BODEGA_APERTURA
+      if (shouldImportBodega) {
+        const { data: prevBodegaRows } = await supabase
+          .from('registros_costeo_cocina')
+          .select('*')
+          .eq('fecha', prevDate)
+          .eq('tipo', 'BODEGA_CIERRE')
+          .gt('cantidad', 0);
+
+        if (prevBodegaRows && prevBodegaRows.length > 0) {
+          // Eliminar si ya existía bodega apertura en targetDate para evitar duplicar
+          await supabase
+            .from('registros_costeo_cocina')
+            .delete()
+            .eq('fecha', targetDate)
+            .eq('tipo', 'BODEGA_APERTURA');
+
+          const newBodegaAperturaRows = prevBodegaRows.map((r: any) => ({
+            fecha: targetDate,
+            tipo: 'BODEGA_APERTURA',
+            insumo_id: r.insumo_id,
+            nombre_insumo: r.nombre_insumo,
+            categoria: r.categoria,
+            cantidad: r.cantidad,
+            unidad: r.unidad || 'Kg',
+            costo_unitario: r.costo_unitario,
+            valor_total: r.valor_total || (Number(r.cantidad || 0) * Number(r.costo_unitario || 0)),
+            observaciones: `Inventario bodega amanece importado del cierre de bodega ${prevDate}`
+          }));
+
+          if (newBodegaAperturaRows.length > 0) {
+            await supabase
+              .from('registros_costeo_cocina')
+              .insert(newBodegaAperturaRows);
+            importedBodegaCount = newBodegaAperturaRows.length;
+          }
+        } else {
+          // Fallback a conteos_fisicos si no está en registros_costeo_cocina
+          const { data: conteoBodega } = await supabase
+            .from('conteos_fisicos')
+            .select('id')
+            .eq('fecha', prevDate)
+            .in('tipo', ['BODEGA_CIERRE', 'CIERRE_BODEGA'])
+            .maybeSingle();
+
+          if (conteoBodega) {
+            const { data: detalles } = await supabase
+              .from('conteos_fisicos_detalle')
+              .select('*')
+              .eq('conteo_id', conteoBodega.id)
+              .gt('cantidad', 0);
+
+            if (detalles && detalles.length > 0) {
+              await supabase
+                .from('registros_costeo_cocina')
+                .delete()
+                .eq('fecha', targetDate)
+                .eq('tipo', 'BODEGA_APERTURA');
+
+              const newBodegaAperturaRows = detalles.map((dt: any) => {
+                const catItem = catalog.find((c: any) => c.nombre.toLowerCase() === (dt.nombre_insumo || '').toLowerCase());
+                const unitPrice = Number(dt.costo_unitario || catItem?.costo_unitario_kg || 0);
+                const qty = Number(dt.cantidad || 0);
+                return {
+                  fecha: targetDate,
+                  tipo: 'BODEGA_APERTURA',
+                  insumo_id: dt.insumo_id || catItem?.id || null,
+                  nombre_insumo: dt.nombre_insumo,
+                  categoria: dt.categoria || catItem?.categoria || 'Verduras e Insumos',
+                  cantidad: qty,
+                  unidad: dt.unidad || 'Kg',
+                  costo_unitario: unitPrice,
+                  valor_total: Number(dt.valor_total || (qty * unitPrice)),
+                  observaciones: `Inventario bodega amanece importado del cierre físico bodega ${prevDate}`
+                };
+              });
+
+              if (newBodegaAperturaRows.length > 0) {
+                await supabase
+                  .from('registros_costeo_cocina')
+                  .insert(newBodegaAperturaRows);
+                importedBodegaCount = newBodegaAperturaRows.length;
+              }
+            }
           }
         }
       }
@@ -457,8 +658,11 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         fecha: targetDate,
-        importedItemsCount,
-        sourceDate
+        prevDate,
+        importedCocinaCount,
+        importedBodegaCount,
+        importedItemsCount: importedCocinaCount + importedBodegaCount,
+        sourceDate: prevDate
       });
     }
 
@@ -480,6 +684,10 @@ export async function POST(request: Request) {
             dbTipos.push('DEVOLUCION');
           } else if (upper === 'CIERRE' || upper === 'COCINA_CIERRE') {
             dbTipos.push('CIERRE');
+          } else if (upper === 'BODEGA_APERTURA' || upper === 'BODEGA_INICIAL') {
+            dbTipos.push('BODEGA_APERTURA');
+          } else if (upper === 'BODEGA_CIERRE' || upper === 'CIERRE_BODEGA') {
+            dbTipos.push('BODEGA_CIERRE');
           } else {
             dbTipos.push(upper);
           }
@@ -495,6 +703,27 @@ export async function POST(request: Request) {
           console.error('Error al eliminar registros por tipo:', delErr);
           throw delErr;
         }
+
+        // Si se limpió APERTURA, CIERRE, BODEGA_APERTURA o BODEGA_CIERRE, limpiar también conteos_fisicos asociados
+        const conteoTipos: string[] = [];
+        if (dbTipos.includes('APERTURA')) conteoTipos.push('COCINA_APERTURA', 'APERTURA');
+        if (dbTipos.includes('CIERRE')) conteoTipos.push('COCINA_CIERRE', 'CIERRE');
+        if (dbTipos.includes('BODEGA_APERTURA')) conteoTipos.push('BODEGA_APERTURA');
+        if (dbTipos.includes('BODEGA_CIERRE')) conteoTipos.push('BODEGA_CIERRE', 'CIERRE_BODEGA');
+
+        if (conteoTipos.length > 0) {
+          const { data: cList } = await supabase
+            .from('conteos_fisicos')
+            .select('id')
+            .eq('fecha', targetDate)
+            .in('tipo', conteoTipos);
+
+          if (cList && cList.length > 0) {
+            const cIds = cList.map((c: any) => c.id);
+            await supabase.from('conteos_fisicos_detalle').delete().in('conteo_id', cIds);
+            await supabase.from('conteos_fisicos').delete().in('id', cIds);
+          }
+        }
       } else {
         // Si no se especificaron tipos, eliminar todos los registros de la fecha
         const { error: delAllErr } = await supabase
@@ -505,6 +734,18 @@ export async function POST(request: Request) {
         if (delAllErr) {
           console.error('Error al vaciar hoja completa:', delAllErr);
           throw delAllErr;
+        }
+
+        // Vaciar también todos los conteos físicos de la fecha
+        const { data: cList } = await supabase
+          .from('conteos_fisicos')
+          .select('id')
+          .eq('fecha', targetDate);
+
+        if (cList && cList.length > 0) {
+          const cIds = cList.map((c: any) => c.id);
+          await supabase.from('conteos_fisicos_detalle').delete().in('conteo_id', cIds);
+          await supabase.from('conteos_fisicos').delete().in('id', cIds);
         }
       }
 
