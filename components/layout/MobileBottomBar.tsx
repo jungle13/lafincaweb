@@ -7,8 +7,14 @@ import { Home, TrendingUp, FileSpreadsheet, ShoppingCart, Bot } from 'lucide-rea
 export default function MobileBottomBar() {
   const pathname = usePathname();
 
-  // Ocultar barra inferior en /chat-bot para no tapar el teclado ni el input
-  if (pathname?.startsWith('/chat-bot')) return null;
+  // Ocultar barra inferior en /chat-bot y en el Portal Cajero hermético
+  if (
+    pathname?.startsWith('/chat-bot') ||
+    pathname?.startsWith('/libros-apoyo/acceso') ||
+    pathname?.startsWith('/libros-apoyo/cajero')
+  ) {
+    return null;
+  }
 
   const NAV_ITEMS = [
     { label: 'Inicio', href: '/', icon: Home },

@@ -6,6 +6,9 @@ import { usePathname } from 'next/navigation';
 export default function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isChatBot = pathname?.startsWith('/chat-bot') || pathname?.startsWith('/chat_bot');
+  const isCajeroPortal =
+    pathname?.startsWith('/libros-apoyo/acceso') ||
+    pathname?.startsWith('/libros-apoyo/cajero');
 
   // Bloquear completamente el scroll del body y html cuando estamos en el chat-bot
   // para que el scroll del chat sea 100% independiente y nunca mueva la pantalla ni el panel izquierdo
@@ -38,6 +41,14 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
       };
     }
   }, [isChatBot]);
+
+  if (isCajeroPortal) {
+    return (
+      <main className="w-full min-h-screen bg-slate-900 p-0 m-0 overflow-x-hidden min-w-0">
+        {children}
+      </main>
+    );
+  }
 
   if (isChatBot) {
     return (

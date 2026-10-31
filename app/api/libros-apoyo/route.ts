@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         caja_nombre = 'CAJA PRINCIPAL',
         cajero_nombre = 'JOHANNA',
         usuario_username = 'johanna',
-        efectivo_inicial = 200000,
+        efectivo_inicial = 500000,
         tipo_libro = 'CAJA_MENOR',
       } = body;
 
@@ -396,6 +396,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const tipoAjuste = String(body.tipo_ajuste || 'EGRESO').toUpperCase();
+      let finalClasificacion = clasificacion;
+      let finalCategoria = categoria;
+      if (es_ajuste) {
+        if (tipoAjuste === 'INGRESO') {
+          finalClasificacion = 'Ingreso / Entrada';
+          finalCategoria = 'Ajuste Posterior (Ingreso)';
+        } else {
+          finalClasificacion = 'Gasto Operativo';
+          finalCategoria = 'Ajuste Posterior (Egreso)';
+        }
+      }
+      const finalConcepto = es_ajuste
+        ? (concepto.toUpperCase().startsWith('[AJUSTE') ? concepto.trim() : ('[AJUSTE ' + tipoAjuste + '] ' + concepto.trim()))
+        : concepto.trim();
       const diaMes = Number(fecha.split('-')[2] || 1);
       const prefijoAjuste = es_ajuste ? 'AJUSTE CAJA / ' : 'CUADERNO CAJA / ';
       const soporteFinal = soporte_factura || `${prefijoAjuste}${responsable_caja.toUpperCase()}`;
@@ -408,11 +423,9 @@ export async function POST(req: NextRequest) {
           orden_item: 999,
           tipo_libro,
           periodo_id: `per-${fecha.slice(0, 7)}`,
-          clasificacion,
-          categoria,
-          concepto: es_ajuste && !concepto.toUpperCase().startsWith('[AJUSTE]')
-            ? `[AJUSTE] ${concepto.trim()}`
-            : concepto.trim(),
+          clasificacion: finalClasificacion,
+          categoria: finalCategoria,
+          concepto: finalConcepto,
           descripcion_beneficiario: descripcion_beneficiario.trim() || concepto.trim(),
           valor_pagado: Number(valor_pagado || 0),
           soporte_factura: soporteFinal,

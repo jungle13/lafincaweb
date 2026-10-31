@@ -121,6 +121,13 @@ export default function Sidebar() {
     setPendingHref(null);
   }, [pathname]);
 
+  // El Portal Cajero es una interfaz totalmente hermética: no tiene sidebar
+  const isCajeroPortal =
+    pathname?.startsWith('/libros-apoyo/acceso') ||
+    pathname?.startsWith('/libros-apoyo/cajero');
+
+  if (isCajeroPortal) return null;
+
   return (
     <>
       {/* Backdrop con oscurecimiento suave */}

@@ -31,6 +31,13 @@ export default function TopHeader() {
   const { toggleSidebar } = useSidebar();
   const { user, logout } = useAuth();
 
+  // El Portal Cajero es una interfaz totalmente hermética: no muestra header administrativo ni sidebar
+  const isCajeroPortal =
+    pathname?.startsWith('/libros-apoyo/acceso') ||
+    pathname?.startsWith('/libros-apoyo/cajero');
+
+  if (isCajeroPortal) return null;
+
   // Obtener el título según la ruta activa o formatear fallback
   const getModuleTitle = () => {
     if (VIEW_TITLES[pathname]) return VIEW_TITLES[pathname];
@@ -91,9 +98,9 @@ export default function TopHeader() {
             onClick={handleLogout}
             type="button"
             title="Cerrar sesión"
-            className="ml-1 px-2 py-1 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+            className="ml-1 px-2 py-1 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer font-medium"
           >
-            Salir
+            Cerrar Sesión
           </button>
         </div>
       </div>

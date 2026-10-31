@@ -365,8 +365,8 @@ export async function recalcularHojaDiaria(fecha: string, tipoLibro: string = 'C
 
   if (existing) {
     const base = primeraSesion
-      ? Number(primeraSesion.efectivo_inicial || 200000)
-      : Number(existing.base_inicial || 200000);
+      ? Number(primeraSesion.efectivo_inicial || 500000)
+      : Number(existing.base_inicial || 500000);
     const ventaPos = Number(existing.venta_pos_total || ventaPosOficial || existing.venta_efectivo_pos || 0);
     const fisico = ultimaSesion
       ? Number(ultimaSesion.efectivo_cierre || 0)
@@ -396,7 +396,7 @@ export async function recalcularHojaDiaria(fecha: string, tipoLibro: string = 'C
       })
       .eq('id', existing.id);
   } else {
-    const base = primeraSesion ? Number(primeraSesion.efectivo_inicial || 200000) : 200000;
+    const base = primeraSesion ? Number(primeraSesion.efectivo_inicial || 500000) : 500000;
     const ventaPos = ventaPosOficial || totalSalidas;
     const fisico = ultimaSesion ? Number(ultimaSesion.efectivo_cierre || 0) : base;
     const datafonos = sesionesOrdenadas.length > 0 ? sumDatafonosSesiones : 0;
