@@ -139,15 +139,21 @@ export function parseVentasTxtContent(content: string, fileName: string = 'venta
       const nums = trimmed.match(/[\d\.\,]+/g);
 
       if (nums && nums.length >= 7) {
-        const nLen = nums.length;
-        const cant = parseFloat(nums[nLen - 8]?.replace(/,/g, '')) || parseFloat(nums[nLen - 7]?.replace(/,/g, '')) || 0;
-        const vBruta = parseFloat(nums[nLen - 7]?.replace(/,/g, '')) || 0;
-        const desc = parseFloat(nums[nLen - 6]?.replace(/,/g, '')) || 0;
-        const vNeta = parseFloat(nums[nLen - 5]?.replace(/,/g, '')) || 0;
-        const imp = parseFloat(nums[nLen - 4]?.replace(/,/g, '')) || 0;
-        const granTot = parseFloat(nums[nLen - 3]?.replace(/,/g, '')) || 0;
-        const vUnit = parseFloat(nums[nLen - 2]?.replace(/,/g, '')) || 0;
-        const pct = parseFloat(nums[nLen - 1]?.replace(/,/g, '')) || 0;
+        const cleanNumber = (s: string | undefined): number => {
+          if (!s) return 0;
+          const cleanStr = String(s).replace(/\./g, '').replace(',', '.');
+          const n = parseFloat(cleanStr);
+          return isNaN(n) ? 0 : n;
+        };
+
+        const cant = cleanNumber(nums[nums.length - 7]);
+        const vBruta = cleanNumber(nums[nums.length - 6]);
+        const desc = cleanNumber(nums[nums.length - 5]);
+        const vNeta = cleanNumber(nums[nums.length - 4]);
+        const imp = cleanNumber(nums[nums.length - 3]);
+        const granTot = cleanNumber(nums[nums.length - 2]);
+        const vUnit = cleanNumber(nums[nums.length - 1]);
+        const pct = 0;
 
         if (cant > 0 || granTot > 0) {
           const classification = classifyProduct(producto, codigo);
@@ -285,19 +291,19 @@ export async function guardarVentasEnBaseDeDatos(parsed: VentasParsedData) {
   const detallePayload = parsed.items.map((it) => ({
     periodo_id: parsed.periodo_id,
     fecha: parsed.fecha,
-    codigo: it.codigo,
-    producto: it.producto,
+    archivo_origen: parsed.archivo_origen,
+    codigo_producto: it.codigo,
+    nombre_producto: it.producto,
     categoria: it.categoria,
-    subcategoria: it.subcategoria,
-    es_receta: it.es_receta,
-    cantidad: it.cantidad,
-    venta_bruta: it.venta_bruta,
-    descuento: it.descuento,
-    venta_neta: it.venta_neta,
-    impuesto: it.impuesto,
-    gran_total: it.gran_total,
-    valor_unitario: it.valor_unitario,
-    porcentaje_participacion: it.porcentaje_participacion,
+    unidad: 'ud',
+    cantidad: Number(it.cantidad || 0),
+    venta_bruta: Number(it.venta_bruta || 0),
+    descuento: Number(it.descuento || 0),
+    venta_neta: Number(it.venta_neta || 0),
+    impuesto: Number(it.impuesto || 0),
+    gran_total: Number(it.gran_total || 0),
+    valor_unitario: Number(it.valor_unitario || 0),
+    porcentaje_dia: Number(it.porcentaje_participacion || 0),
   }));
 
   const batchSize = 100;

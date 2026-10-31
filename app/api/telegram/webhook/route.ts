@@ -5,6 +5,11 @@ import {
   enviarMensajeTelegram,
   guardarMensajeChat,
 } from '@/services/telegramBotService';
+import {
+  parseVentasTxtContent,
+  guardarVentasEnBaseDeDatos,
+} from '@/services/ventasParserService';
+import { procesarFlujoBorradorTelegram } from '@/services/gestorBorradoresTelegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +77,6 @@ export async function POST(req: Request) {
       const textContent = decoder.decode(arrayBuffer);
 
       // 3. Procesar mediante el servicio unificado de ventas (0 tokens de IA consumidos)
-      const { parseVentasTxtContent, guardarVentasEnBaseDeDatos } = await import('@/services/ventasParserService');
       const parsed = parseVentasTxtContent(textContent, fileName);
       await guardarVentasEnBaseDeDatos(parsed);
 
@@ -125,7 +129,6 @@ Puedo responder consultas operativas en tiempo real:
     }
 
     // Interceptar flujo de borrador interactivo de conteos/insumos (0 tokens LLM)
-    const { procesarFlujoBorradorTelegram } = await import('@/services/gestorBorradoresTelegram');
     const borradorRes = await procesarFlujoBorradorTelegram(chatId, text, sender.first_name);
     if (borradorRes.interceptado && borradorRes.respuesta) {
       await enviarMensajeTelegram(chatId, borradorRes.respuesta);
