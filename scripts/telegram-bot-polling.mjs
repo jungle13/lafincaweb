@@ -574,6 +574,32 @@ async function guardarMensaje(chatId, role, content) {
   } catch (e) {}
 }
 
+async function registrarUsuario(chatId, sender, ultimoTexto) {
+  try {
+    const { data: existing } = await supabase
+      .from('telegram_usuarios')
+      .select('total_mensajes, first_name, last_name, username')
+      .eq('chat_id', chatId)
+      .maybeSingle();
+
+    const count = (existing?.total_mensajes || 0) + 1;
+
+    await supabase.from('telegram_usuarios').upsert(
+      {
+        chat_id: chatId,
+        first_name: sender?.first_name || existing?.first_name || 'Usuario',
+        last_name: sender?.last_name || existing?.last_name || '',
+        username: sender?.username || existing?.username || '',
+        ultimo_mensaje: (ultimoTexto || '').slice(0, 500),
+        ultimo_mensaje_at: new Date().toISOString(),
+        total_mensajes: count,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'chat_id' }
+    );
+  } catch (err) {}
+}
+
 const systemPrompt = `
 Eres el Asistente Operativo oficial de "La Finca" (Asador, Restaurante y Control de Carnes) en Telegram.
 Tu misión es entregar respuestas de negocio ULTRA PUNTUALES, DIRECTAS Y EJECUTIVAS.
@@ -759,7 +785,7 @@ async function ejecutarTool(callName, args) {
   return { error: 'Herramienta desconocida' };
 }
 
-async function procesarMensaje(chatId, texto) {
+async function procesarMensaje(chatId, texto, sender) {
   console.log(`\n📩 Mensaje recibido de [Chat ${chatId}]: "${texto}"`);
 
   if (texto === '/start') {
@@ -831,6 +857,7 @@ Consultas disponibles:
     console.log(`🤖 Respuesta: "${respuestaFinal.slice(0, 100)}..."`);
     await guardarMensaje(chatId, 'user', texto);
     await guardarMensaje(chatId, 'model', respuestaFinal);
+    await registrarUsuario(chatId, sender, respuestaFinal);
     await enviarMensajeTelegram(chatId, respuestaFinal);
   } catch (err) {
     console.error('Error procesando mensaje:', err);
@@ -853,7 +880,9 @@ async function poll() {
           offset = update.update_id + 1;
           const msg = update.message || update.edited_message;
           if (msg && msg.text) {
-            await procesarMensaje(msg.chat.id, msg.text.trim());
+            const sender = msg.from || msg.chat || {};
+            await registrarUsuario(msg.chat.id, sender, msg.text.trim());
+            await procesarMensaje(msg.chat.id, msg.text.trim(), sender);
           }
         }
       }

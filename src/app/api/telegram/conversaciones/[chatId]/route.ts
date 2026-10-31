@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { enviarMensajeTelegram, guardarMensajeChat } from '@/services/telegramBotService';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function GET(req: Request, { params }: { params: { chatId: string } }) {
   try {
@@ -24,17 +26,38 @@ export async function GET(req: Request, { params }: { params: { chatId: string }
       .select('id, chat_id, role, content, created_at')
       .eq('chat_id', chatId)
       .order('created_at', { ascending: true })
-      .limit(200);
+      .limit(300);
 
     if (msgError) {
       return NextResponse.json({ ok: false, error: msgError.message }, { status: 500 });
     }
 
-    return NextResponse.json({
-      ok: true,
-      usuario: usuario || { chat_id: chatId, first_name: 'Usuario', last_name: '' },
-      mensajes: mensajes || [],
-    });
+    const defaultName =
+      chatId === 9126609191 ? 'Arturo' :
+      chatId === 9064833515 ? 'Eliana' :
+      chatId === 6566295870 ? 'César' : 'Usuario';
+
+    const defaultLast =
+      chatId === 9126609191 ? 'Rivera' :
+      chatId === 9064833515 ? 'Garces' :
+      chatId === 6566295870 ? 'Arango' : '';
+
+    return NextResponse.json(
+      {
+        ok: true,
+        usuario: usuario || { chat_id: chatId, first_name: defaultName, last_name: defaultLast, rol: 'Colaborador' },
+        mensajes: mensajes || [],
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }

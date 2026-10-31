@@ -121,7 +121,10 @@ export default function ChatBotPage() {
   const cargarConversaciones = async (silencioso = false) => {
     if (!silencioso) setCargandoLista(true);
     try {
-      const res = await fetch('/api/telegram/conversaciones');
+      const res = await fetch(`/api/telegram/conversaciones?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache' },
+      });
       const data = await res.json();
       if (data.ok && Array.isArray(data.conversaciones)) {
         setConversaciones(data.conversaciones);
@@ -130,10 +133,10 @@ export default function ChatBotPage() {
         const actual = conversacionActivaRef.current;
         if (actual) {
           const chatActualizado = data.conversaciones.find((c: any) => c.chat_id === actual.chat_id);
-          if (chatActualizado && chatActualizado.ultimo_mensaje_at !== actual.ultimo_mensaje_at) {
-            cargarMensajesSilencioso(actual.chat_id);
-            marcarComoVisto(actual.chat_id, chatActualizado.ultimo_mensaje_at);
+          if (chatActualizado) {
+            setConversacionActiva((prev) => (prev ? { ...prev, ...chatActualizado } : chatActualizado));
           }
+          cargarMensajesSilencioso(actual.chat_id);
         }
       }
     } catch (e) {
@@ -146,11 +149,22 @@ export default function ChatBotPage() {
   // Refrescar silenciosamente mensajes del chat activo sin loaders intrusivos
   const cargarMensajesSilencioso = async (chatId: number) => {
     try {
-      const res = await fetch(`/api/telegram/conversaciones/${chatId}`);
+      const res = await fetch(`/api/telegram/conversaciones/${chatId}?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache' },
+      });
       const data = await res.json();
       if (data.ok && Array.isArray(data.mensajes)) {
-        setMensajes(data.mensajes);
-        setTimeout(() => scrollToBottom(), 50);
+        setMensajes((prev) => {
+          if (
+            prev.length === data.mensajes.length &&
+            prev[prev.length - 1]?.id === data.mensajes[data.mensajes.length - 1]?.id
+          ) {
+            return prev;
+          }
+          setTimeout(() => scrollToBottom(), 50);
+          return data.mensajes;
+        });
       }
     } catch (e) {}
   };
@@ -161,7 +175,10 @@ export default function ChatBotPage() {
     marcarComoVisto(usuario.chat_id, usuario.ultimo_mensaje_at);
     setCargandoMensajes(true);
     try {
-      const res = await fetch(`/api/telegram/conversaciones/${usuario.chat_id}`);
+      const res = await fetch(`/api/telegram/conversaciones/${usuario.chat_id}?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache' },
+      });
       const data = await res.json();
       if (data.ok && Array.isArray(data.mensajes)) {
         setMensajes(data.mensajes);
@@ -174,12 +191,12 @@ export default function ChatBotPage() {
     }
   };
 
-  // Carga inicial y sondeo periódico silencioso cada 10 segundos
+  // Carga inicial y sondeo periódico silencioso en tiempo real cada 3.5 segundos
   useEffect(() => {
     cargarConversaciones(false);
     const interval = setInterval(() => {
       cargarConversaciones(true);
-    }, 10000);
+    }, 3500);
     return () => clearInterval(interval);
   }, []);
 
