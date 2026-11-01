@@ -42,6 +42,7 @@ import {
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
 import Modal from '@/components/ui/Modal';
 import { formatMoney } from '@/lib/formatters';
+import { useAuth } from '@/context/AuthContext';
 import {
   LibroCajaKPIs,
   LibroCajaDiario,
@@ -119,7 +120,9 @@ function parseInputMoneyToNumber(formatted: string): number {
   return Number(formatted.replace(/\./g, '').replace(/,/g, '').replace(/\D/g, '')) || 0;
 }
 
-export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { modoCajeroHermetico?: boolean }) {
+export default function LibrosApoyoContent({
+  // Hook de autenticación global del sistema
+ modoCajeroHermetico = false }: { modoCajeroHermetico?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isCajeroModeUrl = searchParams.get('modo') === 'cajero';
@@ -225,7 +228,8 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
   const pageSize = 35;
 
   // Estado del Cajero y Caja Activa
-  const [cajeroActivo, setCajeroActivo] = useState('JOHANNA');
+  const { user: globalAuthUser } = useAuth();
+  const [cajeroActivo, setCajeroActivo] = useState('ADMIN');
   const [cajaActiva, setCajaActiva] = useState('CAJA 1 (PRINCIPAL)');
 
   // Formulario de Ingreso Rápido (Quick-Add) con formateador de miles
@@ -357,8 +361,8 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
   // Determinar si el usuario actual es Administrador
   const isAdmin = !modoCajeroHermetico && (currentSessionUser?.rol === 'ADMIN' || !isCajeroModeUrl);
 
-  const currentUsername = (currentSessionUser?.username || cajeroActivo || '').toLowerCase().trim();
-  const currentCajeroName = (currentSessionUser?.nombre_cajero || cajeroActivo || '').toUpperCase().trim();
+  const currentUsername = (currentSessionUser?.username || globalAuthUser?.username || 'admin').toLowerCase().trim();
+  const currentCajeroName = (currentSessionUser?.nombre_cajero || (isAdmin ? (globalAuthUser?.name || 'ADMIN') : cajeroActivo)).toUpperCase().trim();
 
   // Todas las sesiones (turnos) del día activo ordenadas por turno
   const sesionesDiaActivo = useMemo(() => {
@@ -1245,7 +1249,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
                       {formatDateTitle(activeTabId)}
                     </span>
                     <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
-                      Usuario en Sesión: {currentCajeroName} {isAdmin ? '(ADMIN)' : '(CAJERO)'}
+                      Usuario en Sesión: {currentSessionUser ? `${currentSessionUser.nombre_cajero} (CAJERO)` : `${globalAuthUser?.name?.toUpperCase() || 'ADMIN'} (ADMIN)`}
                     </span>
                     {sesionAbiertaDia && (
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
