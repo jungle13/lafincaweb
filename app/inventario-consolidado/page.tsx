@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
+  Pencil,
+  Trash2,
+  Clock,
+  User,
+  Calculator,
+  History,
   FileSpreadsheet, 
   Layers, 
   Search, 
@@ -731,6 +737,226 @@ export default function InventarioConsolidadoPage() {
     setIsAddingGlobalItem(false);
   };
 
+  // Lateral Insumo Manager Drawer State (Similar a Costeo Diario)
+  const [activeDrawerInsumo, setActiveDrawerInsumo] = useState<{
+    categoryId: string;
+    categoryName: string;
+    item: InsumoItem;
+  } | null>(null);
+
+  const qtyInputRef = useRef<HTMLInputElement>(null);
+  const [drawerTargetView, setDrawerTargetView] = useState<'COCINA_CIERRE' | 'BODEGA_CIERRE'>('COCINA_CIERRE');
+  const [drawerPresentacion, setDrawerPresentacion] = useState<'Entero' | 'Porcion'>('Entero');
+  const [drawerQtyFormula, setDrawerQtyFormula] = useState('');
+  const [drawerCustomWeight, setDrawerCustomWeight] = useState('');
+  const [drawerUnitPrice, setDrawerUnitPrice] = useState<string>('');
+  const [drawerObs, setDrawerObs] = useState('');
+  const [drawerSuccessMsg, setDrawerSuccessMsg] = useState('');
+  const [editingRegId, setEditingRegId] = useState<string | null>(null);
+  const [isSavingDrawer, setIsSavingDrawer] = useState(false);
+
+  // Abrir panel lateral de insumo
+  const handleOpenInsumoManager = (categoryId: string, categoryName: string, item: InsumoItem) => {
+    let itemWithRegistros = { ...item };
+    if (!itemWithRegistros.registros) {
+      itemWithRegistros.registros = [];
+    }
+
+    const initialTarget: 'COCINA_CIERRE' | 'BODEGA_CIERRE' = 
+      viewMode === 'BODEGA_CIERRE' ? 'BODEGA_CIERRE' : 'COCINA_CIERRE';
+    setDrawerTargetView(initialTarget);
+
+    const defaultPres = (item.name.toLowerCase().includes('porci') || categoryId === 'carnes') ? 'Porcion' : 'Entero';
+    setDrawerPresentacion(defaultPres);
+    setDrawerQtyFormula('');
+    setDrawerCustomWeight('');
+    setDrawerUnitPrice(item.unitPrice ? item.unitPrice.toString() : '');
+    setDrawerObs('');
+    setDrawerSuccessMsg('');
+    setEditingRegId(null);
+
+    setActiveDrawerInsumo({
+      categoryId,
+      categoryName,
+      item: itemWithRegistros
+    });
+
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+      qtyInputRef.current?.select();
+    }, 100);
+  };
+
+  const handleStartEditRegistro = (reg: RegistroItem) => {
+    setEditingRegId(reg.id);
+    if (reg.tipo === 'BODEGA_CIERRE') {
+      setDrawerTargetView('BODEGA_CIERRE');
+    } else {
+      setDrawerTargetView('COCINA_CIERRE');
+    }
+
+    const isPorcion = (activeDrawerInsumo?.item.name.toLowerCase().includes('porci') || activeDrawerInsumo?.categoryId === 'carnes');
+    setDrawerPresentacion(isPorcion ? 'Porcion' : 'Entero');
+
+    if (isPorcion) {
+      const stdW = getPortionWeightKg(activeDrawerInsumo?.item.name || '');
+      const portions = stdW > 0 ? (reg.cantidad / stdW).toFixed(0) : reg.cantidad.toString();
+      setDrawerQtyFormula(portions);
+      setDrawerCustomWeight(reg.cantidad.toString());
+    } else {
+      setDrawerQtyFormula(reg.cantidad.toString());
+      setDrawerCustomWeight('');
+    }
+
+    setDrawerUnitPrice(reg.costoUnitario.toString());
+    setDrawerObs(reg.observaciones || '');
+    setDrawerSuccessMsg('');
+
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+      qtyInputRef.current?.select();
+    }, 50);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRegId(null);
+    setDrawerQtyFormula('');
+    setDrawerCustomWeight('');
+    setDrawerObs('');
+    if (activeDrawerInsumo) {
+      setDrawerUnitPrice(activeDrawerInsumo.item.unitPrice ? activeDrawerInsumo.item.unitPrice.toString() : '');
+    }
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 50);
+  };
+
+  const handleAddInsumoRegistro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeDrawerInsumo || !activeSheet) return;
+
+    const evalResult = evaluateQtyFormula(drawerQtyFormula);
+    if (!evalResult.isValid || evalResult.value <= 0) {
+      qtyInputRef.current?.focus();
+      return;
+    }
+
+    let finalQty = 0;
+    const unitPrice = parseFloat(drawerUnitPrice) || activeDrawerInsumo.item.unitPrice || 0;
+
+    if (drawerPresentacion === 'Porcion') {
+      const portionsCount = evalResult.value;
+      const stdW = getPortionWeightKg(activeDrawerInsumo.item.name);
+      const parsedCustomWeight = parseFloat(drawerCustomWeight);
+      finalQty = (!isNaN(parsedCustomWeight) && parsedCustomWeight > 0)
+        ? parsedCustomWeight
+        : Number((portionsCount * stdW).toFixed(2));
+    } else {
+      finalQty = evalResult.value;
+    }
+
+    const regTotal = Math.round(finalQty * unitPrice);
+    const targetViewToSave = drawerTargetView;
+
+    setIsSavingDrawer(true);
+    try {
+      const res = await fetch('/api/costeo-diario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: activeSheet.dateStr,
+          titulo: activeSheet.title,
+          pos_sales: activeSheet.posSales,
+          targetView: targetViewToSave,
+          movimiento: {
+            id: editingRegId ? editingRegId.replace(/^(reg-|item-)/, '') : undefined,
+            tipo: targetViewToSave,
+            insumo_id: activeDrawerInsumo.item.id?.replace(/^(item-|reg-)/, '') || null,
+            nombre_insumo: activeDrawerInsumo.item.name,
+            categoria: activeDrawerInsumo.categoryName,
+            cantidad: finalQty,
+            unidad: activeDrawerInsumo.item.unit,
+            costo_unitario: unitPrice,
+            total: regTotal,
+            observaciones: drawerObs.trim() || undefined
+          }
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al registrar movimiento');
+
+      setDrawerSuccessMsg(editingRegId ? '✓ Registro actualizado con éxito' : '✓ Cantidad agregada correctamente');
+      setEditingRegId(null);
+      setDrawerQtyFormula('');
+      setDrawerCustomWeight('');
+      setDrawerObs('');
+
+      // Recargar hojas
+      const r = await fetch(`/api/costeo-diario?t=${Date.now()}`, { cache: 'no-store' });
+      const d = await r.json();
+      if (d?.sheets && Array.isArray(d.sheets)) {
+        setSheets(d.sheets);
+        const updatedS = d.sheets.find((s: CosteoSheet) => s.id === activeSheet.id);
+        if (updatedS) {
+          const cat = updatedS.categories.find((c: CategoryGroup) => c.id === activeDrawerInsumo.categoryId);
+          const it = cat?.items.find((i: InsumoItem) => i.id === activeDrawerInsumo.item.id || i.name.toLowerCase() === activeDrawerInsumo.item.name.toLowerCase());
+          if (it) {
+            setActiveDrawerInsumo(prev => prev ? { ...prev, item: it } : null);
+          }
+        }
+      }
+
+      setTimeout(() => setDrawerSuccessMsg(''), 3000);
+      setTimeout(() => {
+        qtyInputRef.current?.focus();
+      }, 50);
+    } catch (err) {
+      console.error('Error guardando en drawer:', err);
+      alert('Error al guardar el movimiento en base de datos.');
+    } finally {
+      setIsSavingDrawer(false);
+    }
+  };
+
+  const handleDeleteInsumoRegistro = async (regId: string) => {
+    if (!activeDrawerInsumo || !activeSheet) return;
+    if (!confirm('¿Deseas eliminar este registro de conteo?')) return;
+
+    setIsSavingDrawer(true);
+    try {
+      const res = await fetch('/api/costeo-diario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DELETE_ITEM',
+          fecha: activeSheet.dateStr,
+          registroIds: [regId]
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al eliminar registro');
+
+      const r = await fetch(`/api/costeo-diario?t=${Date.now()}`, { cache: 'no-store' });
+      const d = await r.json();
+      if (d?.sheets && Array.isArray(d.sheets)) {
+        setSheets(d.sheets);
+        const updatedS = d.sheets.find((s: CosteoSheet) => s.id === activeSheet.id);
+        if (updatedS) {
+          const cat = updatedS.categories.find((c: CategoryGroup) => c.id === activeDrawerInsumo.categoryId);
+          const it = cat?.items.find((i: InsumoItem) => i.id === activeDrawerInsumo.item.id || i.name.toLowerCase() === activeDrawerInsumo.item.name.toLowerCase());
+          if (it) {
+            setActiveDrawerInsumo(prev => prev ? { ...prev, item: it } : null);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error eliminando registro:', err);
+      alert('Error al eliminar registro.');
+    } finally {
+      setIsSavingDrawer(false);
+    }
+  };
+
   // Solo se permite añadir en COCINA_CIERRE o BODEGA_CIERRE (NUNCA en Ver Consolidado ni en Ver Paralelo)
   const isAddingAllowedInCurrentView = viewMode === 'COCINA_CIERRE' || viewMode === 'BODEGA_CIERRE';
 
@@ -1106,7 +1332,11 @@ export default function InventarioConsolidadoPage() {
                                       key={`bodega-it-${item.id}`}
                                       className="grid grid-cols-12 gap-2 p-2.5 px-3.5 items-center text-xs hover:bg-slate-50/60"
                                     >
-                                      <div className="col-span-6 font-semibold text-slate-900 truncate" title={item.name}>
+                                      <div 
+                                        className="col-span-6 font-semibold text-slate-900 hover:text-blue-600 cursor-pointer truncate hover:underline" 
+                                        title="Clic para ver historial o gestionar insumo"
+                                        onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                      >
                                         {item.name}
                                       </div>
                                       <div className="col-span-3 text-right font-mono font-medium text-slate-800">
@@ -1198,7 +1428,11 @@ export default function InventarioConsolidadoPage() {
                                       key={`cocina-it-${item.id}`}
                                       className="grid grid-cols-12 gap-2 p-2.5 px-3.5 items-center text-xs hover:bg-slate-50/60"
                                     >
-                                      <div className="col-span-6 font-semibold text-slate-900 truncate" title={item.name}>
+                                      <div 
+                                        className="col-span-6 font-semibold text-slate-900 hover:text-amber-600 cursor-pointer truncate hover:underline" 
+                                        title="Clic para ver historial o gestionar insumo"
+                                        onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                      >
                                         {item.name}
                                       </div>
                                       <div className="col-span-3 text-right font-mono font-medium text-slate-800">
@@ -1361,8 +1595,12 @@ export default function InventarioConsolidadoPage() {
                                       key={item.id}
                                       className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 px-4 items-center text-xs hover:bg-slate-50/70 transition-colors"
                                     >
-                                      <div className="col-span-5 font-semibold text-slate-900 flex items-center gap-2">
-                                        <span className="truncate">{item.name}</span>
+                                      <div 
+                                        className="col-span-5 font-semibold text-slate-900 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer group select-none"
+                                        onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                        title="Clic para ver historial o añadir cantidades a este insumo"
+                                      >
+                                        <span className="truncate group-hover:underline">{item.name}</span>
                                         {viewMode === 'CONSOLIDADO' && metrics.hasCocina && metrics.hasBodega && (
                                           <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0.2 rounded font-normal shrink-0">
                                             Cocina + Bodega
