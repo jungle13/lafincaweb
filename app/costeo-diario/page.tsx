@@ -1519,6 +1519,13 @@ export default function CosteoDiarioPage() {
 
   // Cargar hojas reales desde Supabase (/api/costeo-diario)
   useEffect(() => {
+    fetch('/api/productos-venta')
+      .then(r => r.json())
+      .then(d => {
+        if (d?.data && Array.isArray(d.data)) setProductosVentaList(d.data);
+      })
+      .catch(() => {});
+
     fetch('/api/costeo-diario')
       .then(r => r.json())
       .then(data => {
@@ -1745,10 +1752,11 @@ export default function CosteoDiarioPage() {
     const now = new Date();
     const horaAuto = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    const operationalType: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' = 
+    const operationalType: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' | 'CONSUMO' = 
       activeOperationalView === 'COCINA_APERTURA' ? 'INVENTARIO_INICIAL_COCINA' :
       activeOperationalView === 'DEVOLUCIONES' ? 'DEVOLUCION_COCINA' :
       activeOperationalView === 'COCINA_CIERRE' ? 'COCINA_CIERRE' :
+      activeOperationalView === 'CONSUMOS' ? 'CONSUMO' :
       activeOperationalView === 'BODEGA_APERTURA' ? 'BODEGA_APERTURA' :
       activeOperationalView === 'BODEGA_CIERRE' ? 'BODEGA_CIERRE' : 'BODEGA_A_COCINA';
 
@@ -1975,6 +1983,8 @@ export default function CosteoDiarioPage() {
       filteredRegs = regs.filter(r => r.tipo === 'DEVOLUCION_COCINA');
     } else if (activeOperationalView === 'COCINA_CIERRE') {
       filteredRegs = regs.filter(r => r.tipo === 'COCINA_CIERRE');
+    } else if (activeOperationalView === 'CONSUMOS') {
+      filteredRegs = regs.filter(r => r.tipo === 'CONSUMO');
     } else if (activeOperationalView === 'BODEGA_APERTURA') {
       filteredRegs = regs.filter(r => r.tipo === 'BODEGA_APERTURA');
     } else if (activeOperationalView === 'BODEGA_CIERRE') {
@@ -2261,10 +2271,11 @@ export default function CosteoDiarioPage() {
     const finalUnit = unitOption.baseUnit;
     const finalTotal = Math.round(finalQty * price);
 
-    const operationalType: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' = 
+    const operationalType: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' | 'CONSUMO' = 
       activeOperationalView === 'COCINA_APERTURA' ? 'INVENTARIO_INICIAL_COCINA' :
       activeOperationalView === 'DEVOLUCIONES' ? 'DEVOLUCION_COCINA' :
       activeOperationalView === 'COCINA_CIERRE' ? 'COCINA_CIERRE' :
+      activeOperationalView === 'CONSUMOS' ? 'CONSUMO' :
       activeOperationalView === 'BODEGA_APERTURA' ? 'BODEGA_APERTURA' :
       activeOperationalView === 'BODEGA_CIERRE' ? 'BODEGA_CIERRE' : 'BODEGA_A_COCINA';
 
@@ -2291,13 +2302,17 @@ export default function CosteoDiarioPage() {
       detalleCalculo: detalle,
       costoUnitario: price,
       total: finalTotal,
-      observaciones: activeOperationalView === 'DEVOLUCIONES' ? 'Devolución registrada a bodega' : 'Ingreso registrado'
+      observaciones: activeOperationalView === 'CONSUMOS' && consumoResponsable
+          ? `Responsable: ${consumoResponsable.trim()}`
+          : activeOperationalView === 'DEVOLUCIONES' ? 'Devolución registrada a bodega' : 'Ingreso registrado'
     };
 
     // Enrutamiento inteligente a la categoría adecuada según la naturaleza del insumo
     let targetCatId = catId;
     const itemCat = (selectedCatalogItem?.categoria || '').toUpperCase();
-    if (itemCat.includes('VERDURA')) {
+    if (activeOperationalView === 'CONSUMOS') {
+      targetCatId = addingCategory || 'consumos_insumos';
+    } else if (itemCat.includes('VERDURA')) {
       const found = activeSheet.categories.find(c => c.id === 'verduras' || c.name.toLowerCase().includes('verdura'));
       if (found) targetCatId = found.id;
     } else if (itemCat.includes('GRANO') || itemCat.includes('ABARROTE') || itemCat.includes('LACTEO') || itemCat.includes('HUEVO')) {
@@ -3196,6 +3211,7 @@ Trucha 8`;
                     {activeOperationalView === 'COCINA_APERTURA' && 'Cocina Apertura (Inventario Inicial)'}
                     {activeOperationalView === 'DEVOLUCIONES' && 'Devoluciones Cocina a Bodega'}
                     {activeOperationalView === 'COCINA_CIERRE' && 'Cocina Cierre'}
+                    {activeOperationalView === 'CONSUMOS' && 'Consumos (Insumos y Productos de Venta)'}
                     {activeOperationalView === 'BODEGA_APERTURA' && 'Bodega Apertura'}
                     {activeOperationalView === 'BODEGA_CIERRE' && 'Bodega Cierre'}
                   </span>
@@ -3283,7 +3299,29 @@ Trucha 8`;
               </div>
 
               {/* LISTADO DE CATEGORÍAS */}
-              {activeSheet.categories.map((cat) => {
+              {(activeOperationalView === 'CONSUMOS' 
+                ? (() => {
+                    const existingInsumos = activeSheet.categories.find(c => c.id === 'consumos_insumos' || c.name.toLowerCase().includes('insumos y carne'));
+                    const existingProds = activeSheet.categories.find(c => c.id === 'consumos_productos' || c.name.toLowerCase().includes('productos para la venta'));
+                    return [
+                      existingInsumos || {
+                        id: 'consumos_insumos',
+                        name: 'Consumido del Catálogo de Insumos y Carne',
+                        items: [],
+                        subtotal: 0,
+                        itemsCount: 0
+                      },
+                      existingProds || {
+                        id: 'consumos_productos',
+                        name: 'Consumido de Productos para la Venta',
+                        items: [],
+                        subtotal: 0,
+                        itemsCount: 0
+                      }
+                    ];
+                  })()
+                : activeSheet.categories.filter(cat => cat.id !== 'consumos_insumos' && cat.id !== 'consumos_productos' && !cat.name.toLowerCase().includes('consumido'))
+              ).map((cat) => {
                 const isCollapsed = Boolean(collapsedCategories[cat.id]);
                 const catViewTotal = calculateCategoryViewTotal(cat);
                 const isAddingHere = addingCategory === cat.id;
@@ -3302,7 +3340,16 @@ Trucha 8`;
                 });
 
                 // Insumos filtrados con buscador comprensivo en TODOS los insumos del sistema
-                const filteredCatalog = searchCatalogComprehensive(newInsumoName, catalogItems, searchCategoryFilter);
+                const effectiveSearchCatalog = (activeOperationalView === 'CONSUMOS' && cat.id === 'consumos_productos' && productosVentaList.length > 0)
+                  ? productosVentaList.map(p => ({
+                      id: p.id,
+                      nombre: p.nombre,
+                      categoria: p.categoria || 'Productos Venta',
+                      costo_unitario_kg: Number(p.precio_venta || p.costo_estimado || 0),
+                      unidad_medida: 'Und'
+                    }))
+                  : catalogItems;
+                const filteredCatalog = searchCatalogComprehensive(newInsumoName, effectiveSearchCatalog, searchCategoryFilter);
 
                 // Cálculo en tiempo real de equivalencia en Kg para el formulario de ingreso
                 const parsedAddQty = evaluateQtyFormula(newInsumoQtyFormula).value || 0;
@@ -3632,7 +3679,16 @@ Trucha 8`;
 
                             {/* Botones de Confirmación */}
                             <div className="flex items-center gap-1.5 justify-end">
-                              <button
+                              {activeOperationalView === 'CONSUMOS' && (
+                              <input
+                                type="text"
+                                value={consumoResponsable}
+                                onChange={(e) => setConsumoResponsable(e.target.value)}
+                                placeholder="Responsable (ej: Juan)"
+                                className="w-full sm:w-36 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 shadow-2xs font-sans"
+                              />
+                            )}
+                            <button
                                 onClick={() => handleAddItem(cat.id)}
                                 className="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
                               >
@@ -3741,6 +3797,14 @@ Trucha 8`;
                     </span>
                   </div>
 
+                  {/* Costo Consumos (suma) */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Costo Consumos :</span>
+                    <span className="font-mono font-medium text-purple-700">
+                      +${costoConsumos.toLocaleString('es-CO')} <span className="text-[10px] text-purple-600 font-sans font-normal">(suma)</span>
+                    </span>
+                  </div>
+
                   {/* 5. Costo Consumo Real Total */}
                   <div className="flex items-center justify-between pt-2.5 pb-2.5 border-t border-b border-slate-200 bg-slate-50/80 -mx-4 px-4 my-1">
                     <span className="font-bold text-slate-900">Costo Consumo Real :</span>
@@ -3833,6 +3897,21 @@ Trucha 8`;
                     >
                       <span>Cocina Cierre</span>
                       {activeOperationalView === 'COCINA_CIERRE' && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveOperationalView('CONSUMOS')}
+                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
+                        activeOperationalView === 'CONSUMOS'
+                          ? 'text-slate-950 font-bold underline'
+                          : 'text-slate-600 hover:text-slate-900 hover:underline'
+                      }`}
+                    >
+                      <span>Consumos</span>
+                      {activeOperationalView === 'CONSUMOS' && (
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
                       )}
                     </button>
@@ -4600,6 +4679,7 @@ Trucha 8`;
                               {reg.tipo === 'DEVOLUCION_COCINA' && 'Devolución Cocina → Bodega'}
                               {reg.tipo === 'BODEGA_A_COCINA' && 'Traslado Bodega → Cocina'}
                               {reg.tipo === 'COCINA_CIERRE' && 'Cocina Cierre'}
+                              {reg.tipo === 'CONSUMO' && 'Consumo Interno'}
                               {reg.tipo === 'BODEGA_APERTURA' && 'Bodega Apertura'}
                               {reg.tipo === 'BODEGA_CIERRE' && 'Bodega Cierre'}
                             </span>
