@@ -1330,7 +1330,9 @@ export default function InventarioConsolidadoPage() {
                                   bodegaItems.map(({ item, metrics }) => (
                                     <div
                                       key={`bodega-it-${item.id}`}
-                                      className="grid grid-cols-12 gap-2 p-2.5 px-3.5 items-center text-xs hover:bg-slate-50/60"
+                                      onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                      className="grid grid-cols-12 gap-2 p-2.5 px-3.5 items-center text-xs hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                                      title="Clic para ver historial o gestionar insumo en Bodega"
                                     >
                                       <div 
                                         className="col-span-6 font-semibold text-slate-900 hover:text-blue-600 cursor-pointer truncate hover:underline" 
@@ -1426,7 +1428,9 @@ export default function InventarioConsolidadoPage() {
                                   cocinaItems.map(({ item, metrics }) => (
                                     <div
                                       key={`cocina-it-${item.id}`}
-                                      className="grid grid-cols-12 gap-2 p-2.5 px-3.5 items-center text-xs hover:bg-slate-50/60"
+                                      onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                      className="grid grid-cols-12 gap-2 p-2.5 px-3.5 items-center text-xs hover:bg-amber-50/50 cursor-pointer transition-colors group"
+                                      title="Clic para ver historial o gestionar insumo en Cocina"
                                     >
                                       <div 
                                         className="col-span-6 font-semibold text-slate-900 hover:text-amber-600 cursor-pointer truncate hover:underline" 
@@ -1593,7 +1597,9 @@ export default function InventarioConsolidadoPage() {
                                   return (
                                     <div
                                       key={item.id}
-                                      className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 px-4 items-center text-xs hover:bg-slate-50/70 transition-colors"
+                                      onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
+                                      className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 px-4 items-center text-xs hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                                      title="Clic para ver historial, editar o añadir cantidades a este insumo"
                                     >
                                       <div 
                                         className="col-span-5 font-semibold text-slate-900 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer group select-none"
@@ -1904,6 +1910,426 @@ export default function InventarioConsolidadoPage() {
           </button>
         </div>
       </aside>
+
+      {/* ============================================================ */}
+      {/* DRAWER LATERAL: GESTIONAR INSUMO, HISTORIAL Y CONTEOS        */}
+      {/* ============================================================ */}
+
+      {/* Backdrop desenfocado */}
+      {activeDrawerInsumo && (
+        <div
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[80] transition-opacity cursor-pointer"
+          onClick={() => setActiveDrawerInsumo(null)}
+        />
+      )}
+
+      {/* Contenedor Drawer deslizante de DERECHA A IZQUIERDA */}
+      <aside
+        className={`fixed inset-y-0 right-0 z-[90] w-full sm:w-[500px] md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
+          activeDrawerInsumo ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+        }`}
+        aria-label="Administrador de Insumo Consolidado"
+      >
+        {activeDrawerInsumo && (() => {
+          const item = activeDrawerInsumo.item;
+          const metrics = getItemConsolidatedMetrics(item);
+          const evalRes = evaluateQtyFormula(drawerQtyFormula);
+          const parsedQty = evalRes.value || 0;
+          const stdWeight = getPortionWeightKg(item.name);
+          const customW = parseFloat(drawerCustomWeight);
+          const finalEstimatedKg = drawerPresentacion === 'Porcion'
+            ? (!isNaN(customW) && customW > 0 ? customW : Number((parsedQty * stdWeight).toFixed(2)))
+            : parsedQty;
+          const uPrice = parseFloat(drawerUnitPrice) || item.unitPrice || 0;
+          const estimatedCost = Math.round(finalEstimatedKg * uPrice);
+
+          const displayQty = viewMode === 'COCINA_CIERRE'
+            ? metrics.cocinaQty
+            : viewMode === 'BODEGA_CIERRE'
+            ? metrics.bodegaQty
+            : metrics.totalQty;
+
+          const displayTotal = viewMode === 'COCINA_CIERRE'
+            ? metrics.cocinaTotal
+            : viewMode === 'BODEGA_CIERRE'
+            ? metrics.bodegaTotal
+            : metrics.totalConsolidado;
+
+          const rawVisible = (item.registros || []).filter(r => {
+            const t = (r.tipo || '').toUpperCase();
+            if (viewMode === 'COCINA_CIERRE') return t === 'COCINA_CIERRE' || t === 'CIERRE';
+            if (viewMode === 'BODEGA_CIERRE') return t === 'BODEGA_CIERRE';
+            return true;
+          });
+
+          const visibleRegs: RegistroItem[] = rawVisible.length > 0 ? rawVisible : (displayQty > 0 ? [{
+            id: `reg-${item.id}-auto`,
+            hora: '--:--',
+            usuario: viewMode === 'BODEGA_CIERRE' ? 'Bodeguero' : 'Cocina / Consolidado',
+            tipo: viewMode === 'BODEGA_CIERRE' ? 'BODEGA_CIERRE' : 'COCINA_CIERRE',
+            origen: viewMode === 'BODEGA_CIERRE' ? 'Bodega General' : 'Cocina Principal',
+            destino: viewMode === 'BODEGA_CIERRE' ? 'Bodega Cierre' : 'Cocina Cierre',
+            cantidad: displayQty,
+            unidad: item.unit,
+            costoUnitario: uPrice,
+            total: displayTotal,
+            observaciones: 'Saldo registrado en hoja'
+          }] : []);
+
+          return (
+            <div className="flex flex-col h-full bg-white select-none">
+              
+              {/* Header del Panel Lateral */}
+              <div className="p-4 border-b border-slate-200 bg-slate-50/90 shrink-0">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="text-xs text-slate-500 font-medium">
+                    <span className="text-slate-600 font-semibold uppercase">{activeDrawerInsumo.categoryName}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDrawerInsumo(null)}
+                    className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                    title="Cerrar panel lateral"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 leading-tight">
+                  {item.name}
+                </h3>
+
+                {/* Resumen métrico superior */}
+                <div className="mt-3.5 grid grid-cols-3 gap-2">
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/90 shadow-2xs text-center">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">
+                      {viewMode === 'COCINA_CIERRE' ? 'Cierre Cocina' : viewMode === 'BODEGA_CIERRE' ? 'Cierre Bodega' : 'Total Consolidado'}
+                    </div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {displayQty} <span className="text-xs font-normal text-slate-500">{item.unit}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/90 shadow-2xs text-center">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">
+                      Costo Unitario
+                    </div>
+                    <div className="text-sm font-bold text-slate-900">
+                      ${item.unitPrice ? item.unitPrice.toLocaleString('es-CO') : '0'}
+                      <span className="text-[10px] font-normal text-slate-500"> /{item.unit}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/90 shadow-2xs text-center">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">
+                      Total Valorizado
+                    </div>
+                    <div className="text-sm font-bold text-amber-700">
+                      ${displayTotal.toLocaleString('es-CO')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contenido scrolleable: Formulario e Historial */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6">
+
+                {/* Formulario Ingresar Cantidad */}
+                <form 
+                  onSubmit={handleAddInsumoRegistro}
+                  className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 shadow-2xs"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Calculator className="w-3.5 h-3.5 text-blue-600" />
+                      <span>{editingRegId ? 'Editar Conteo' : 'Ingresar / Sumar Cantidad'}</span>
+                    </h4>
+                    {editingRegId && (
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="text-[11px] text-red-600 hover:text-red-700 font-medium underline cursor-pointer"
+                      >
+                        Cancelar Edición
+                      </button>
+                    )}
+                  </div>
+
+                  {drawerSuccessMsg && (
+                    <div className="mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-xs font-medium flex items-center gap-1.5 animate-fadeIn">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>{drawerSuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Selector de Destino de Inventario (Cocina Cierre vs Bodega Cierre) */}
+                  <div className="mb-3 bg-white p-1 rounded-lg border border-slate-200 grid grid-cols-2 gap-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setDrawerTargetView('COCINA_CIERRE')}
+                      className={`py-1 px-2 rounded-md font-medium text-center transition-colors cursor-pointer ${
+                        drawerTargetView === 'COCINA_CIERRE'
+                          ? 'bg-amber-500 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Cocina Cierre
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerTargetView('BODEGA_CIERRE')}
+                      className={`py-1 px-2 rounded-md font-medium text-center transition-colors cursor-pointer ${
+                        drawerTargetView === 'BODEGA_CIERRE'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Bodega Cierre
+                    </button>
+                  </div>
+
+                  {/* Presentación & Costo Unitario */}
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Presentación</label>
+                      <select
+                        value={drawerPresentacion}
+                        onChange={(e) => setDrawerPresentacion(e.target.value as any)}
+                        className="w-full text-xs bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="Entero">Entero ({item.unit})</option>
+                        <option value="Porcion">Porción (Estándar)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                        Costo Unitario ($/{item.unit})
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={drawerUnitPrice}
+                        onChange={(e) => setDrawerUnitPrice(e.target.value)}
+                        placeholder={item.unitPrice.toString()}
+                        className="w-full text-xs bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Cantidad / Fórmula */}
+                  <div className="mb-3">
+                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                      {drawerPresentacion === 'Porcion' ? 'Cantidad de Porciones (Fórmula o número)' : `Cantidad a Sumar (${item.unit})`}
+                    </label>
+                    <div className="relative">
+                      <input
+                        ref={qtyInputRef}
+                        type="text"
+                        value={drawerQtyFormula}
+                        onChange={(e) => setDrawerQtyFormula(e.target.value)}
+                        placeholder="Ej: 26 ó 10 + 16 ó 5.5"
+                        className="w-full text-sm font-semibold bg-white border border-slate-300 rounded-md pl-3 pr-20 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                      />
+                      <span className="absolute right-2.5 top-2.5 text-xs font-medium text-slate-400">
+                        {drawerPresentacion === 'Porcion' ? 'Porciones' : item.unit}
+                      </span>
+                    </div>
+
+                    {/* Preview de Fórmula si tiene operador */}
+                    {evalRes.preview && (
+                      <div className="text-[11px] text-blue-600 font-mono mt-1 font-semibold flex items-center gap-1">
+                        <Calculator className="w-3 h-3" />
+                        <span>{evalRes.preview}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Si es Porción, mostrar conversión a Kg con posibilidad de sobreescritura manual */}
+                  {drawerPresentacion === 'Porcion' && (
+                    <div className="mb-3 bg-amber-50/70 border border-amber-200/80 rounded-lg p-2.5">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-amber-900 font-medium">Peso Total Equivalente (Kg):</span>
+                        <span className="text-[10px] text-amber-700 font-mono">
+                          Std: {(stdWeight * 1000).toFixed(0)}g / porción
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder={finalEstimatedKg.toString()}
+                          value={drawerCustomWeight}
+                          onChange={(e) => setDrawerCustomWeight(e.target.value)}
+                          className="flex-1 text-xs bg-white border border-amber-300 rounded px-2.5 py-1 text-slate-800 font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold"
+                        />
+                        <span className="text-xs font-semibold text-amber-900">Kg</span>
+                      </div>
+                      <p className="text-[10px] text-amber-600 mt-1">
+                        Calculado auto por porciones. Si pesaste directamente la balanza, escribe el peso exacto arriba.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Nota u Observación */}
+                  <div className="mb-3">
+                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                      Nota / Observación <span className="text-slate-400 font-normal">(opcional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={drawerObs}
+                      onChange={(e) => setDrawerObs(e.target.value)}
+                      placeholder="Ej: Conteo físico tarde, lote nuevo, etc."
+                      className="w-full text-xs bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Resumen previo antes de guardar */}
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-xs mb-3 text-slate-600">
+                    <span>Impacto Estimado:</span>
+                    <span className="font-bold text-slate-900 font-mono">
+                      +{finalEstimatedKg} {item.unit} ≈ ${estimatedCost.toLocaleString('es-CO')} COP
+                    </span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingDrawer || !evalRes.isValid || evalRes.value <= 0}
+                    className="w-full py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-xs rounded-lg transition-colors shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {isSavingDrawer ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{editingRegId ? 'Actualizar Registro' : 'Registrar en ' + (drawerTargetView === 'COCINA_CIERRE' ? 'Cocina' : 'Bodega')}</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Historial de Conteos y Movimientos */}
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <History className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Historial de Conteos ({visibleRegs.length})</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-400">
+                      {viewMode === 'CONSOLIDADO' ? 'Mostrando Cocina + Bodega' : `Filtrado por ${viewMode}`}
+                    </span>
+                  </div>
+
+                  {visibleRegs.length === 0 ? (
+                    <div className="text-center py-6 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
+                      No hay registros individuales de conteo para la vista actual.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {visibleRegs.map((reg, idx) => {
+                        const isCocina = reg.tipo === 'COCINA_CIERRE' || reg.tipo === 'CIERRE';
+                        const isSelectedForEdit = editingRegId === reg.id;
+
+                        return (
+                          <div
+                            key={reg.id || idx}
+                            className={`p-3 rounded-lg border transition-all ${
+                              isSelectedForEdit
+                                ? 'bg-blue-50/80 border-blue-400 shadow-2xs'
+                                : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                  isCocina ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {isCocina ? 'Cocina Cierre' : 'Bodega Cierre'}
+                                </span>
+                                {reg.usuario && (
+                                  <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                                    <User className="w-3 h-3 text-slate-400" />
+                                    <span>{reg.usuario}</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Acciones Editar y Eliminar */}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditRegistro(reg)}
+                                  className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                                  title="Editar este registro"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteInsumoRegistro(reg.id)}
+                                  className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                  title="Eliminar este conteo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-baseline justify-between">
+                              <div className="text-sm font-bold text-slate-900 font-mono">
+                                +{reg.cantidad} <span className="text-xs font-normal text-slate-500">{reg.unidad || item.unit}</span>
+                              </div>
+                              <div className="text-xs font-semibold text-slate-700 font-mono">
+                                ${reg.total ? reg.total.toLocaleString('es-CO') : Math.round(reg.cantidad * (reg.costoUnitario || item.unitPrice)).toLocaleString('es-CO')} COP
+                              </div>
+                            </div>
+
+                            <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+                              <span>Costo: ${(reg.costoUnitario || item.unitPrice).toLocaleString('es-CO')} /{reg.unidad || item.unit}</span>
+                              {reg.hora && (
+                                <span className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{reg.hora}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {reg.observaciones && (
+                              <div className="mt-1.5 text-[11px] bg-slate-50 text-slate-600 px-2 py-1 rounded border border-slate-100 italic">
+                                "{reg.observaciones}"
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Footer del Drawer */}
+              <div className="p-3 bg-slate-50 border-t border-slate-200 shrink-0 flex items-center justify-between text-xs">
+                <span className="text-slate-500 text-[11px]">
+                  Cambios reflejados automáticamente en la hoja activa
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveDrawerInsumo(null)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-md font-medium text-slate-700 transition-colors cursor-pointer shadow-2xs"
+                >
+                  Cerrar Panel
+                </button>
+              </div>
+
+            </div>
+          );
+        })()}
+      </aside>
+
 
     </div>
   );
