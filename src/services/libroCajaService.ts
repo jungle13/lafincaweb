@@ -189,7 +189,7 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
     dia_mes: Number(r.dia_mes || 1),
     orden_item: Number(r.orden_item || 0),
     valor_pagado: Number(r.valor_pagado || 0),
-    caja_nombre: r.caja_nombre || 'CAJA 1 (PRINCIPAL)',
+    caja_nombre: r.caja_nombre || 'Caja 1',
     es_ajuste: Boolean(r.es_ajuste),
   }));
 

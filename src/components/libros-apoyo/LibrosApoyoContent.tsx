@@ -92,9 +92,9 @@ const CAJEROS_OFICIALES = [
 ];
 
 const CAJAS_OFICIALES = [
-  'CAJA 1 (PRINCIPAL)',
-  'CAJA 2 (AUXILIAR)',
-  'CAJA 3 (PARRILLA / BAR)',
+  'Caja 1',
+  'Caja 2',
+  'Caja 3',
 ];
 
 function formatDateTitle(fechaStr: string): string {
@@ -230,7 +230,7 @@ export default function LibrosApoyoContent({
   // Estado del Cajero y Caja Activa
   const { user: globalAuthUser } = useAuth();
   const [cajeroActivo, setCajeroActivo] = useState('ADMIN');
-  const [cajaActiva, setCajaActiva] = useState('CAJA 1 (PRINCIPAL)');
+  const [cajaActiva, setCajaActiva] = useState('Caja 1');
 
   // Formulario de Ingreso Rápido (Quick-Add) con formateador de miles
   const [quickClasificacion, setQuickClasificacion] = useState('Costo / Insumo');
@@ -260,7 +260,7 @@ export default function LibrosApoyoContent({
   // Modal Apertura de Flujo de Caja (Cajero)
   const [isAbrirFlujoModalOpen, setIsAbrirFlujoModalOpen] = useState(false);
   const [flujoAperturaFecha, setFlujoAperturaFecha] = useState('2026-10-26');
-  const [flujoAperturaCaja, setFlujoAperturaCaja] = useState('CAJA 1 (PRINCIPAL)');
+  const [flujoAperturaCaja, setFlujoAperturaCaja] = useState('Caja 1');
   const [flujoAperturaEfectivoInicial, setFlujoAperturaEfectivoInicial] = useState('500.000');
   const [openingFlujo, setOpeningFlujo] = useState(false);
 
@@ -292,7 +292,7 @@ export default function LibrosApoyoContent({
         const u = JSON.parse(stored);
         setCurrentSessionUser(u);
         if (u.nombre_cajero) setCajeroActivo(u.nombre_cajero);
-        if (u.caja_predeterminada && u.caja_predeterminada !== 'TODAS LAS CAJAS') {
+        if (u.caja_predeterminada && u.caja_predeterminada !== 'Todas las Cajas') {
           setCajaActiva(u.caja_predeterminada);
         }
       }

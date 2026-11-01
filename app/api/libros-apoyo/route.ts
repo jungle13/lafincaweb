@@ -582,7 +582,7 @@ export async function POST(req: NextRequest) {
           responsable_caja: resp,
           proveedor_fuente: String(it.proveedor_fuente || 'Gastos Menores / Caja Menor').trim(),
           usuario_registro: resp,
-          caja_nombre: it.caja_nombre || 'CAJA 1 (PRINCIPAL)',
+          caja_nombre: it.caja_nombre || 'Caja 1',
           es_ajuste: Boolean(it.es_ajuste),
         };
       });
