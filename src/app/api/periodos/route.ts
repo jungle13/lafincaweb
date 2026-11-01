@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,42 +16,72 @@ interface PeriodoInventario {
   conteo_cierre_fisico?: Record<string, any>;
 }
 
-const OPERATIONAL_PERIODOS: PeriodoInventario[] = [
-  {
-    id: 'per-2026-10',
-    codigo: '2026-10',
-    nombre: 'Octubre 2026',
-    fecha_inicio: '2026-10-01',
-    fecha_fin: '2026-10-31',
-    estado: 'ABIERTO',
-    inicial_registrado: true,
-    inventario_inicial: {},
-  },
-  {
-    id: 'per-2026-09',
-    codigo: '2026-09',
-    nombre: 'Septiembre 2026',
-    fecha_inicio: '2026-09-01',
-    fecha_fin: '2026-09-30',
-    estado: 'CERRADO',
-    inicial_registrado: true,
-    inventario_inicial: {},
-  },
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
+
+function getPeriodoFromMonthKey(monthKey: string, isLatest: boolean): PeriodoInventario {
+  const parts = monthKey.split('-');
+  const year = parseInt(parts[0], 10);
+  const mNum = parseInt(parts[1], 10);
+  const name = (mNum >= 1 && mNum <= 12) ? `${MONTH_NAMES[mNum - 1]} ${year}` : monthKey;
+
+  const lastDay = new Date(year, mNum, 0).getDate();
+  const fecha_inicio = `${monthKey}-01`;
+  const fecha_fin = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+
+  return {
+    id: `per-${monthKey}`,
+    codigo: monthKey,
+    nombre: name,
+    fecha_inicio,
+    fecha_fin,
+    estado: isLatest ? 'ABIERTO' : 'CERRADO',
+    inicial_registrado: true,
+    inventario_inicial: {},
+  };
+}
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const periodoId = searchParams.get('periodo_id') || searchParams.get('codigo');
 
-    const activo = OPERATIONAL_PERIODOS[0];
+    // Conjunto de meses disponibles
+    const monthKeys = new Set<string>();
+    
+    // Meses operacionales base
+    monthKeys.add('2026-11');
+    monthKeys.add('2026-10');
+    monthKeys.add('2026-09');
+
+    // Consultar dinámicamente fechas en costeo_diario
+    try {
+      const { data: sheets } = await supabase
+        .from('costeo_diario')
+        .select('fecha');
+      (sheets || []).forEach((s: any) => {
+        if (s.fecha && s.fecha.length >= 7) {
+          monthKeys.add(s.fecha.slice(0, 7));
+        }
+      });
+    } catch (_) {
+      // Si la consulta falla, se mantienen los meses base
+    }
+
+    // Ordenar descendente (más reciente primero: 2026-11, 2026-10, 2026-09...)
+    const sortedKeys = Array.from(monthKeys).sort((a, b) => b.localeCompare(a));
+    const periodos = sortedKeys.map((k, idx) => getPeriodoFromMonthKey(k, idx === 0));
+
+    const activo = periodos[0];
     const currentPeriodo = periodoId
-      ? OPERATIONAL_PERIODOS.find(p => p.id === periodoId || p.codigo === periodoId) || activo
+      ? periodos.find(p => p.id === periodoId || p.codigo === periodoId) || activo
       : activo;
 
     return NextResponse.json({
       success: true,
-      periodos: OPERATIONAL_PERIODOS,
+      periodos,
       activo,
       selectedPeriodo: currentPeriodo,
       fecha_corte: 'ACTUAL',

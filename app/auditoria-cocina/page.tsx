@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { PlatoReceta, getPlatoDeductions, RECETAS_PLATOS_POS } from '@/lib/recetasData';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
-import MonthSidebar, { MonthItem } from '@/components/sheets/MonthSidebar';
+import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import NewSheetDateModal from '@/components/sheets/NewSheetDateModal';
 import AuditoriaInsumoRow, { InsumoAuditItem } from '@/components/auditoria/AuditoriaInsumoRow';
 import AddInsumoModal from '@/components/auditoria/AddInsumoModal';
@@ -284,18 +284,10 @@ export default function AuditoriaCocinaPage() {
     return Array.from(map.values());
   }, [activeSheet]);
 
-  // Lista de meses
+  // Lista de meses calculada dinámicamente
   const availableMonths: MonthItem[] = useMemo(() => {
-    const map = new Map<string, number>();
-    sheets.forEach(s => {
-      map.set(s.month, (map.get(s.month) || 0) + 1);
-    });
-    return Array.from(map.entries()).map(([month, count]) => ({
-      key: month,
-      label: month === '2026-10' ? 'Octubre 2026' : (month === '2026-09' ? 'Septiembre 2026' : month),
-      count
-    }));
-  }, [sheets]);
+    return buildDynamicMonths(sheets, selectedMonth);
+  }, [sheets, selectedMonth]);
 
   // Hojas filtradas para la lista principal
   const filteredSheets = useMemo(() => {
@@ -349,7 +341,7 @@ export default function AuditoriaCocinaPage() {
       return;
     }
 
-    const monthKey = dateStr.startsWith('2026-09') ? '2026-09' : '2026-10';
+    const monthKey = dateStr.slice(0, 7);
     const parts = dateStr.split('-');
     const titleDate = `${parts[2]} de ${parts[1] === '10' ? 'Octubre' : 'Septiembre'} de ${parts[0]}`;
 

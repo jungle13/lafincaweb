@@ -23,7 +23,7 @@ import {
   Sparkles,
   CheckCircle2
 } from 'lucide-react';
-import MonthSidebar, { MonthItem } from '@/components/sheets/MonthSidebar';
+import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 
 interface RegistroItem {
   id: string;
@@ -345,7 +345,7 @@ export default function InventarioConsolidadoPage() {
   const [sheets, setSheets] = useState<CosteoSheet[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState<'2026-10' | '2026-09'>('2026-10');
+  const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
   const [searchQuery, setSearchQuery] = useState('');
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -381,8 +381,13 @@ export default function InventarioConsolidadoPage() {
       setLoading(true);
       const res = await fetch(`/api/costeo-diario?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
-      if (data?.sheets && Array.isArray(data.sheets)) {
+      if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
         setSheets(data.sheets);
+        const latestMonth = data.sheets[0].month || data.sheets[0].dateStr.slice(0, 7);
+        setSelectedMonth(prev => {
+          const hasInPrev = data.sheets.some((s: any) => s.dateStr.startsWith(prev));
+          return hasInPrev ? prev : latestMonth;
+        });
       }
     } catch (err) {
       console.error('Error fetching sheets for consolidado:', err);
@@ -408,15 +413,10 @@ export default function InventarioConsolidadoPage() {
     fetchCatalog();
   }, []);
 
-  // Meses disponibles con conteo
+  // Meses disponibles calculados dinámicamente con las hojas reales
   const months: MonthItem[] = useMemo(() => {
-    const octCount = sheets.filter(s => s.dateStr.startsWith('2026-10')).length;
-    const sepCount = sheets.filter(s => s.dateStr.startsWith('2026-09')).length;
-    return [
-      { key: '2026-10', label: 'Octubre 2026', count: octCount },
-      { key: '2026-09', label: 'Septiembre 2026', count: sepCount }
-    ];
-  }, [sheets]);
+    return buildDynamicMonths(sheets, selectedMonth);
+  }, [sheets, selectedMonth]);
 
   // Hojas filtradas para la lista
   const filteredSheets = useMemo(() => {
@@ -1100,31 +1100,12 @@ export default function InventarioConsolidadoPage() {
           /* VISTA 1: LISTADO DE HOJAS CONSOLIDADAS                       */
           /* ------------------------------------------------------------ */
           <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white">
-            <aside className="w-full md:w-56 p-4 border-r border-slate-200 bg-slate-50/60 shrink-0 space-y-1">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">
-                Meses
-              </p>
-              {months.map(m => (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => setSelectedMonth(m.key as any)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium text-left transition-colors cursor-pointer ${
-                    selectedMonth === m.key
-                      ? 'bg-slate-200/80 text-slate-900 font-semibold'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-slate-500" />
-                    <span>{m.label}</span>
-                  </div>
-                  <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
-                    {m.count}
-                  </span>
-                </button>
-              ))}
-            </aside>
+            <MonthSidebar
+              months={months}
+              selectedMonth={selectedMonth}
+              onSelectMonth={setSelectedMonth}
+              title="Meses"
+            />
 
             <div className="flex-1 p-4 md:p-8 max-w-5xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">

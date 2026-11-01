@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import catalogoOficial from '@/lib/catalogo-oficial.json';
+import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { 
   FileSpreadsheet,
   ClipboardList, 
@@ -72,7 +73,7 @@ interface CategoryGroup {
 
 interface CosteoSheet {
   id: string;
-  month: '2026-10' | '2026-09';
+  month: string;
   dateStr: string; // YYYY-MM-DD
   title: string;
   posSales: number;
@@ -1338,7 +1339,12 @@ export default function CosteoDiarioPage() {
   const [sheets, setSheets] = useState<CosteoSheet[]>([]);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<'2026-10' | '2026-09'>('2026-10');
+  const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
+
+  // Meses disponibles calculados dinámicamente según las hojas cargadas
+  const months: MonthItem[] = useMemo(() => {
+    return buildDynamicMonths(sheets, selectedMonth);
+  }, [sheets, selectedMonth]);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Modal State (+ Nueva Hoja de Costeo)
@@ -1531,8 +1537,9 @@ export default function CosteoDiarioPage() {
       .then(data => {
         if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
           setSheets(data.sheets);
-          // Auto-abrir la hoja más reciente (o primera de la lista ordenada desc)
           const latest = data.sheets[0];
+          const latestMonth = latest.month || latest.dateStr.slice(0, 7);
+          setSelectedMonth(latestMonth);
           setOpenTabs([latest.id]);
           setActiveTabId(latest.id);
         }
@@ -2240,6 +2247,8 @@ export default function CosteoDiarioPage() {
       }
 
       const targetId = `sheet-${newDate}`;
+      const sheetMonth = newDate.slice(0, 7);
+      setSelectedMonth(sheetMonth);
       setOpenTabs(prev => prev.includes(targetId) ? prev : [...prev, targetId]);
       setActiveTabId(targetId);
       setIsModalOpen(false);
@@ -2939,45 +2948,13 @@ Trucha 8`;
         /* ------------------------------------------------------------ */
         <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white">
           
-          {/* Sub-Sidebar Lateral: Solo Meses */}
-          <aside className="w-full md:w-56 p-4 border-r border-slate-200 bg-slate-50/60 shrink-0 space-y-1">
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">
-              Meses
-            </p>
-            <button
-              onClick={() => setSelectedMonth('2026-10')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium text-left transition-colors ${
-                selectedMonth === '2026-10'
-                  ? 'bg-slate-200/80 text-slate-900 font-semibold'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-slate-500" />
-                <span>Octubre 2026</span>
-              </div>
-              <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                {sheets.filter(s => s.month === '2026-10').length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setSelectedMonth('2026-09')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium text-left transition-colors ${
-                selectedMonth === '2026-09'
-                  ? 'bg-slate-200/80 text-slate-900 font-semibold'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-slate-500" />
-                <span>Septiembre 2026</span>
-              </div>
-              <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                {sheets.filter(s => s.month === '2026-09').length}
-              </span>
-            </button>
-          </aside>
+          {/* Sub-Sidebar Lateral: Meses Dinámicos */}
+          <MonthSidebar
+            months={months}
+            selectedMonth={selectedMonth}
+            onSelectMonth={setSelectedMonth}
+            title="Meses"
+          />
 
           {/* Contenido Central: Hojas de Costeo */}
           <div className="flex-1 p-4 md:p-8 max-w-5xl">

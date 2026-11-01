@@ -9,6 +9,58 @@ export interface MonthItem {
   count: number;
 }
 
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+/**
+ * Convierte una clave tipo 'YYYY-MM' (ej: '2026-11') en un nombre amigable: 'Noviembre 2026'
+ */
+export function formatMonthLabel(key: string): string {
+  if (!key || typeof key !== 'string') return key || '';
+  const parts = key.split('-');
+  if (parts.length >= 2) {
+    const year = parts[0];
+    const mNum = parseInt(parts[1], 10);
+    if (mNum >= 1 && mNum <= 12) {
+      return `${MONTH_NAMES[mNum - 1]} ${year}`;
+    }
+  }
+  return key;
+}
+
+/**
+ * Construye de forma dinámica la lista de meses disponibles a partir de cualquier lista
+ * de objetos que tengan `month` o `dateStr`.
+ * Si se pasa `selectedMonth`, asegura que dicho mes aparezca en la lista aunque tenga 0 elementos.
+ */
+export function buildDynamicMonths(
+  items: { month?: string; dateStr?: string }[],
+  selectedMonth?: string
+): MonthItem[] {
+  const map = new Map<string, number>();
+
+  items.forEach(it => {
+    const mKey = it.month || (it.dateStr ? it.dateStr.slice(0, 7) : '');
+    if (mKey && mKey.length >= 7) {
+      map.set(mKey, (map.get(mKey) || 0) + 1);
+    }
+  });
+
+  if (selectedMonth && selectedMonth.length >= 7 && !map.has(selectedMonth)) {
+    map.set(selectedMonth, 0);
+  }
+
+  return Array.from(map.entries())
+    .sort((a, b) => b[0].localeCompare(a[0])) // Más reciente primero
+    .map(([key, count]) => ({
+      key,
+      label: formatMonthLabel(key),
+      count
+    }));
+}
+
 interface MonthSidebarProps {
   months: MonthItem[];
   selectedMonth: string;

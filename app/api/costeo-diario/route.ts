@@ -403,7 +403,7 @@ export async function GET(request: Request) {
         }
       });
 
-      const month = dateStr.startsWith('2026-10') ? '2026-10' : '2026-09';
+      const month = dateStr.slice(0, 7);
 
       return {
         id: `sheet-${dateStr}`,
