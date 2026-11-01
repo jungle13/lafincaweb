@@ -72,22 +72,24 @@ export interface ComprasResponse {
 
 export async function fetchComprasData(periodoId: string = 'per-2026-10'): Promise<ComprasResponse> {
   try {
-    // 1. Obtener todas las compras del periodo
-    const { data: facturasData, error: errF } = await supabase
-      .from('compras')
-      .select('*')
-      .eq('periodo_id', periodoId)
-      .order('fecha', { ascending: false });
+    // 1 & 2. Obtener compras y detalles en paralelo para acelerar respuesta
+    const [
+      { data: facturasData, error: errF },
+      { data: detallesData, error: errD }
+    ] = await Promise.all([
+      supabase
+        .from('compras')
+        .select('*')
+        .eq('periodo_id', periodoId)
+        .order('fecha', { ascending: false }),
+      supabase
+        .from('compras_detalle')
+        .select('*')
+        .eq('periodo_id', periodoId)
+        .order('fecha', { ascending: false })
+    ]);
 
     if (errF) throw errF;
-
-    // 2. Obtener todos los detalles de compras del periodo
-    const { data: detallesData, error: errD } = await supabase
-      .from('compras_detalle')
-      .select('*')
-      .eq('periodo_id', periodoId)
-      .order('fecha', { ascending: false });
-
     if (errD) throw errD;
 
     const lineas: CompraDetalleItem[] = (detallesData || []).map((d) => ({

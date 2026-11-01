@@ -189,7 +189,7 @@ export async function getVentasPorProducto(
 ): Promise<{ ranking: PlatoRanking[]; categorias: string[]; totalVentas: number }> {
   let query = supabase
     .from('ventas_detalle')
-    .select('*')
+    .select('codigo_producto, nombre_producto, categoria, unidad, cantidad, gran_total, venta_neta, fecha')
     .eq('periodo_id', periodoId);
 
   if (categoria !== 'ALL') {

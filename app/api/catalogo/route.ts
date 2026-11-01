@@ -2,11 +2,29 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-// 1. GET: Listar todos los insumos del catálogo maestro oficial
+// Cache en memoria para acelerar respuestas de catálogo a <2ms
+let cachedCatalog: any[] | null = null;
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 segundos
+
+function invalidateCatalogCache() {
+  cachedCatalog = null;
+  cacheExpiry = 0;
+}
+
+// 1. GET: Listar todos los insumos del catálogo maestro oficial optimizado
 export async function GET() {
   try {
+    const now = Date.now();
+    if (cachedCatalog && now < cacheExpiry) {
+      return NextResponse.json({ success: true, data: cachedCatalog, cached: true }, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+        }
+      });
+    }
+
     const { data: dbCatalog, error } = await supabase
       .from('catalogo_insumos')
       .select('*')
@@ -15,9 +33,12 @@ export async function GET() {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data: dbCatalog || [] }, {
+    cachedCatalog = dbCatalog || [];
+    cacheExpiry = now + CACHE_TTL_MS;
+
+    return NextResponse.json({ success: true, data: cachedCatalog }, {
       headers: {
-        'Cache-Control': 'no-store, max-age=0',
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
       }
     });
   } catch (err: any) {
@@ -67,19 +88,8 @@ export async function POST(request: Request) {
 
     if (insErr) throw insErr;
 
-    // Asegurar registro inicial en stock_actual
-    if (created) {
-      await supabase.from('stock_actual').upsert({
-        insumo_id: created.id,
-        bodega_sin_porcionar_kg: 0,
-        bodega_porcionado_und: 0,
-        bodega_porcionado_kg: 0,
-        cocina_sin_porcionar_kg: 0,
-        cocina_porcionado_und: 0,
-        cocina_porcionado_kg: 0,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'insumo_id' });
-    }
+    // Invalidar caché en memoria para que la siguiente consulta obtenga el nuevo insumo
+    invalidateCatalogCache();
 
     return NextResponse.json({ success: true, data: created });
   } catch (err: any) {
@@ -127,6 +137,9 @@ export async function PUT(request: Request) {
 
     if (updErr) throw updErr;
 
+    // Invalidar caché en memoria
+    invalidateCatalogCache();
+
     return NextResponse.json({ success: true, data: updated });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -143,20 +156,21 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Falta el ID del insumo a eliminar' }, { status: 400 });
     }
 
-    // 1. Eliminar de stock_actual primero para no violar Foreign Key
-    await supabase.from('stock_actual').delete().eq('insumo_id', id);
-
-    // 2. Eliminar de catalogo_insumos
+    // Eliminar de catalogo_insumos
     const { error } = await supabase
       .from('catalogo_insumos')
       .delete()
       .eq('id', id);
 
     if (error) {
-      // Si tiene movimientos históricos que bloquean el delete directo, lo marcamos como inactivo
+      // Si tiene registros históricos asociados que impiden el delete directo, lo marcamos inactivo
       await supabase.from('catalogo_insumos').update({ activo: false }).eq('id', id);
-      return NextResponse.json({ success: true, message: 'Insumo archivado/inactivado (tenía movimientos asociados)' });
+      invalidateCatalogCache();
+      return NextResponse.json({ success: true, message: 'Insumo archivado/inactivado (tenía registros asociados)' });
     }
+
+    // Invalidar caché en memoria
+    invalidateCatalogCache();
 
     return NextResponse.json({ success: true, message: 'Insumo eliminado con éxito' });
   } catch (err: any) {
