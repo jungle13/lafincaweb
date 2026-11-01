@@ -267,7 +267,9 @@ export async function GET(request: Request) {
       { id: 'verduras', name: 'Verduras e Insumos' },
       { id: 'carnes', name: 'Carnes y Proteínas (Saldo Cocina + Traslados)' },
       { id: 'granos', name: 'Granos y Abarrotes' },
-      { id: 'desechables', name: 'Desechables y Empaques' }
+      { id: 'desechables', name: 'Desechables y Empaques' },
+      { id: 'consumos_insumos', name: 'Consumido del Catálogo de Insumos y Carne' },
+      { id: 'consumos_productos', name: 'Consumido de Productos para la Venta' }
     ];
 
     // 4. Build sheets
@@ -280,9 +282,22 @@ export async function GET(request: Request) {
 
       // Process all registrations of the day
       dayRegs.forEach((reg: any) => {
-        const canonicalName = getCanonicalName(reg.nombre_insumo, catalog);
-        const catItem = catalog.find((c: any) => c.nombre.toLowerCase() === canonicalName.toLowerCase());
-        const resolvedCategory = resolveStandardCategory(catItem?.categoria || reg.categoria, canonicalName);
+        let canonicalName = '';
+        let resolvedCategory = '';
+
+        let catItem: any = null;
+
+        if (reg.tipo === 'CONSUMO') {
+          canonicalName = reg.nombre_insumo;
+          resolvedCategory = (reg.categoria || '').includes('Producto')
+            ? 'Consumido de Productos para la Venta'
+            : 'Consumido del Catálogo de Insumos y Carne';
+          catItem = catalog.find((c: any) => c.nombre.toLowerCase() === canonicalName.toLowerCase());
+        } else {
+          canonicalName = getCanonicalName(reg.nombre_insumo, catalog);
+          catItem = catalog.find((c: any) => c.nombre.toLowerCase() === canonicalName.toLowerCase());
+          resolvedCategory = resolveStandardCategory(catItem?.categoria || reg.categoria, canonicalName);
+        }
 
         if (!categoryMap.has(resolvedCategory)) {
           categoryMap.set(resolvedCategory, []);
@@ -320,6 +335,10 @@ export async function GET(request: Request) {
           uiTipo = 'BODEGA_CIERRE';
           uiOrigen = 'Bodega General';
           uiDestino = 'Inventario Cierre Bodega';
+        } else if (reg.tipo === 'CONSUMO') {
+          uiTipo = 'CONSUMO';
+          uiOrigen = 'Cocina Principal';
+          uiDestino = 'Consumos';
         }
 
         const itemReg = {
@@ -339,8 +358,8 @@ export async function GET(request: Request) {
         if (existingItem) {
           if (!existingItem.registros) existingItem.registros = [];
           existingItem.registros.push(itemReg);
-          // Accumulate default qty/total if it's a traslado
-          if (reg.tipo === 'TRASLADO') {
+          // Accumulate default qty/total if it's a traslado or consumo
+          if (reg.tipo === 'TRASLADO' || reg.tipo === 'CONSUMO') {
             existingItem.qty += rawQty;
             existingItem.total += total;
           }
@@ -348,10 +367,10 @@ export async function GET(request: Request) {
           itemsInCat.push({
             id: `item-${reg.id}`,
             name: canonicalName,
-            qty: reg.tipo === 'TRASLADO' ? rawQty : 0,
+            qty: (reg.tipo === 'TRASLADO' || reg.tipo === 'CONSUMO') ? rawQty : 0,
             unit: reg.unidad || 'Kg',
             unitPrice: unitPrice,
-            total: reg.tipo === 'TRASLADO' ? total : 0,
+            total: (reg.tipo === 'TRASLADO' || reg.tipo === 'CONSUMO') ? total : 0,
             isInitialInventory: reg.tipo === 'APERTURA',
             registros: [itemReg]
           });
@@ -396,6 +415,7 @@ export async function GET(request: Request) {
         costoBruto: Number(header.costo_bruto || 0),
         devoluciones: Number(header.devoluciones || 0),
         costoCierre: Number(header.costo_cierre || 0),
+        costoConsumos: Number(header.costo_consumos || 0),
         consumoReal: Number(header.consumo_real || 0),
         foodCostPorcentaje: Number(header.food_cost_porcentaje || 0),
         categories
@@ -863,10 +883,23 @@ export async function POST(request: Request) {
         targetTipo = 'BODEGA_APERTURA';
       } else if (rawTipo === 'BODEGA_CIERRE') {
         targetTipo = 'BODEGA_CIERRE';
+      } else if (rawTipo === 'CONSUMO' || rawTipo === 'CONSUMOS') {
+        targetTipo = 'CONSUMO';
       }
 
-      const canonicalName = getCanonicalName(movimiento.nombre_insumo, catalog);
-      const catItem = catalog.find((c: any) => c.nombre.toLowerCase() === canonicalName.toLowerCase());
+      let canonicalName = movimiento.nombre_insumo;
+      let targetCategoria = movimiento.categoria;
+      const catItem = catalog.find((c: any) => c.nombre.toLowerCase() === (movimiento.nombre_insumo || '').toLowerCase());
+
+      if (targetTipo === 'CONSUMO') {
+        canonicalName = (movimiento.nombre_insumo || '').trim();
+        targetCategoria = (movimiento.categoria || '').includes('Producto')
+          ? 'Consumido de Productos para la Venta'
+          : 'Consumido del Catálogo de Insumos y Carne';
+      } else {
+        canonicalName = getCanonicalName(movimiento.nombre_insumo, catalog);
+        targetCategoria = catItem?.categoria || movimiento.categoria || 'Verduras e Insumos';
+      }
 
       const qty = Number(movimiento.cantidad || 0);
       const unitPrice = Number(movimiento.costo_unitario || catItem?.costo_unitario_kg || 0);
@@ -896,7 +929,7 @@ export async function POST(request: Request) {
             tipo: targetTipo,
             insumo_id: movimiento.insumo_id || catItem?.id || null,
             nombre_insumo: canonicalName,
-            categoria: catItem?.categoria || movimiento.categoria || 'Verduras e Insumos',
+            categoria: targetCategoria,
             cantidad: qty,
             unidad: movimiento.unidad || 'Kg',
             costo_unitario: unitPrice,

@@ -38,7 +38,7 @@ interface InsumoRegistro {
   id: string;
   hora: string;
   usuario: string;
-  tipo: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE';
+  tipo: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'CONSUMO' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE';
   presentacion?: 'Entero' | 'Porcion';
   origen: string;
   destino: string;
@@ -1473,8 +1473,10 @@ export default function CosteoDiarioPage() {
   };
 
   // Modos operativos y switches de inclusión
+  const [productosVentaList, setProductosVentaList] = useState<any[]>([]);
+  const [consumoResponsable, setConsumoResponsable] = useState<string>('');
   const [activeOperationalView, setActiveOperationalView] = useState<
-    'TRASLADOS' | 'COCINA_APERTURA' | 'DEVOLUCIONES' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE'
+    'TRASLADOS' | 'COCINA_APERTURA' | 'DEVOLUCIONES' | 'COCINA_CIERRE' | 'CONSUMOS' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE'
   >('TRASLADOS');
   const [incluirCocinaApertura, setIncluirCocinaApertura] = useState(true);
   const [incluirDevoluciones, setIncluirDevoluciones] = useState(false);
@@ -1505,7 +1507,7 @@ export default function CosteoDiarioPage() {
       const section = params.get('section');
       if (
         section &&
-        ['TRASLADOS', 'COCINA_APERTURA', 'DEVOLUCIONES', 'COCINA_CIERRE', 'BODEGA_APERTURA', 'BODEGA_CIERRE'].includes(section)
+        ['TRASLADOS', 'COCINA_APERTURA', 'DEVOLUCIONES', 'COCINA_CIERRE', 'CONSUMOS', 'BODEGA_APERTURA', 'BODEGA_CIERRE'].includes(section)
       ) {
         setActiveOperationalView(section as any);
       }
@@ -2074,11 +2076,23 @@ export default function CosteoDiarioPage() {
     }, 0);
   };
 
+  const calculateCostoConsumos = (sheet?: CosteoSheet): number => {
+    if (!sheet) return 0;
+    return sheet.categories.reduce((acc, cat) => {
+      return acc + cat.items.reduce((cAcc, it) => {
+        const regs = it.registros || [];
+        const sum = regs.filter(r => r.tipo === 'CONSUMO').reduce((s, r) => s + r.total, 0);
+        return cAcc + sum;
+      }, 0);
+    }, 0);
+  };
+
   const costoApertura = calculateCostoApertura(activeSheet);
   const costoTraslados = calculateCostoTraslados(activeSheet);
   const totalDevoluciones = calculateTotalDevoluciones(activeSheet);
   const costoCierre = calculateCostoCierre(activeSheet);
-  const consumoReal = Math.max(0, costoApertura + costoTraslados - totalDevoluciones - costoCierre);
+  const costoConsumos = calculateCostoConsumos(activeSheet);
+  const consumoReal = Math.max(0, costoApertura + costoTraslados - totalDevoluciones - costoCierre + costoConsumos);
   const ventasDia = activeSheet?.posSales || 0;
   const rendimientoDia = ventasDia - consumoReal;
   const foodCostPct = ventasDia > 0 ? (consumoReal / ventasDia) * 100 : 0;
@@ -2354,6 +2368,7 @@ export default function CosteoDiarioPage() {
     setNewInsumoQtyFormula('');
     setSelectedCatalogItem(null);
     setAddingCategory(null);
+    setConsumoResponsable('');
 
     // Persistir adición en Supabase vía API
     fetch('/api/costeo-diario', {
@@ -2877,7 +2892,7 @@ Trucha 8`;
                 type="button"
                 onClick={() => {
                   setIsConteosDrawerOpen(true);
-                  setConteosTargetView(activeOperationalView);
+                  setConteosTargetView(activeOperationalView === 'CONSUMOS' ? 'COCINA_CIERRE' : activeOperationalView);
                   refreshCatalog(conteosRawText);
                 }}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
