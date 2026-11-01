@@ -9,17 +9,12 @@ import OperationalNotificationBell from '@/components/notifications/OperationalN
 
 const VIEW_TITLES: Record<string, string> = {
   '/': 'Bienvenida • Inicio',
-  '/bodeguero': 'Terminal del Bodeguero',
   '/costeo-diario': 'Costeo Diario Cocina',
   '/libros-apoyo': 'Libros de Apoyo • Libro de Caja Menor',
   '/auditoria-cocina': 'Auditoría Cocina',
   '/recetas': 'Fichas Técnicas / Recetas',
   '/inventario-consolidado': 'Costeo e Inventario Consolidado Diario',
-  '/inventario': 'Inventario de Carnes',
   '/catalogo': 'Catálogo de Carnes e Insumos',
-  '/ajustes': 'Inconsistencias y Ajustes',
-  '/periodos': 'Control y Cierre de Periodos',
-  '/dashboard': 'Dashboard General',
   '/compras': 'Entradas por Compra',
   '/ventas': 'Salidas por Venta',
   '/productos-venta': 'Productos Para la Venta',
