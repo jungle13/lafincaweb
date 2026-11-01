@@ -2174,7 +2174,16 @@ export default function CosteoDiarioPage() {
   const handleSelectCatalogItem = (item: any) => {
     setSelectedCatalogItem(item);
     setNewInsumoName(item.nombre || item.insumo);
-    setNewInsumoPrice(item.costo_unitario_kg || 0);
+    const unitPrice = Number(
+      item.costo_unitario_kg || 
+      item.precio_total || 
+      item.precio_neto || 
+      item.precio_venta || 
+      item.costo_estimado || 
+      item.costo || 
+      0
+    );
+    setNewInsumoPrice(unitPrice);
     const units = getAllowedUnitsForInsumo(item);
     setAvailableUnits(units);
     setNewInsumoUnit(units[0].value);
@@ -2386,7 +2395,9 @@ export default function CosteoDiarioPage() {
     setSheets(sheets.map(s => s.id === activeSheet.id ? updatedSheet : s));
 
     const insumoToSave = newInsumoName.trim();
-    const catNameToSave = selectedCatalogItem?.categoria || targetCategory?.name || 'Verduras e Insumos';
+    const catNameToSave = activeOperationalView === 'CONSUMOS'
+      ? (targetCatId === 'consumos_productos' ? 'Consumido de Productos para la Venta' : 'Consumido del Catálogo de Insumos y Carne')
+      : (selectedCatalogItem?.categoria || targetCategory?.name || 'Verduras e Insumos');
 
     setNewInsumoName('');
     setNewInsumoQtyFormula('');
@@ -3318,13 +3329,17 @@ Trucha 8`;
 
                 // Insumos filtrados con buscador comprensivo en TODOS los insumos del sistema
                 const effectiveSearchCatalog = (activeOperationalView === 'CONSUMOS' && cat.id === 'consumos_productos' && productosVentaList.length > 0)
-                  ? productosVentaList.map(p => ({
-                      id: p.id,
-                      nombre: p.nombre,
-                      categoria: p.categoria || 'Productos Venta',
-                      costo_unitario_kg: Number(p.precio_venta || p.costo_estimado || 0),
-                      unidad_medida: 'Und'
-                    }))
+                  ? productosVentaList.map(p => {
+                      const price = Number(p.precio_total || p.precio_neto || p.precio_venta || p.costo_estimado || 0);
+                      return {
+                        id: p.id,
+                        nombre: p.nombre,
+                        categoria: 'Consumido de Productos para la Venta',
+                        costo_unitario_kg: price,
+                        precio_total: price,
+                        unidad_medida: p.unidad || 'Und'
+                      };
+                    })
                   : catalogItems;
                 const filteredCatalog = searchCatalogComprehensive(newInsumoName, effectiveSearchCatalog, searchCategoryFilter);
 
@@ -3375,7 +3390,9 @@ Trucha 8`;
                     <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-white border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                       <div className="col-span-6">Insumo / Producto</div>
                       <div className="col-span-2 text-right">Cantidad</div>
-                      <div className="col-span-2 text-right">Costo Factura</div>
+                      <div className="col-span-2 text-right">
+                        {cat.id === 'consumos_productos' ? 'Precio Venta' : 'Costo Factura'}
+                      </div>
                       <div className="col-span-2 text-right">Subtotal</div>
                     </div>
 
@@ -3512,11 +3529,25 @@ Trucha 8`;
                                   type="text"
                                   value={newInsumoName}
                                   onChange={(e) => {
-                                    setNewInsumoName(e.target.value);
+                                    const val = e.target.value;
+                                    setNewInsumoName(val);
                                     setIsSearchOpen(true);
+                                    const exact = effectiveSearchCatalog.find(
+                                      it => (it.nombre || it.insumo || '').toLowerCase() === val.trim().toLowerCase()
+                                    );
+                                    if (exact) {
+                                      const price = Number(exact.costo_unitario_kg || exact.precio_total || exact.precio_neto || exact.precio_venta || 0);
+                                      if (price > 0) {
+                                        setNewInsumoPrice(price);
+                                      }
+                                    }
                                   }}
                                   onFocus={() => setIsSearchOpen(true)}
-                                  placeholder="Buscar cualquier insumo (ej: Punta de anca, Arroz, Vasos, Huevos, Leche)..."
+                                  placeholder={
+                                    cat.id === 'consumos_productos'
+                                      ? "Buscar producto para venta (ej: Gatorade, Cerveza, Postre)..."
+                                      : "Buscar cualquier insumo (ej: Punta de anca, Arroz, Vasos, Huevos, Leche)..."
+                                  }
                                   className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 shadow-2xs font-medium"
                                   autoFocus
                                 />
@@ -3645,13 +3676,14 @@ Trucha 8`;
                               ))}
                             </select>
 
-                            {/* Costo Factura (Autollenado, editable) */}
+                            {/* Costo Factura / Precio Venta (Autollenado, editable) */}
                             <input
                               type="number"
                               value={newInsumoPrice}
-                              onChange={(e) => setNewInsumoPrice(Number(e.target.value))}
-                              placeholder="Costo Factura"
-                              className="w-full sm:w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 font-mono"
+                              onChange={(e) => setNewInsumoPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                              placeholder={cat.id === 'consumos_productos' ? 'Precio Venta ($)' : 'Costo Unitario ($)'}
+                              title={cat.id === 'consumos_productos' ? 'Precio de Venta Unitario' : 'Costo Factura Unitario'}
+                              className="w-full sm:w-32 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 font-mono"
                             />
 
                             {/* Botones de Confirmación */}
@@ -3686,14 +3718,31 @@ Trucha 8`;
                             </div>
                           </div>
 
-                          {/* Previsualización en Vivo de la Conversión Automática a Kg */}
-                          {parsedAddQty > 0 && selectedUnitOpt && (
-                            <div className="flex items-center gap-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md w-fit font-mono">
-                              <span>✓ Conversión automática:</span>
-                              <strong>{convertedBaseQty} {selectedUnitOpt.baseUnit}</strong>
-                              <span className="text-amber-600">(${estimatedCost.toLocaleString('es-CO')} COP)</span>
+                          {/* Previsualización en Vivo de la Conversión Automática y TOTAL */}
+                          {(parsedAddQty > 0 || Number(newInsumoPrice) > 0) && (
+                            <div className="flex items-center gap-2.5 text-xs bg-amber-50/90 border border-amber-200/90 px-3 py-1.5 rounded-md font-mono flex-wrap">
+                              <span className="text-amber-900 font-semibold">
+                                {cat.id === 'consumos_productos' ? '✓ Consumo Venta:' : '✓ Conversión / Registro:'}
+                              </span>
+                              <span className="text-slate-800">
+                                <strong>{parsedAddQty || 0} {newInsumoUnit}</strong>
+                                {selectedUnitOpt && selectedUnitOpt.baseUnit !== newInsumoUnit && (
+                                  <span className="text-slate-500 text-[11px] ml-1">
+                                    (= {convertedBaseQty} {selectedUnitOpt.baseUnit})
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-slate-400">•</span>
+                              <span className="text-slate-700">
+                                {cat.id === 'consumos_productos' ? 'Precio Unitario:' : 'Costo Unitario:'}{' '}
+                                <strong>${Number(newInsumoPrice || 0).toLocaleString('es-CO')}</strong>
+                              </span>
+                              <span className="text-slate-400">•</span>
+                              <span className="text-emerald-800 font-bold bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 shadow-2xs">
+                                Total: ${estimatedCost.toLocaleString('es-CO')} COP
+                              </span>
                               {newInsumoUnit === 'Porciones' && (
-                                <span className="text-amber-700 text-[10px]">
+                                <span className="text-amber-700 text-[10px] block w-full mt-0.5 font-sans">
                                   ({parsedAddQty} porciones calculadas en base a ficha técnica)
                                 </span>
                               )}
