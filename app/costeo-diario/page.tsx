@@ -1451,6 +1451,27 @@ export default function CosteoDiarioPage() {
     bodegaCierre: true,
   });
 
+  // Estado para colapsar/expandir categorías individualmente
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCategoryCollapse = (catId: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [catId]: !prev[catId]
+    }));
+  };
+
+  const collapseAllCategories = () => {
+    if (!activeSheet) return;
+    const all: Record<string, boolean> = {};
+    activeSheet.categories.forEach(c => { all[c.id] = true; });
+    setCollapsedCategories(all);
+  };
+
+  const expandAllCategories = () => {
+    setCollapsedCategories({});
+  };
+
   // Modos operativos y switches de inclusión
   const [activeOperationalView, setActiveOperationalView] = useState<
     'TRASLADOS' | 'COCINA_APERTURA' | 'DEVOLUCIONES' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE'
@@ -3222,8 +3243,33 @@ Trucha 8`;
 
 
 
+              {/* Barra de utilidades: Expandir/Colapsar categorías */}
+              <div className="flex items-center justify-between px-1 mb-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Categorías de Insumos ({activeSheet.categories.length})
+                </span>
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={expandAllCategories}
+                    className="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline cursor-pointer"
+                  >
+                    Expandir todas
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={collapseAllCategories}
+                    className="text-[11px] text-slate-500 hover:text-slate-700 font-medium hover:underline cursor-pointer"
+                  >
+                    Colapsar todas
+                  </button>
+                </div>
+              </div>
+
               {/* LISTADO DE CATEGORÍAS */}
               {activeSheet.categories.map((cat) => {
+                const isCollapsed = Boolean(collapsedCategories[cat.id]);
                 const catViewTotal = calculateCategoryViewTotal(cat);
                 const isAddingHere = addingCategory === cat.id;
 
@@ -3258,22 +3304,34 @@ Trucha 8`;
                     }`}
                   >
                     
-                    {/* Encabezado de Categoría */}
-                    <div className="p-2.5 px-4 flex items-center justify-between border-b border-slate-200 bg-slate-50/80">
+                    {/* Encabezado de Categoría Interactivo con Expandir/Contraer */}
+                    <div 
+                      onClick={() => toggleCategoryCollapse(cat.id)}
+                      className="p-2.5 px-4 flex items-center justify-between border-b border-slate-200 bg-slate-50/80 hover:bg-slate-100/70 transition-colors cursor-pointer select-none"
+                    >
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-400">▼</span>
+                        <span className={`text-[10px] text-slate-500 transition-transform duration-200 inline-block ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
+                          ▼
+                        </span>
                         <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
                           {cat.name}
                         </h2>
                         <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-medium">
                           {displayItems.length}
                         </span>
+                        {isCollapsed && (
+                          <span className="text-[10px] text-slate-400 font-normal italic">
+                            (contraído - clic para ver insumos)
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs font-semibold text-slate-700">
                         Subtotal: <span className="font-bold text-slate-900">${catViewTotal.toLocaleString('es-CO')}</span>
                       </div>
                     </div>
 
+                    {!isCollapsed && (
+                      <>
                     {/* Encabezado de Columnas */}
                     <div className="hidden sm:grid grid-cols-12 gap-2 p-2 px-4 bg-white border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                       <div className="col-span-6">Insumo / Producto</div>
@@ -3617,6 +3675,8 @@ Trucha 8`;
                         </button>
                       )}
                     </div>
+                      </>
+                    )}
                   </div>
                 );
               })}

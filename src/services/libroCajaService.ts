@@ -32,6 +32,7 @@ export interface LibroCajaDiario {
   venta_efectivo_pos: number;
   venta_pos_total: number;
   total_datafonos: number;
+  total_otros_medios?: number;
   total_costos_insumos: number;
   total_gastos_operativos: number;
   total_turnos_nomina: number;
@@ -53,8 +54,11 @@ export interface LibroCajaSesion {
   efectivo_inicial: number;
   efectivo_cierre: number;
   valor_datafonos: number;
+  valor_otros_medios?: number;
   total_salidas: number;
   total_ajustes: number;
+  venta_pos?: number;
+  diferencia_cuadre?: number;
   estado: 'ABIERTA' | 'CERRADA_PARCIAL' | 'CERRADA_TOTAL' | 'CERRADA' | string;
   numero_turno?: number;
   tipo_cierre?: 'PARCIAL' | 'TOTAL' | string;
@@ -153,8 +157,11 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
     efectivo_inicial: Number(s.efectivo_inicial || 0),
     efectivo_cierre: Number(s.efectivo_cierre || 0),
     valor_datafonos: Number(s.valor_datafonos || 0),
+    valor_otros_medios: Number(s.valor_otros_medios || 0),
     total_salidas: Number(s.total_salidas || 0),
     total_ajustes: Number(s.total_ajustes || 0),
+    venta_pos: Number(s.venta_pos || 0),
+    diferencia_cuadre: Number(s.diferencia_cuadre || 0),
   }));
 
   const diarios: LibroCajaDiario[] = (diariosRes.data || []).map((d: any) => {
@@ -166,6 +173,7 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
       venta_efectivo_pos: Number(d.venta_efectivo_pos || posOficial || 0),
       venta_pos_total: posOficial,
       total_datafonos: Number(d.total_datafonos || 0),
+      total_otros_medios: Number(d.total_otros_medios || 0),
       total_costos_insumos: Number(d.total_costos_insumos || 0),
       total_gastos_operativos: Number(d.total_gastos_operativos || 0),
       total_turnos_nomina: Number(d.total_turnos_nomina || 0),
@@ -346,6 +354,14 @@ export async function recalcularHojaDiaria(fecha: string, tipoLibro: string = 'C
     (a: number, s: any) => a + Number(s.valor_datafonos || 0),
     0
   );
+  const sumOtrosMediosSesiones = sesionesOrdenadas.reduce(
+    (a: number, s: any) => a + Number(s.valor_otros_medios || 0),
+    0
+  );
+  const sumEfectivoSesiones = sesionesOrdenadas.reduce(
+    (a: number, s: any) => a + Number(s.efectivo_cierre || 0),
+    0
+  );
 
   // Determinar estado del flujo del día según las sesiones
   let estadoDia = existing?.estado || 'ABIERTA';
@@ -368,13 +384,14 @@ export async function recalcularHojaDiaria(fecha: string, tipoLibro: string = 'C
       ? Number(primeraSesion.efectivo_inicial || 500000)
       : Number(existing.base_inicial || 500000);
     const ventaPos = Number(existing.venta_pos_total || ventaPosOficial || existing.venta_efectivo_pos || 0);
-    const fisico = ultimaSesion
-      ? Number(ultimaSesion.efectivo_cierre || 0)
+    const fisico = sesionesOrdenadas.length > 0
+      ? sumEfectivoSesiones
       : Number(existing.efectivo_fisico_cierre || 0);
     const datafonos = sesionesOrdenadas.length > 0 ? sumDatafonosSesiones : Number(existing.total_datafonos || 0);
-    // Fórmula de Cuadre Real: (Efectivo Cierre + Datafonos + Total Salidas - Base Inicial) vs Venta POS
-    const recaudadoReal = fisico + datafonos + totalSalidas - base;
-    const diferencia = recaudadoReal - ventaPos;
+    const otrosMedios = sesionesOrdenadas.length > 0 ? sumOtrosMediosSesiones : Number(existing.total_otros_medios || 0);
+    // Cuadre Oficial: Efectivo + Datáfonos + Otros Medios (Nequi) + Salidas vs Venta POS
+    const totalCuadre = fisico + datafonos + otrosMedios + totalSalidas;
+    const diferencia = totalCuadre - ventaPos;
 
     await supabase
       .from('libro_caja_diario')
@@ -383,6 +400,7 @@ export async function recalcularHojaDiaria(fecha: string, tipoLibro: string = 'C
         venta_pos_total: ventaPos,
         venta_efectivo_pos: ventaPos,
         total_datafonos: datafonos,
+        total_otros_medios: otrosMedios,
         efectivo_fisico_cierre: fisico,
         total_costos_insumos: costos,
         total_gastos_operativos: gastos,
@@ -398,10 +416,11 @@ export async function recalcularHojaDiaria(fecha: string, tipoLibro: string = 'C
   } else {
     const base = primeraSesion ? Number(primeraSesion.efectivo_inicial || 500000) : 500000;
     const ventaPos = ventaPosOficial || totalSalidas;
-    const fisico = ultimaSesion ? Number(ultimaSesion.efectivo_cierre || 0) : base;
+    const fisico = sesionesOrdenadas.length > 0 ? sumEfectivoSesiones : base;
     const datafonos = sesionesOrdenadas.length > 0 ? sumDatafonosSesiones : 0;
-    const recaudadoReal = fisico + datafonos + totalSalidas - base;
-    const diferencia = recaudadoReal - ventaPos;
+    const otrosMedios = sesionesOrdenadas.length > 0 ? sumOtrosMediosSesiones : 0;
+    const totalCuadre = fisico + datafonos + otrosMedios + totalSalidas;
+    const diferencia = totalCuadre - ventaPos;
 
     await supabase.from('libro_caja_diario').insert({
       fecha,
@@ -412,6 +431,7 @@ export async function recalcularHojaDiaria(fecha: string, tipoLibro: string = 'C
       venta_efectivo_pos: ventaPos,
       venta_pos_total: ventaPos,
       total_datafonos: datafonos,
+      total_otros_medios: otrosMedios,
       total_costos_insumos: costos,
       total_gastos_operativos: gastos,
       total_turnos_nomina: turnos,

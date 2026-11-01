@@ -16,7 +16,8 @@ import {
   UtensilsCrossed,
   Loader2,
   Wallet,
-  Bot
+  Bot,
+  Layers
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 
@@ -44,9 +45,10 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'OPERACIONES DE COCINA',
+    title: 'COSTEO DIARIO E INVENTARIO',
     items: [
       { label: 'Costeo Diario Cocina', href: '/costeo-diario', icon: FileSpreadsheet },
+      { label: 'Inventario Consolidado Diario', href: '/inventario-consolidado', icon: Layers },
     ],
   },
   {

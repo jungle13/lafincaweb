@@ -144,7 +144,8 @@ async function runMigration() {
     const responsablesRaw = String(r[2] || '').trim();
     const datafonos = Number(r[3] || 0);
     const nequi = Number(r[4] || 0);
-    const totalDatafonos = datafonos + nequi; // Sumatoria de datáfonos y medios electrónicos
+    const totalDatafonos = datafonos;
+    const totalOtrosMedios = nequi;
     const efectivoFisico = Number(r[5] || 0);
     const totalCuadre = Number(r[6] || 0);
     const posReporteXZ = Number(r[7] || 0);
@@ -164,7 +165,8 @@ async function runMigration() {
       tipo_libro: 'CAJA_MENOR',
       periodo_id: 'per-2026-10',
       base_inicial: 500000,
-      total_datafonos: totalDatafonos,
+      total_datafonos: datafonos,
+      total_otros_medios: nequi,
       efectivo_fisico_cierre: efectivoFisico,
       venta_pos_total: ventaPosReal,
       venta_efectivo_pos: ventaPosReal,
@@ -220,7 +222,10 @@ async function runMigration() {
       usuario_username: username,
       efectivo_inicial: 500000,
       efectivo_cierre: efectivo,
-      valor_datafonos: datafonos + nequi,
+      valor_datafonos: datafonos,
+      valor_otros_medios: nequi,
+      venta_pos: reporteXZ,
+      diferencia_cuadre: diferencia,
       total_salidas: salidasTurno,
       total_ajustes: 0,
       estado: 'CERRADA_TOTAL',

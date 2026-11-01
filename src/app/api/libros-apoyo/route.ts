@@ -182,6 +182,7 @@ export async function POST(req: NextRequest) {
         tipo_cierre = 'TOTAL', // 'PARCIAL' | 'TOTAL'
         efectivo_cierre = 0,
         valor_datafonos = 0,
+        valor_otros_medios = 0,
         observaciones = '',
         tipo_libro = 'CAJA_MENOR',
       } = body;
@@ -237,6 +238,7 @@ export async function POST(req: NextRequest) {
         .update({
           efectivo_cierre: Number(efectivo_cierre || 0),
           valor_datafonos: esParcial ? 0 : Number(valor_datafonos || 0),
+          valor_otros_medios: esParcial ? 0 : Number(valor_otros_medios || 0),
           estado: nuevoEstado,
           tipo_cierre: esParcial ? 'PARCIAL' : 'TOTAL',
           hora_cierre: new Date().toISOString(),
@@ -453,10 +455,11 @@ export async function POST(req: NextRequest) {
     if (action === 'UPDATE_ARQUEO') {
       const {
         fecha,
-        base_inicial = 200000,
+        base_inicial = 500000,
         venta_efectivo_pos = 0,
         venta_pos_total = 0,
         total_datafonos = 0,
+        total_otros_medios = 0,
         efectivo_fisico_cierre = 0,
         estado = 'CERRADA',
         observaciones = '',
@@ -472,13 +475,14 @@ export async function POST(req: NextRequest) {
 
       const totalSalidas = Number(existing?.total_salidas || 0);
       const posFinal = Number(venta_pos_total || venta_efectivo_pos || existing?.venta_pos_total || 0);
-      const datafonosFinal = Number(total_datafonos || 0);
-      const fisicoFinal = Number(efectivo_fisico_cierre || 0);
-      const baseFinal = Number(base_inicial || 0);
+      const datafonosFinal = Number(total_datafonos !== undefined ? total_datafonos : (existing?.total_datafonos || 0));
+      const otrosMediosFinal = Number(total_otros_medios !== undefined ? total_otros_medios : (existing?.total_otros_medios || 0));
+      const fisicoFinal = Number(efectivo_fisico_cierre !== undefined ? efectivo_fisico_cierre : (existing?.efectivo_fisico_cierre || 0));
+      const baseFinal = Number(base_inicial || 500000);
 
-      // Cuadre real: (Efectivo Cierre + Datafonos + Salidas - Base Inicial) - Venta POS
-      const recaudado = fisicoFinal + datafonosFinal + totalSalidas - baseFinal;
-      const diferencia = recaudado - posFinal;
+      // Cuadre Oficial: Efectivo + Datáfonos + Otros Medios (Nequi) + Salidas vs Venta POS
+      const totalCuadre = fisicoFinal + datafonosFinal + otrosMediosFinal + totalSalidas;
+      const diferencia = totalCuadre - posFinal;
 
       if (existing) {
         const { error } = await supabase
@@ -488,6 +492,7 @@ export async function POST(req: NextRequest) {
             venta_efectivo_pos: posFinal,
             venta_pos_total: posFinal,
             total_datafonos: datafonosFinal,
+            total_otros_medios: otrosMediosFinal,
             efectivo_fisico_cierre: fisicoFinal,
             diferencia_cuadre: diferencia,
             estado,
@@ -508,6 +513,7 @@ export async function POST(req: NextRequest) {
           venta_efectivo_pos: posFinal,
           venta_pos_total: posFinal,
           total_datafonos: datafonosFinal,
+          total_otros_medios: otrosMediosFinal,
           total_costos_insumos: 0,
           total_gastos_operativos: 0,
           total_turnos_nomina: 0,

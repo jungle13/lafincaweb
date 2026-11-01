@@ -36,7 +36,8 @@ import {
   CreditCard,
   CheckSquare,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  Smartphone
 } from 'lucide-react';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
 import Modal from '@/components/ui/Modal';
@@ -248,6 +249,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
   const [arqueoVentaPos, setArqueoVentaPos] = useState('0');
   const [arqueoEfectivoFisico, setArqueoEfectivoFisico] = useState('0');
   const [arqueoDatafonos, setArqueoDatafonos] = useState('0');
+  const [arqueoOtrosMedios, setArqueoOtrosMedios] = useState('0');
   const [arqueoEstado, setArqueoEstado] = useState('AUDITADA');
   const [savingArqueo, setSavingArqueo] = useState(false);
 
@@ -263,6 +265,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
   const [flujoCierreTipo, setFlujoCierreTipo] = useState<'PARCIAL' | 'TOTAL'>('PARCIAL');
   const [flujoCierreEfectivoFisico, setFlujoCierreEfectivoFisico] = useState('');
   const [flujoCierreDatafonos, setFlujoCierreDatafonos] = useState('');
+  const [flujoCierreOtrosMedios, setFlujoCierreOtrosMedios] = useState('');
   const [flujoCierreObs, setFlujoCierreObs] = useState('');
   const [closingFlujo, setClosingFlujo] = useState(false);
 
@@ -422,6 +425,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
       setArqueoVentaPos(String(activeSheet.venta_pos_total || activeSheet.venta_efectivo_pos || 0));
       setArqueoEfectivoFisico(String(activeSheet.efectivo_fisico_cierre || 0));
       setArqueoDatafonos(String(activeSheet.total_datafonos || 0));
+      setArqueoOtrosMedios(String(activeSheet.total_otros_medios || 0));
       setArqueoEstado(activeSheet.estado || 'AUDITADA');
     }
   }, [activeSheet]);
@@ -534,7 +538,8 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
     if (!activeTabId) return;
 
     const efectivoCierreNum = parseInputMoneyToNumber(flujoCierreEfectivoFisico);
-    const datafonosNum = flujoCierreTipo === 'TOTAL' ? parseInputMoneyToNumber(flujoCierreDatafonos) : 0;
+    const datafonosNum = parseInputMoneyToNumber(flujoCierreDatafonos);
+    const otrosMediosNum = parseInputMoneyToNumber(flujoCierreOtrosMedios);
 
     setClosingFlujo(true);
     try {
@@ -551,6 +556,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
           tipo_cierre: flujoCierreTipo,
           efectivo_cierre: efectivoCierreNum,
           valor_datafonos: datafonosNum,
+          valor_otros_medios: otrosMediosNum,
           observaciones: flujoCierreObs.trim(),
         }),
       });
@@ -562,6 +568,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
       setIsCerrarFlujoModalOpen(false);
       setFlujoCierreEfectivoFisico('');
       setFlujoCierreDatafonos('');
+      setFlujoCierreOtrosMedios('');
       setFlujoCierreObs('');
       invalidateCache(CACHE_KEY);
       await loadData(true);
@@ -681,6 +688,7 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
           venta_pos_total: Number(arqueoVentaPos || 0),
           venta_efectivo_pos: Number(arqueoVentaPos || 0),
           total_datafonos: Number(arqueoDatafonos || 0),
+          total_otros_medios: Number(arqueoOtrosMedios || 0),
           efectivo_fisico_cierre: Number(arqueoEfectivoFisico || 0),
           estado: arqueoEstado,
         }),
@@ -733,15 +741,35 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
     .filter((r) => r.es_ajuste)
     .reduce((a, b) => a + Number(b.valor_pagado || 0), 0);
 
-  const efectivoFisicoCajero = Number(ultimaSesionDia?.efectivo_cierre || activeSheet?.efectivo_fisico_cierre || 0);
-  const datafonosCajero = sesionesDiaActivo.length > 0
+  // Totales consolidados oficiales para el Flujo del Día:
+  const efectivoDia = sesionesDiaActivo.length > 0
+    ? sesionesDiaActivo.reduce((a, s) => a + Number(s.efectivo_cierre || 0), 0)
+    : Number(activeSheet?.efectivo_fisico_cierre || 0);
+
+  const datafonosDia = sesionesDiaActivo.length > 0
     ? sesionesDiaActivo.reduce((a, s) => a + Number(s.valor_datafonos || 0), 0)
     : Number(activeSheet?.total_datafonos || 0);
+
+  const otrosMediosDia = sesionesDiaActivo.length > 0
+    ? sesionesDiaActivo.reduce((a, s) => a + Number(s.valor_otros_medios || 0), 0)
+    : Number(activeSheet?.total_otros_medios || 0);
+
+  const salidasDia = totalSalidasCajaActiva > 0
+    ? totalSalidasCajaActiva
+    : Number(activeSheet?.total_salidas || 0);
+
   const ventaPosReal = Number(activeSheet?.venta_pos_total || activeSheet?.venta_efectivo_pos || 0);
 
-  // Cuadre total: (Físico + Datáfonos + Salidas - Base Inicial) vs Venta POS
-  const dineroRecaudadoCajero = efectivoFisicoCajero + datafonosCajero + totalSalidasCajaActiva - baseFlujo;
-  const diferenciaCuadreCajero = dineroRecaudadoCajero - ventaPosReal;
+  // FÓRMULA OFICIAL DE CUADRE DIARIO:
+  // Efectivo + Datáfonos + Otros Medios (Nequi) + Salidas (que también se suman al total)
+  const sumatoriaTotalDia = efectivoDia + datafonosDia + otrosMediosDia + salidasDia;
+  const diferenciaCuadreDia = sumatoriaTotalDia - ventaPosReal;
+
+  // Variables retrocompatibles
+  const efectivoFisicoCajero = efectivoDia;
+  const datafonosCajero = datafonosDia;
+  const dineroRecaudadoCajero = sumatoriaTotalDia;
+  const diferenciaCuadreCajero = diferenciaCuadreDia;
 
   return (
     <div className="flex flex-col h-full max-h-full w-full overflow-hidden bg-slate-50 font-normal text-xs p-0 m-0">
@@ -1337,57 +1365,96 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {sesionesDiaActivo.map((ses, idx) => {
                       const isThisOpen = ses.estado === 'ABIERTA';
                       const isParcial = ses.estado === 'CERRADA_PARCIAL';
+                      const datafonosTurno = Number(ses.valor_datafonos || 0);
+                      const efectivoTurno = Number(ses.efectivo_cierre || 0);
+                      const otrosMediosTurno = Number(ses.valor_otros_medios || 0);
+                      const salidasTurno = Number(ses.total_salidas || 0);
+                      // Sumatoria Total del Turno = Datáfonos + Efectivo + Demás Conceptos (Nequi) + Salidas
+                      const totalTurno = datafonosTurno + efectivoTurno + otrosMediosTurno + salidasTurno;
+                      const posTurno = Number(ses.venta_pos || 0);
+                      const diffTurno = posTurno > 0 ? (totalTurno - posTurno) : Number(ses.diferencia_cuadre || 0);
+
                       return (
                         <div
                           key={ses.id}
-                          className={`p-2.5 rounded-lg border text-xs flex flex-col justify-between gap-1.5 ${
+                          className={`p-3 rounded-xl border text-xs flex flex-col justify-between gap-2.5 transition-all shadow-2xs ${
                             isThisOpen
                               ? 'bg-emerald-50/60 border-emerald-300'
                               : isParcial
                               ? 'bg-amber-50/50 border-amber-200'
-                              : 'bg-slate-50 border-slate-200'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
                           }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900">
-                              Turno #{ses.numero_turno || idx + 1} • {ses.cajero_nombre}
-                            </span>
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-900 block truncate text-xs">
+                                Turno #{ses.numero_turno || idx + 1} • {ses.cajero_nombre}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-medium truncate block">
+                                {ses.caja_nombre || 'Caja Registradora'}
+                              </span>
+                            </div>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${
                                 isThisOpen
-                                  ? 'bg-emerald-200 text-emerald-900'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                                   : isParcial
-                                  ? 'bg-amber-200 text-amber-900'
-                                  : 'bg-slate-200 text-slate-800'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
                               }`}
                             >
-                              {isThisOpen
-                                ? 'En Turno Activo'
-                                : isParcial
-                                ? 'Cierre Parcial'
-                                : 'Cierre Total'}
+                              {isThisOpen ? 'En Turno Activo' : isParcial ? 'Cierre Parcial' : 'Turno Cerrado'}
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200/60 font-mono text-[11px]">
+                          {/* Sumatoria de Datáfonos, Efectivo, Demás conceptos (Nequi) y Salidas */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px] bg-slate-50/80 p-2 rounded-lg border border-slate-100">
                             <div>
-                              <span className="text-[9px] text-slate-500 block font-sans">Efectivo Inicial</span>
-                              <span className="font-bold text-slate-900">${formatMoney(ses.efectivo_inicial)}</span>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">Datáfonos</span>
+                              <span className="font-bold text-indigo-700 block mt-0.5">${formatMoney(datafonosTurno)}</span>
                             </div>
                             <div>
-                              <span className="text-[9px] text-slate-500 block font-sans">Salidas Turno</span>
-                              <span className="font-bold text-rose-700">${formatMoney(ses.total_salidas)}</span>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-500 block font-sans">Efectivo Cierre</span>
-                              <span className="font-bold text-slate-900">
-                                {isThisOpen ? 'En curso' : `$${formatMoney(ses.efectivo_cierre)}`}
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">Efectivo</span>
+                              <span className="font-bold text-slate-900 block mt-0.5">
+                                {isThisOpen ? 'En curso' : `$${formatMoney(efectivoTurno)}`}
                               </span>
                             </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">Demás conceptos (Nequi)</span>
+                              <span className="font-bold text-purple-700 block mt-0.5">${formatMoney(otrosMediosTurno)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-rose-700 uppercase block font-sans">(+) Salidas</span>
+                              <span className="font-bold text-rose-700 block mt-0.5">${formatMoney(salidasTurno)}</span>
+                            </div>
+                          </div>
+
+                          {/* Total Turno y Comparativo POS */}
+                          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
+                                Total Turno
+                              </span>
+                              <span className="font-mono font-black text-xs text-slate-900">
+                                $ {formatMoney(totalTurno)}
+                              </span>
+                            </div>
+                            {posTurno > 0 && (
+                              <div className="text-right">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
+                                  POS Turno: ${formatMoney(posTurno)}
+                                </span>
+                                <span className={`font-mono font-black text-[11px] ${
+                                  diffTurno === 0 ? 'text-emerald-700' : diffTurno > 0 ? 'text-blue-700' : 'text-rose-700'
+                                }`}>
+                                  {diffTurno === 0 ? 'Exacto ($0)' : diffTurno > 0 ? `+${formatMoney(diffTurno)}` : `-${formatMoney(Math.abs(diffTurno))}`}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -1421,68 +1488,86 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
                   )}
                 </div>
 
-                {/* 5 Columnas de Flujo */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {/* 6 Columnas Oficiales del Flujo del Día: Efectivo, Datáfonos, Otros Medios, Salidas, Sumatoria Total, Ventas POS y Diferencia */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                   <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      (+) Base Inicial Día
+                    <span className="text-[10px] font-bold text-slate-600 uppercase block">
+                      (+) Efectivo
                     </span>
                     <span className="font-mono font-black text-sm text-slate-900 mt-1 block">
-                      $ {formatMoney(baseFlujo)}
+                      $ {formatMoney(efectivoDia)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-sans block mt-0.5">
+                      Físico contado en caja
                     </span>
                   </div>
 
                   <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      (-) Salidas Registradas
-                    </span>
-                    <span className="font-mono font-black text-sm text-rose-700 mt-1 block">
-                      $ {formatMoney(totalSalidasCajaActiva)}
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      (+) Efectivo Físico Cierre
-                    </span>
-                    <span className="font-mono font-black text-sm text-slate-900 mt-1 block">
-                      {isFlujoCerradoTotal || isFlujoPendienteRelevo || isAdmin
-                        ? `$ ${formatMoney(efectivoFisicoCajero)}`
-                        : '•••••••• (Al cerrar)'}
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      (+) Recibido en Datáfonos
+                    <span className="text-[10px] font-bold text-slate-600 uppercase block">
+                      (+) Datáfonos
                     </span>
                     <span className="font-mono font-black text-sm text-indigo-700 mt-1 block">
-                      {isFlujoCerradoTotal || isAdmin
-                        ? `$ ${formatMoney(datafonosCajero)}`
-                        : '•••••••• (Cierre Total)'}
+                      $ {formatMoney(datafonosDia)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-sans block mt-0.5">
+                      Vouchers / tarjetas
                     </span>
                   </div>
 
-                  <div className="col-span-2 sm:col-span-1 bg-slate-900 text-white p-2.5 rounded-lg">
-                    <span className="text-[10px] font-bold text-slate-300 uppercase block">
-                      Venta POS y Cuadre
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-600 uppercase block">
+                      (+) Otros Medios
                     </span>
-                    {isFlujoCerradoTotal || isAdmin ? (
-                      <div className="mt-1">
-                        <div className="font-mono font-bold text-xs text-slate-200">
-                          POS: $ {formatMoney(ventaPosReal)}
-                        </div>
-                        <div className={`font-mono font-black text-xs ${
-                          diferenciaCuadreCajero === 0 ? 'text-emerald-400' : diferenciaCuadreCajero > 0 ? 'text-blue-400' : 'text-rose-400'
-                        }`}>
-                          {diferenciaCuadreCajero === 0 ? 'CUADRADA ($0)' : diferenciaCuadreCajero > 0 ? `SOBRANTE +$${formatMoney(diferenciaCuadreCajero)}` : `FALTANTE -$${formatMoney(Math.abs(diferenciaCuadreCajero))}`}
-                        </div>
+                    <span className="font-mono font-black text-sm text-purple-700 mt-1 block">
+                      $ {formatMoney(otrosMediosDia)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-sans block mt-0.5">
+                      Nequi / Transferencias
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <span className="text-[10px] font-bold text-rose-700 uppercase block">
+                      (+) Salidas
+                    </span>
+                    <span className="font-mono font-black text-sm text-rose-700 mt-1 block">
+                      $ {formatMoney(salidasDia)}
+                    </span>
+                    <span className="text-[9px] text-rose-600 font-sans block mt-0.5">
+                      Pagadas en efectivo
+                    </span>
+                  </div>
+
+                  <div className="bg-orange-50/70 p-2.5 rounded-lg border border-orange-200">
+                    <span className="text-[10px] font-bold text-orange-900 uppercase block">
+                      (=) Sumatoria Total
+                    </span>
+                    <span className="font-mono font-black text-sm text-orange-800 mt-1 block">
+                      $ {formatMoney(sumatoriaTotalDia)}
+                    </span>
+                    <span className="text-[9px] text-orange-700 font-sans block mt-0.5">
+                      Flujo total recaudado
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 sm:col-span-3 lg:col-span-1 bg-slate-900 text-white p-2.5 rounded-lg flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase block">
+                      Ventas POS y Diferencia
+                    </span>
+                    <div className="mt-1">
+                      <div className="font-mono font-bold text-xs text-slate-200">
+                        POS: $ {formatMoney(ventaPosReal)}
                       </div>
-                    ) : (
-                      <div className="text-[11px] text-slate-400 mt-1 leading-tight">
-                        Oculto hasta realizar el Cierre Total del flujo.
+                      <div className={`font-mono font-black text-xs mt-0.5 ${
+                        diferenciaCuadreDia === 0 ? 'text-emerald-400' : diferenciaCuadreDia > 0 ? 'text-blue-400' : 'text-rose-400'
+                      }`}>
+                        {diferenciaCuadreDia === 0
+                          ? 'CUADRADA ($0)'
+                          : diferenciaCuadreDia > 0
+                          ? `SOBRANTE +$${formatMoney(diferenciaCuadreDia)}`
+                          : `FALTANTE -$${formatMoney(Math.abs(diferenciaCuadreDia))}`}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1963,26 +2048,41 @@ export default function LibrosApoyoContent({ modoCajeroHermetico = false }: { mo
             </div>
           </div>
 
-          {flujoCierreTipo === 'TOTAL' && (
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <CreditCard className="w-3.5 h-3.5 text-slate-500" />
-                <span>Valor Completo Recibido en Datáfonos del Día</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-slate-400 font-bold">$</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  required
-                  value={flujoCierreDatafonos}
-                  onChange={(e) => setFlujoCierreDatafonos(formatInputValueMoney(e.target.value))}
-                  placeholder="Total vouchers de datáfono del día"
-                  className="w-full min-h-[42px] pl-7 pr-3 rounded-lg border border-slate-300 font-mono font-bold text-sm text-slate-900 focus:outline-none focus:border-slate-900"
-                />
-              </div>
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+              <span>Valor Recibido en Datáfonos</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-slate-400 font-bold">$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={flujoCierreDatafonos}
+                onChange={(e) => setFlujoCierreDatafonos(formatInputValueMoney(e.target.value))}
+                placeholder="Total vouchers de datáfono del turno"
+                className="w-full min-h-[42px] pl-7 pr-3 rounded-lg border border-slate-300 font-mono font-bold text-sm text-slate-900 focus:outline-none focus:border-slate-900"
+              />
             </div>
-          )}
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <Smartphone className="w-3.5 h-3.5 text-purple-600" />
+              <span>Otros Medios de Pago / Nequi / Transferencias</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-slate-400 font-bold">$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={flujoCierreOtrosMedios}
+                onChange={(e) => setFlujoCierreOtrosMedios(formatInputValueMoney(e.target.value))}
+                placeholder="Total Nequi / transferencias del turno"
+                className="w-full min-h-[42px] pl-7 pr-3 rounded-lg border border-slate-300 font-mono font-bold text-sm text-slate-900 focus:outline-none focus:border-slate-900"
+              />
+            </div>
+          </div>
 
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">

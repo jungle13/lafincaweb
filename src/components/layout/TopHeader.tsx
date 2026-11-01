@@ -14,6 +14,7 @@ const VIEW_TITLES: Record<string, string> = {
   '/libros-apoyo': 'Libros de Apoyo • Libro de Caja Menor',
   '/auditoria-cocina': 'Auditoría Cocina',
   '/recetas': 'Fichas Técnicas / Recetas',
+  '/inventario-consolidado': 'Costeo e Inventario Consolidado Diario',
   '/inventario': 'Inventario de Carnes',
   '/catalogo': 'Catálogo de Carnes e Insumos',
   '/ajustes': 'Inconsistencias y Ajustes',
@@ -41,7 +42,9 @@ export default function TopHeader() {
   // Obtener el título según la ruta activa o formatear fallback
   const getModuleTitle = () => {
     if (VIEW_TITLES[pathname]) return VIEW_TITLES[pathname];
-    const matchedKey = Object.keys(VIEW_TITLES).find(k => k !== '/' && pathname.startsWith(k));
+    const matchedKey = Object.keys(VIEW_TITLES)
+      .sort((a, b) => b.length - a.length)
+      .find(k => k !== '/' && pathname.startsWith(k));
     if (matchedKey) return VIEW_TITLES[matchedKey];
     
     const cleaned = pathname.replace('/', '').replace(/-/g, ' ');
