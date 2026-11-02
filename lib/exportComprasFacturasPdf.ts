@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { CompraFacturaGroup, CompraDetalleItem } from '@/services/comprasService';
+import { CompraFacturaGroup } from '@/services/comprasService';
 import {
   createLetterPdf,
   drawStandardHeader,
@@ -9,8 +9,6 @@ import {
   fitText,
   LETTER_WIDTH,
   DEFAULT_MARGIN_X,
-  DEFAULT_MARGIN_TOP_P1,
-  DEFAULT_MARGIN_TOP_OTHERS,
   DEFAULT_MARGIN_BOTTOM,
   PDF_COLORS,
   DEFAULT_COMPANY_NAME
@@ -24,14 +22,14 @@ export interface ExportComprasPdfOptions {
 }
 
 /**
- * Genera el documento PDF de Entradas por Compras por Factura organizado por Categoría,
- * siguiendo el estándar minimalista monocromático institucional de La Finca.
+ * Genera el documento PDF de Entradas por Compras listando factura por factura
+ * con su total, organizadas por Categoría, con diseño minimalista monocromático institucional.
  */
 export function generateComprasFacturasPdf({
   facturas,
   periodoNombre = 'Octubre 2026',
   companyName = DEFAULT_COMPANY_NAME,
-  reportTitle = 'ENTRADAS POR COMPRAS — DETALLE POR FACTURA Y CATEGORÍA'
+  reportTitle = 'ENTRADAS POR COMPRAS — FACTURAS POR CATEGORÍA'
 }: ExportComprasPdfOptions): jsPDF {
   const doc = createLetterPdf();
   const marginX = DEFAULT_MARGIN_X;
@@ -50,26 +48,6 @@ export function generateComprasFacturasPdf({
 
   currentY += 1.5;
 
-  // Anchos de columnas para las tablas de ítems dentro de cada categoría
-  // Ancho total: 197.9 mm
-  // Insumo / Detalle: 105 mm
-  // Cantidad + Unidad: 28 mm
-  // Costo Unitario: 32 mm
-  // Subtotal: 32.9 mm
-  const colW = {
-    insumo: 105.0,
-    cant: 28.0,
-    unitPrice: 32.0,
-    total: 32.9
-  };
-
-  const colX = {
-    insumo: marginX,
-    cant: marginX + colW.insumo,
-    unitPrice: marginX + colW.insumo + colW.cant,
-    total: marginX + colW.insumo + colW.cant + colW.unitPrice
-  };
-
   function checkSpace(neededHeight: number, isMajorHeader: boolean = false): void {
     const threshold = isMajorHeader ? (neededHeight + 8) : neededHeight;
     if (currentY + threshold > marginBottom) {
@@ -86,20 +64,36 @@ export function generateComprasFacturasPdf({
     }
   }
 
-  // 1. Resumen superior de Totales de Compras
+  // 1. Agrupar las Facturas por Categoría
+  const facturasByCategory: Record<string, CompraFacturaGroup[]> = {};
+  facturas.forEach((fac) => {
+    const cat = (fac.categoria || 'Sin Categoría').trim();
+    if (!facturasByCategory[cat]) facturasByCategory[cat] = [];
+    facturasByCategory[cat].push(fac);
+  });
+
+  // Ordenar categorías por monto total descendente
+  const sortedCategories = Object.keys(facturasByCategory).sort((a, b) => {
+    const totalA = facturasByCategory[a].reduce((sum, f) => sum + Number(f.valor_total || 0), 0);
+    const totalB = facturasByCategory[b].reduce((sum, f) => sum + Number(f.valor_total || 0), 0);
+    return totalB - totalA;
+  });
+
+  // Totales globales
   const totalFacturas = facturas.length;
   const totalInversion = facturas.reduce((sum, f) => sum + Number(f.valor_total || 0), 0);
-  const totalItems = facturas.reduce((sum, f) => sum + (f.items?.length || 0), 0);
+  const totalItems = facturas.reduce((sum, f) => sum + Number(f.total_items || f.items?.length || 0), 0);
 
+  // 2. Bloque Superior de KPIs (minimalista)
   const kpiH = 10.5;
   const kpiCols = 3;
   const kpiGap = 3.0;
   const kpiW = (contentWidth - (kpiGap * (kpiCols - 1))) / kpiCols;
 
   const topKpis = [
-    { title: 'TOTAL FACTURAS PROCESADAS', val: `${totalFacturas} Facturas`, sub: 'Comprobantes emitidos' },
-    { title: 'ÍTEMS TOTALES COMPRADOS', val: `${totalItems} Ítems`, sub: 'Líneas recibidas' },
-    { title: 'INVERSIÓN TOTAL EN COMPRAS', val: formatMoneyCOP(totalInversion), sub: 'Suma de facturas' }
+    { title: 'TOTAL FACTURAS PROCESADAS', val: `${totalFacturas} Facturas`, sub: `${sortedCategories.length} categorías de compra` },
+    { title: 'ÍTEMS TOTALES COMPRADOS', val: `${totalItems} Ítems`, sub: 'Líneas recibidas en facturas' },
+    { title: 'INVERSIÓN TOTAL EN COMPRAS', val: formatMoneyCOP(totalInversion), sub: 'Suma consolidada de facturas' }
   ];
 
   topKpis.forEach((kpi, idx) => {
@@ -129,148 +123,162 @@ export function generateComprasFacturasPdf({
 
   currentY += kpiH + 3.5;
 
-  // 2. Iteración por cada Factura
-  if (facturas.length === 0) {
+  // Anchos de columnas de la tabla de Facturas (suma = 197.9 mm)
+  // Fecha: 24 mm
+  // N° Factura: 32 mm
+  // Proveedor: 60 mm
+  // Ítems: 18 mm
+  // Origen / Soporte: 31.9 mm
+  // Total Factura: 32 mm
+  const colW = {
+    fecha: 24.0,
+    factura: 32.0,
+    proveedor: 60.0,
+    items: 18.0,
+    origen: 31.9,
+    total: 32.0
+  };
+
+  const colX = {
+    fecha: marginX,
+    factura: marginX + colW.fecha,
+    proveedor: marginX + colW.fecha + colW.factura,
+    items: marginX + colW.fecha + colW.factura + colW.proveedor,
+    origen: marginX + colW.fecha + colW.factura + colW.proveedor + colW.items,
+    total: marginX + colW.fecha + colW.factura + colW.proveedor + colW.items + colW.origen
+  };
+
+  // 3. Renderizado por cada Categoría
+  if (sortedCategories.length === 0) {
     checkSpace(10);
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8.0);
+    doc.setFontSize(7.5);
     doc.setTextColor(...PDF_COLORS.textMuted);
     doc.text('No hay facturas de compras registradas para este período.', marginX, currentY + 5);
     currentY += 10;
   } else {
-    facturas.forEach((fac, facIdx) => {
-      // Agrupamos los ítems de esta factura por Categoría
-      const itemsByCategory: Record<string, CompraDetalleItem[]> = {};
-      (fac.items || []).forEach((it) => {
-        const cat = (it.categoria || fac.categoria || 'Sin Categoría').trim();
-        if (!itemsByCategory[cat]) itemsByCategory[cat] = [];
-        itemsByCategory[cat].push(it);
-      });
+    sortedCategories.forEach((catName) => {
+      const catFacturas = facturasByCategory[catName].sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const catTotal = catFacturas.reduce((sum, f) => sum + Number(f.valor_total || 0), 0);
+      const catItemsCount = catFacturas.reduce((sum, f) => sum + Number(f.total_items || f.items?.length || 0), 0);
 
-      const categoriesInFactura = Object.keys(itemsByCategory).sort();
+      // Subencabezado de Categoría (Banda oscura sobria)
+      checkSpace(12, true);
 
-      // Cabecera de la Factura (Banda oscura minimalista)
-      checkSpace(14, true);
-
-      const facHeaderH = 5.5;
+      const catHeaderH = 5.2;
       doc.setFillColor(...PDF_COLORS.sectionDark);
-      doc.rect(marginX, currentY, contentWidth, facHeaderH, 'F');
+      doc.rect(marginX, currentY, contentWidth, catHeaderH, 'F');
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6.8);
       doc.setTextColor(255, 255, 255);
 
-      const facTitle = `FACTURA N° ${fac.numero_factura}   |   FECHA: ${fac.fecha}   |   PROVEEDOR: ${fac.proveedor.toUpperCase()}`;
-      doc.text(fitText(doc, facTitle, contentWidth - 45), marginX + 2, currentY + 3.7);
+      const catTitle = `CATEGORÍA: ${catName.toUpperCase()} (${catFacturas.length} ${catFacturas.length === 1 ? 'FACTURA' : 'FACTURAS'} • ${catItemsCount} ÍTEMS)`;
+      doc.text(fitText(doc, catTitle, contentWidth - 45), marginX + 2, currentY + 3.6);
 
-      const facTotalStr = `TOTAL: ${formatMoneyCOP(fac.valor_total)}`;
-      doc.text(facTotalStr, marginX + contentWidth - 2, currentY + 3.7, { align: 'right' });
+      const catSubtotalStr = `SUBTOTAL: ${formatMoneyCOP(catTotal)}`;
+      doc.text(catSubtotalStr, marginX + contentWidth - 2, currentY + 3.6, { align: 'right' });
 
-      currentY += facHeaderH + 0.5;
+      currentY += catHeaderH + 0.3;
 
-      // Si no tiene ítems detallados
-      if (categoriesInFactura.length === 0) {
-        checkSpace(4.5);
-        doc.setFont('helvetica', 'italic');
-        doc.setFontSize(6.0);
+      // Encabezado de columnas de la tabla de facturas
+      const thH = 4.0;
+      doc.setFillColor(...PDF_COLORS.categoryGray);
+      doc.rect(marginX, currentY, contentWidth, thH, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.6);
+      doc.setTextColor(...PDF_COLORS.textMain);
+
+      doc.text('FECHA', colX.fecha + 2, currentY + 2.7);
+      doc.text('N° FACTURA', colX.factura + 2, currentY + 2.7);
+      doc.text('PROVEEDOR', colX.proveedor + 2, currentY + 2.7);
+      doc.text('ÍTEMS', colX.items + colW.items - 2, currentY + 2.7, { align: 'right' });
+      doc.text('ORIGEN / SOPORTE', colX.origen + 2, currentY + 2.7);
+      doc.text('TOTAL FACTURA', colX.total + colW.total - 2, currentY + 2.7, { align: 'right' });
+
+      // Línea bajo encabezado
+      doc.setDrawColor(...PDF_COLORS.borderMedium);
+      doc.setLineWidth(0.18);
+      doc.line(marginX, currentY + thH, marginX + contentWidth, currentY + thH);
+
+      currentY += thH + 0.3;
+
+      // Filas de Factura por Factura
+      catFacturas.forEach((fac, fIdx) => {
+        const rowH = 4.2;
+        checkSpace(rowH);
+
+        if (fIdx % 2 === 1) {
+          doc.setFillColor(...PDF_COLORS.rowAlt);
+          doc.rect(marginX, currentY, contentWidth, rowH, 'F');
+        }
+
+        // Fecha
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5.6);
+        doc.setTextColor(...PDF_COLORS.textMain);
+        doc.text(fac.fecha || '', colX.fecha + 2, currentY + 2.9);
+
+        // N° Factura
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5.6);
+        doc.setTextColor(...PDF_COLORS.textMain);
+        const facNum = fitText(doc, fac.numero_factura || 'S/N', colW.factura - 3);
+        doc.text(facNum, colX.factura + 2, currentY + 2.9);
+
+        // Proveedor
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(5.5);
+        doc.setTextColor(...PDF_COLORS.textBody);
+        const provStr = fitText(doc, fac.proveedor || 'Proveedor General', colW.proveedor - 3);
+        doc.text(provStr, colX.proveedor + 2, currentY + 2.9);
+
+        // Ítems comprados
+        const itemsNum = fac.total_items || fac.items?.length || 1;
+        doc.text(`${itemsNum}`, colX.items + colW.items - 2, currentY + 2.9, { align: 'right' });
+
+        // Archivo Origen o soporte
+        doc.setFontSize(5.2);
         doc.setTextColor(...PDF_COLORS.textMuted);
-        doc.text('Factura registrada sin líneas individuales.', marginX + 2, currentY + 3.2);
-        currentY += 5.0;
-      } else {
-        // Iterar por cada Categoría dentro de la Factura
-        categoriesInFactura.forEach((catName) => {
-          const items = itemsByCategory[catName];
-          const catSubtotal = items.reduce((sum, it) => sum + Number(it.valor_compra || 0), 0);
+        const origenStr = fitText(doc, fac.origen || 'Extracción Directa', colW.origen - 3);
+        doc.text(origenStr, colX.origen + 2, currentY + 2.9);
 
-          // Subencabezado de Categoría
-          checkSpace(8.0, true);
+        // Total Factura
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5.8);
+        doc.setTextColor(...PDF_COLORS.textMain);
+        doc.text(formatMoneyCOP(fac.valor_total), colX.total + colW.total - 2, currentY + 2.9, { align: 'right' });
 
-          const catH = 4.3;
-          doc.setFillColor(...PDF_COLORS.categoryGray);
-          doc.rect(marginX, currentY, contentWidth, catH, 'F');
+        // Línea divisoria muy fina
+        doc.setDrawColor(...PDF_COLORS.borderSubtle);
+        doc.setLineWidth(0.08);
+        doc.line(marginX, currentY + rowH, marginX + contentWidth, currentY + rowH);
 
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(6.2);
-          doc.setTextColor(...PDF_COLORS.textMain);
-          doc.text(`CATEGORÍA: ${catName.toUpperCase()} (${items.length} ${items.length === 1 ? 'ítem' : 'ítems'})`, marginX + 2, currentY + 3.0);
+        currentY += rowH;
+      });
 
-          doc.text(`Subtotal Categoría: ${formatMoneyCOP(catSubtotal)}`, marginX + contentWidth - 2, currentY + 3.0, { align: 'right' });
+      // Fila de Subtotal de Categoría
+      const subH = 4.2;
+      checkSpace(subH);
+      doc.setFillColor(...PDF_COLORS.subHeaderBg);
+      doc.rect(marginX, currentY, contentWidth, subH, 'F');
 
-          currentY += catH + 0.3;
+      doc.setDrawColor(...PDF_COLORS.borderMedium);
+      doc.setLineWidth(0.15);
+      doc.line(marginX, currentY, marginX + contentWidth, currentY);
 
-          // Encabezados de Columnas de la Tabla
-          const thH = 3.6;
-          doc.setFillColor(...PDF_COLORS.subHeaderBg);
-          doc.rect(marginX, currentY, contentWidth, thH, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      doc.setTextColor(...PDF_COLORS.textMain);
+      doc.text(`TOTAL ${catName.toUpperCase()} (${catFacturas.length} FACTURAS):`, colX.fecha + 2, currentY + 2.9);
+      doc.text(formatMoneyCOP(catTotal), colX.total + colW.total - 2, currentY + 2.9, { align: 'right' });
 
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(5.4);
-          doc.setTextColor(...PDF_COLORS.textBody);
-
-          doc.text('INSUMO (BD) / DETALLE FACTURA ORIGINAL', colX.insumo + 2, currentY + 2.5);
-          doc.text('CANTIDAD', colX.cant + colW.cant - 2, currentY + 2.5, { align: 'right' });
-          doc.text('COSTO UNIT.', colX.unitPrice + colW.unitPrice - 2, currentY + 2.5, { align: 'right' });
-          doc.text('TOTAL COMPRA', colX.total + colW.total - 2, currentY + 2.5, { align: 'right' });
-
-          // Línea divisoria bajo th
-          doc.setDrawColor(...PDF_COLORS.borderMedium);
-          doc.setLineWidth(0.12);
-          doc.line(marginX, currentY + thH, marginX + contentWidth, currentY + thH);
-
-          currentY += thH + 0.3;
-
-          // Filas de los ítems de esta categoría
-          items.forEach((it, idx) => {
-            const rowH = 4.2;
-            checkSpace(rowH);
-
-            if (idx % 2 === 1) {
-              doc.setFillColor(...PDF_COLORS.rowAlt);
-              doc.rect(marginX, currentY, contentWidth, rowH, 'F');
-            }
-
-            // Insumo + Detalle
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(5.8);
-            doc.setTextColor(...PDF_COLORS.textMain);
-
-            const nombrePrincipal = it.nombre_insumo || it.detalle || 'Insumo';
-            const detalleSecundario = it.detalle && it.detalle !== it.nombre_insumo ? ` — ${it.detalle}` : '';
-            const insumoLabel = fitText(doc, `${nombrePrincipal}${detalleSecundario}`, colW.insumo - 4);
-            doc.text(insumoLabel, colX.insumo + 2, currentY + 2.9);
-
-            // Cantidad + Unidad
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(5.6);
-            doc.setTextColor(...PDF_COLORS.textBody);
-            const cantStr = `${it.cantidad.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${it.unidad || ''}`.trim();
-            doc.text(cantStr, colX.cant + colW.cant - 2, currentY + 2.9, { align: 'right' });
-
-            // Costo Unitario
-            doc.text(formatMoneyCOP(it.costo_unitario), colX.unitPrice + colW.unitPrice - 2, currentY + 2.9, { align: 'right' });
-
-            // Total Compra
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(...PDF_COLORS.textMain);
-            doc.text(formatMoneyCOP(it.valor_compra), colX.total + colW.total - 2, currentY + 2.9, { align: 'right' });
-
-            // Línea sutil
-            doc.setDrawColor(...PDF_COLORS.borderSubtle);
-            doc.setLineWidth(0.08);
-            doc.line(marginX, currentY + rowH, marginX + contentWidth, currentY + rowH);
-
-            currentY += rowH;
-          });
-
-          currentY += 1.0;
-        });
-      }
-
-      currentY += 2.5; // Espacio entre facturas
+      currentY += subH + 3.0; // Espacio entre categorías
     });
   }
 
-  // 3. Banner final de Cierre de Compras
+  // 4. Banner final de Total General Consolidado
   checkSpace(7.0);
   doc.setFillColor(...PDF_COLORS.black);
   doc.rect(marginX, currentY, contentWidth, 5.8, 'F');
@@ -278,13 +286,11 @@ export function generateComprasFacturasPdf({
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.8);
   doc.setTextColor(255, 255, 255);
-  doc.text(`TOTAL GENERAL ENTRADAS POR COMPRAS (${totalFacturas} FACTURAS):`, marginX + 2, currentY + 4.0);
+  doc.text(`TOTAL GENERAL ENTRADAS POR COMPRAS (${totalFacturas} FACTURAS EN ${sortedCategories.length} CATEGORÍAS):`, marginX + 2, currentY + 4.0);
   doc.text(formatMoneyCOP(totalInversion), marginX + contentWidth - 2, currentY + 4.0, { align: 'right' });
 
-  currentY += 8.0;
-
-  // 4. Aplicar pie de página estándar institucional
-  applyStandardFooters(doc, companyName, 'Entradas por Compras • Reporte Oficial por Factura y Categoría');
+  // 5. Aplicar pie de página estándar institucional
+  applyStandardFooters(doc, companyName, 'Entradas por Compras • Reporte Oficial de Facturas por Categoría');
 
   return doc;
 }
