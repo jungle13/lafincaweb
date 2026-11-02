@@ -40,7 +40,7 @@ function getCanonicalName(rawName: string, catalog: any[]): string {
   if (n.includes('batavia')) return 'Lechuga Batavia';
   if (n.includes('pimenton')) return 'Pimentón rojo';
   if (n.includes('zanahoria')) return 'Zanahoria';
-  if (n.includes('limon')) return 'Limón Tahití';
+  if ((n.includes('limon') || n.includes('lima')) && !n.includes('polvo') && !n.includes('jabon') && !n.includes('zumo') && !n.includes('limonada') && !n.includes('aromatica')) return 'Limón Tahití';
   if (n.includes('chicharron') || n.includes('tocino')) return 'Tocino / Chicharrón cocina';
   if (n.includes('chorizo paisa')) return 'Chorizo Paisa tradicional';
   if (n.includes('chorizo de pollo') || n.includes('chorizo pollo')) return 'Chorizo de pollo';
@@ -83,6 +83,25 @@ function resolveStandardCategory(rawCat: string, rawName: string): string {
   const cat = (rawCat || '').toLowerCase();
   const name = (rawName || '').toLowerCase();
 
+  // 1. Verduras e Insumos prioritarias (evita que 'hit' en tahití o 'agua' en aguacate desvíen verduras)
+  if (
+    cat.includes('verdura') || cat.includes('fruver') || cat.includes('hortaliza') || cat.includes('fruta') ||
+    name.includes('limon') || name.includes('tahiti') || name.includes('aguacate') ||
+    name.includes('tomate') || name.includes('cebolla') || name.includes('papa') ||
+    name.includes('platano') || name.includes('yuca') || name.includes('zanahoria') ||
+    name.includes('cilantro') || name.includes('habichuela') || name.includes('arveja') ||
+    name.includes('pimenton') || name.includes('lechuga') || name.includes('repollo') ||
+    name.includes('champiñon') || name.includes('ahuyama') || name.includes('calabacin') ||
+    name.includes('pepino') || name.includes('espinaca') || name.includes('apio') ||
+    name.includes('guasca') || name.includes('perejil') || name.includes('hierbabuena') ||
+    name.includes('mazorca') || name.includes('choclo')
+  ) {
+    if (!name.includes('limonada') && !cat.includes('bebida') && !cat.includes('licor')) {
+      return 'Verduras e Insumos';
+    }
+  }
+
+  // 2. Carnes y Proteínas
   if (
     cat.includes('carne') || cat.includes('prote') || cat.includes('pollo') ||
     cat.includes('pescado') || cat.includes('cerdo') || cat.includes('embutido') ||
@@ -93,13 +112,38 @@ function resolveStandardCategory(rawCat: string, rawName: string): string {
     name.includes('tilapia') || name.includes('salmon') || name.includes('sobrebarriga') ||
     name.includes('churrasco') || name.includes('punta de anca') || name.includes('baby')
   ) {
-    return 'Carnes y Proteínas (Saldo Cocina + Traslados)';
-  } else if (
+    return 'Carnes y Proteínas';
+  }
+
+  // 3. Bebidas y Licores
+  if (
+    cat.includes('bebida') || cat.includes('licor') || cat.includes('cerveza') || cat.includes('gaseosa') ||
+    name.includes('cerveza') || name.includes('gaseosa') ||
+    (name.includes('hit') && !name.includes('tahiti')) ||
+    name.includes('gatorade') || name.includes('red bull') || name.includes('vive 100') ||
+    name.includes('postobon') || name.includes('coca-cola') || name.includes('coca cola') ||
+    (name.includes('coca') && !name.includes('cocad')) ||
+    name.includes('cristal') || name.includes('aguardiente') ||
+    (name.includes('ron ') && !name.includes('chicharron') && !name.includes('camaron')) || name.startsWith('ron ') ||
+    name.includes('whisky') || name.includes('whiskey') || name.includes('tequila') || name.includes('vodka') ||
+    name.includes('vino') || name.includes('soda') || name.includes('bretaña') ||
+    name.includes('speed') || name.includes('monster') || name.includes('malta') || name.includes('pony') ||
+    (name.includes('agua') && !name.includes('aguacate') && !name.includes('aguapanela') && !name.includes('aguamadre')) ||
+    (name.includes('jugo') && !name.includes('carne') && !name.includes('pollo'))
+  ) {
+    return 'Bebidas';
+  }
+
+  // 4. Desechables y Empaques
+  if (
     cat.includes('desechable') || cat.includes('empaque') ||
     name.includes('vaso') || name.includes('servilleta') || name.includes('contenedor')
   ) {
     return 'Desechables y Empaques';
-  } else if (
+  }
+
+  // 5. Granos y Abarrotes
+  if (
     cat.includes('grano') || cat.includes('abarrote') || cat.includes('lacteo') ||
     cat.includes('lácteo') || cat.includes('huevo') ||
     name.includes('arroz') || name.includes('aceite') || name.includes('frijol') ||
@@ -265,8 +309,9 @@ export async function GET(request: Request) {
 
     const standardCategories = [
       { id: 'verduras', name: 'Verduras e Insumos' },
-      { id: 'carnes', name: 'Carnes y Proteínas (Saldo Cocina + Traslados)' },
+      { id: 'carnes', name: 'Carnes y Proteínas' },
       { id: 'granos', name: 'Granos y Abarrotes' },
+      { id: 'bebidas', name: 'Bebidas' },
       { id: 'desechables', name: 'Desechables y Empaques' },
       { id: 'consumos_insumos', name: 'Consumido del Catálogo de Insumos y Carne' },
       { id: 'consumos_productos', name: 'Consumido de Productos para la Venta' }
@@ -393,8 +438,13 @@ export async function GET(request: Request) {
       categoryMap.forEach((items, name) => {
         if (!standardCategories.some(s => s.name === name)) {
           const subtotal = items.reduce((sum: number, it: any) => sum + (Number(it.total) || 0), 0);
+          const catId = name === 'Consumido de Productos para la Venta'
+            ? 'consumos_productos'
+            : name === 'Consumido del Catálogo de Insumos y Carne'
+            ? 'consumos_insumos'
+            : name.toLowerCase().replace(/[^a-z0-9]/g, '-');
           categories.push({
-            id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+            id: catId,
             name,
             subtotal,
             itemsCount: items.length,
@@ -922,12 +972,14 @@ export async function POST(request: Request) {
         if (upErr) throw upErr;
         rowResult = updatedRow;
       } else {
+        const safeInsumoId = catItem?.id || (targetTipo === 'CONSUMO' ? null : (movimiento.insumo_id || null));
+
         const { data: newRow, error: insErr } = await supabase
           .from('registros_costeo_cocina')
           .insert({
             fecha: targetDate,
             tipo: targetTipo,
-            insumo_id: movimiento.insumo_id || catItem?.id || null,
+            insumo_id: safeInsumoId,
             nombre_insumo: canonicalName,
             categoria: targetCategoria,
             cantidad: qty,

@@ -21,9 +21,11 @@ import {
   Check,
   ClipboardList,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Download
 } from 'lucide-react';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
+import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
 
 interface RegistroItem {
   id: string;
@@ -251,7 +253,16 @@ function inferCategoryFromName(name: string): { category: string; defaultUnit: s
   if (n.includes('huevo') || n.includes('leche') || n.includes('queso')) {
     return { category: 'Huevos y Lácteos', defaultUnit: n.includes('huevo') ? 'Und' : 'Lts' };
   }
-  if (n.includes('gaseosa') || n.includes('cerveza') || n.includes('jugo') || n.includes('agua')) {
+  if (
+    n.includes('gaseosa') || n.includes('cerv') || n.includes('cerveza') || n.includes('poker') || n.includes('club colombia') ||
+    n.includes('aguila') || n.includes('costeñ') || n.includes('corona') || n.includes('stella') || n.includes('heineken') ||
+    n.includes('jugo') || n.includes('gatorade') || n.includes('red bull') || n.includes('vive 100') || n.includes('speed') ||
+    n.includes('monster') || n.includes('postobon') || n.includes('coca') || (n.includes('hit') && !n.includes('tahiti')) || n.includes('pony') ||
+    n.includes('malta') || n.includes('licor') || n.includes('aguardiente') || n.includes('ron') || n.includes('whisky') ||
+    n.includes('tequila') || n.includes('vodka') || n.includes('vino') || n.includes('soda') || n.includes('bretaña') ||
+    (n.includes('agua') && !n.includes('aguacate') && !n.includes('aguapanela') && !n.includes('aguamadre')) ||
+    n.includes('bebida')
+  ) {
     return { category: 'Bebidas', defaultUnit: 'Und' };
   }
   if (n.includes('carne') || n.includes('res') || n.includes('cerdo') || n.includes('pollo') || n.includes('churrasco') || n.includes('costilla') || n.includes('lomo') || n.includes('punta de anca') || n.includes('chorizo')) {
@@ -957,6 +968,23 @@ export default function InventarioConsolidadoPage() {
     }
   };
 
+  const handleExportPdf = (targetSheet?: CosteoSheet | null) => {
+    const sheetToExport = targetSheet || activeSheet;
+    if (!sheetToExport) return;
+    try {
+      downloadInventarioConsolidadoPdf({
+        sheet: sheetToExport,
+        companyName: 'RESTAURANTE CHOCLOS Y ASADOS LA FINCA',
+        reportTitle: 'INFORME DE INVENTARIO Y CIERRES (BODEGA Y COCINA)'
+      });
+      setToastMessage('Informe PDF descargado exitosamente');
+      setTimeout(() => setToastMessage(''), 3500);
+    } catch (err) {
+      console.error('Error generando PDF de inventario consolidado:', err);
+      alert('Error al generar el informe en PDF.');
+    }
+  };
+
   // Solo se permite añadir en COCINA_CIERRE o BODEGA_CIERRE (NUNCA en Ver Consolidado ni en Ver Paralelo)
   const isAddingAllowedInCurrentView = viewMode === 'COCINA_CIERRE' || viewMode === 'BODEGA_CIERRE';
 
@@ -1047,6 +1075,17 @@ export default function InventarioConsolidadoPage() {
                   <span>{toastMessage}</span>
                 </div>
               )}
+
+              {/* Boton Exportar Informe PDF */}
+              <button
+                type="button"
+                onClick={() => handleExportPdf(activeSheet)}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-md transition-all shadow-2xs cursor-pointer"
+                title="Exportar informe consolidado en PDF de 3 columnas (Bodega Cierre y Cocina Cierre)"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>Exportar Informe PDF</span>
+              </button>
 
               {/* Botón Añadir Conteos: SOLO si está en Cocina Cierre o Bodega Cierre (NUNCA en Consolidado/Paralelo) */}
               {isAddingAllowedInCurrentView && (
@@ -1194,6 +1233,18 @@ export default function InventarioConsolidadoPage() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExportPdf(sh);
+                          }}
+                          className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-md transition-colors cursor-pointer"
+                          title="Descargar informe PDF de esta fecha"
+                        >
+                          <Download className="w-3.5 h-3.5 text-slate-500" />
+                          <span>PDF</span>
+                        </button>
                         <button
                           type="button"
                           onClick={(e) => {

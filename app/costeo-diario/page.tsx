@@ -198,7 +198,18 @@ function getAllowedUnitsForInsumo(item?: {
     ];
   }
 
-  // 2. Insumos basados en Unidades (Tamales, Arepas, Aguacates, Bebidas, etc.)
+  // 2. Bebidas (cervezas, gaseosas, jugos, aguas, licores)
+  if (c.includes('bebida') || c.includes('licor') || n.includes('cerveza') || n.includes('gaseosa') || n.includes('gatorade') || n.includes('red bull') || n.includes('jugo') || (n.includes('agua') && !n.includes('aguacate'))) {
+    return [
+      { value: 'Und', label: 'Unidades (Und / Latas / Botellas)', baseUnit: 'Und', toBaseFactor: () => 1 },
+      { value: 'Caja', label: 'Cajas / Pacas', baseUnit: 'Und', toBaseFactor: () => 1 },
+      { value: 'Paquete', label: 'Paquetes / Sixpack', baseUnit: 'Und', toBaseFactor: () => 1 },
+      { value: 'Litro', label: 'Litros (Lt)', baseUnit: 'Litro', toBaseFactor: () => 1 },
+      { value: 'Botella', label: 'Botellas', baseUnit: 'Und', toBaseFactor: () => 1 }
+    ];
+  }
+
+  // 3. Insumos basados en Unidades (Tamales, Arepas, Aguacates, etc.)
   if (n.includes('tamal') || ((tipo === 'UNIDADES' || u === 'und') && !isPortionableMeat(item, n, c))) {
     return [
       { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 },
@@ -335,6 +346,7 @@ interface ParsedConteoItem {
 function mapCategoryToGroupId(catName: string): string {
   const c = normalizeStrHelper(catName);
   if (c.includes('carne') || c.includes('pollo') || c.includes('cerdo') || c.includes('pescado') || c.includes('res') || c.includes('marisco')) return 'carnes';
+  if (c.includes('bebida') || c.includes('licor') || c.includes('cerveza') || c.includes('gaseosa')) return 'bebidas';
   if (c.includes('verdura') || c.includes('hortaliza') || c.includes('fruta')) return 'verduras';
   if (c.includes('grano') || c.includes('abarrote') || c.includes('lacteo') || c.includes('huevo')) return 'granos';
   if (c.includes('desechable') || c.includes('empaque')) return 'desechables';
@@ -680,16 +692,19 @@ function searchCatalogComprehensive(query: string, items: any[], activeCategoryF
 
     let score = 0;
 
+    const cleanSpace = clean.replace(/-/g, ' ');
+    const normNameSpaced = normName.replace(/-/g, ' ');
+
     // 1. Coincidencia exacta de nombre
-    if (normName === clean) {
+    if (normName === clean || normNameSpaced === cleanSpace) {
       score = 1.0;
     }
     // 2. Comienza exactamente con el texto buscado
-    else if (normName.startsWith(clean)) {
+    else if (normName.startsWith(clean) || normNameSpaced.startsWith(cleanSpace)) {
       score = 0.95;
     }
     // 3. Subcadena directa dentro del nombre
-    else if (normName.includes(clean)) {
+    else if (normName.includes(clean) || normNameSpaced.includes(cleanSpace)) {
       score = 0.90;
     }
     // 4. Búsqueda por categoría directa (ej: "verduras", "desechables", "bebidas", "granos")
@@ -895,7 +910,16 @@ function inferCategoryFromName(name: string): { category: string; isMeat: boolea
   }
 
   // Bebidas
-  if (n.includes('gaseosa') || n.includes('cerv') || n.includes('cerveza') || n.includes('jugo') || n.includes('agua') || n.includes('bebida')) {
+  if (
+    n.includes('gaseosa') || n.includes('cerv') || n.includes('cerveza') || n.includes('poker') || n.includes('club colombia') ||
+    n.includes('aguila') || n.includes('costeñ') || n.includes('corona') || n.includes('stella') || n.includes('heineken') ||
+    n.includes('jugo') || n.includes('gatorade') || n.includes('red bull') || n.includes('vive 100') || n.includes('speed') ||
+    n.includes('monster') || n.includes('postobon') || n.includes('coca') || (n.includes('hit') && !n.includes('tahiti')) || n.includes('pony') ||
+    n.includes('malta') || n.includes('licor') || n.includes('aguardiente') || n.includes('ron') || n.includes('whisky') ||
+    n.includes('tequila') || n.includes('vodka') || n.includes('vino') || n.includes('soda') || n.includes('bretaña') ||
+    (n.includes('agua') && !n.includes('aguacate') && !n.includes('aguapanela') && !n.includes('aguamadre')) ||
+    n.includes('bebida')
+  ) {
     return { category: 'Bebidas', isMeat: false, defaultUnit: 'Und' };
   }
 
@@ -938,6 +962,56 @@ function findBestCatalogMatch(query: string, catalogList: any[]): { item: any | 
   }
   if (q.includes('bagre')) {
     const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('bagre'));
+    if (it) return { item: it, score: 1.0 };
+  }
+
+  // Bebidas de alta rotación (Cervezas, Gaseosas, Jugos, Aguas)
+  if (q.includes('poker')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('poker'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('club colombia') || (q.includes('club') && q.includes('dorada'))) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('club colombia'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('aguila') || q.includes('águila')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('aguila'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('corona') || q.includes('coronita')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('corona'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('costeñita') || q.includes('costenita')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('costeñita') || normalizeStrHelper(c.nombre || c.insumo).includes('costenita'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('stella')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('stella'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('gatorade')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('gatorade'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('coca') && !q.includes('cocad')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('coca-cola') || normalizeStrHelper(c.nombre || c.insumo).includes('coca cola'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('postobon') || q.includes('postobón') || q.includes('colombiana') || q.includes('manzana')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('postobon') || normalizeStrHelper(c.nombre || c.insumo).includes('postobón'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('hit')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('hit'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('bretaña') || q.includes('bretana') || q.includes('soda')) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('bretaña') || normalizeStrHelper(c.nombre || c.insumo).includes('bretana') || normalizeStrHelper(c.nombre || c.insumo).includes('soda'));
+    if (it) return { item: it, score: 1.0 };
+  }
+  if (q.includes('cristal') || (q.includes('agua') && !q.includes('aguacate'))) {
+    const it = catalogList.find(c => normalizeStrHelper(c.nombre || c.insumo).includes('cristal') || normalizeStrHelper(c.nombre || c.insumo).includes('brisa') || normalizeStrHelper(c.nombre || c.insumo).includes('agua'));
     if (it) return { item: it, score: 1.0 };
   }
 
@@ -1950,6 +2024,17 @@ export default function CosteoDiarioPage() {
   // Current Active Sheet
   const activeSheet = sheets.find(s => s.id === activeTabId);
 
+  // Sincronizar automáticamente el insumo abierto en el panel lateral con las actualizaciones del sheet
+  useEffect(() => {
+    if (activeDrawerInsumo && activeSheet) {
+      const cat = activeSheet.categories.find(c => c.id === activeDrawerInsumo.categoryId || c.name === activeDrawerInsumo.categoryName);
+      const it = cat?.items.find(i => i.name.toLowerCase() === activeDrawerInsumo.item.name.toLowerCase());
+      if (it && it !== activeDrawerInsumo.item) {
+        setActiveDrawerInsumo(prev => prev ? { ...prev, item: it } : null);
+      }
+    }
+  }, [sheets, activeSheet]);
+
   // Verificar si se ha diligenciado inventario de Cocina Apertura
   const hasAperturaDiligenciada = useMemo(() => {
     if (!activeSheet) return false;
@@ -2350,6 +2435,11 @@ export default function CosteoDiarioPage() {
     const targetCategory = activeSheet.categories.find(c => c.id === targetCatId);
     const existingItem = targetCategory?.items.find(it => it.name.toLowerCase() === newInsumoName.trim().toLowerCase());
 
+    const insumoToSave = newInsumoName.trim();
+    const catNameToSave = activeOperationalView === 'CONSUMOS'
+      ? (targetCatId === 'consumos_productos' ? 'Consumido de Productos para la Venta' : 'Consumido del Catálogo de Insumos y Carne')
+      : (targetCatId === 'bebidas' ? 'Bebidas' : (selectedCatalogItem?.categoria || targetCategory?.name || 'Verduras e Insumos'));
+
     let updatedCategories: CategoryGroup[] = [];
 
     if (existingItem) {
@@ -2366,10 +2456,13 @@ export default function CosteoDiarioPage() {
       };
 
       updatedCategories = activeSheet.categories.map(cat => {
-        if (cat.id !== targetCatId) return cat;
+        if (cat.id !== targetCatId && cat.name !== catNameToSave) return cat;
+        const newItems = cat.items.map(it => it.id === existingItem.id ? updatedExistingItem : it);
+        const newSubtotal = newItems.reduce((acc, it) => acc + (it.total || 0), 0);
         return {
           ...cat,
-          items: cat.items.map(it => it.id === existingItem.id ? updatedExistingItem : it)
+          items: newItems,
+          subtotal: newSubtotal
         };
       });
     } else {
@@ -2383,21 +2476,37 @@ export default function CosteoDiarioPage() {
         registros: [newRegistro]
       };
 
-      updatedCategories = activeSheet.categories.map(cat => {
-        if (cat.id === targetCatId) {
-          return { ...cat, items: [...cat.items, newItem] };
-        }
-        return cat;
-      });
+      const categoryExists = activeSheet.categories.some(cat => cat.id === targetCatId || cat.name === catNameToSave);
+      if (categoryExists) {
+        updatedCategories = activeSheet.categories.map(cat => {
+          if (cat.id === targetCatId || cat.name === catNameToSave) {
+            return { 
+              ...cat, 
+              items: [...cat.items, newItem],
+              subtotal: (cat.subtotal || 0) + finalTotal,
+              itemsCount: (cat.itemsCount || 0) + 1
+            };
+          }
+          return cat;
+        });
+      } else {
+        updatedCategories = [
+          ...activeSheet.categories,
+          {
+            id: targetCatId,
+            name: catNameToSave,
+            items: [newItem],
+            subtotal: finalTotal,
+            itemsCount: 1
+          }
+        ];
+      }
     }
 
     const updatedSheet = { ...activeSheet, categories: updatedCategories };
     setSheets(sheets.map(s => s.id === activeSheet.id ? updatedSheet : s));
 
-    const insumoToSave = newInsumoName.trim();
-    const catNameToSave = activeOperationalView === 'CONSUMOS'
-      ? (targetCatId === 'consumos_productos' ? 'Consumido de Productos para la Venta' : 'Consumido del Catálogo de Insumos y Carne')
-      : (selectedCatalogItem?.categoria || targetCategory?.name || 'Verduras e Insumos');
+
 
     setNewInsumoName('');
     setNewInsumoQtyFormula('');
@@ -2423,20 +2532,29 @@ export default function CosteoDiarioPage() {
           unidad: finalUnit,
           costo_unitario: price,
           total: finalTotal,
-          observaciones: activeOperationalView === 'DEVOLUCIONES' ? 'Devolución registrada a bodega' : 'Ingreso registrado'
+          observaciones: activeOperationalView === 'CONSUMOS' && consumoResponsable
+            ? `Responsable: ${consumoResponsable.trim()}`
+            : activeOperationalView === 'DEVOLUCIONES' ? 'Devolución registrada a bodega' : 'Ingreso registrado'
         }
       })
     })
       .then(async res => {
         if (res.ok) {
-          const r = await fetch('/api/costeo-diario');
+          const r = await fetch(`/api/costeo-diario?t=${Date.now()}`, { cache: 'no-store' });
           const d = await r.json();
           if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
             setSheets(d.sheets);
           }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          console.error('Error guardando en API:', errData);
+          alert(`Error al guardar: ${errData.error || 'No se pudo guardar el registro en base de datos'}`);
         }
       })
-      .catch(err => console.error('Error persistiendo nuevo insumo en API:', err));
+      .catch(err => {
+        console.error('Error persistiendo nuevo insumo en API:', err);
+        alert(`Error de red al guardar: ${err.message}`);
+      });
   };
 
   // Delete item y persistir eliminación en Base de Datos
@@ -2662,6 +2780,7 @@ Trucha 8`;
         if (targetCatId === 'verduras' && (cNorm.includes('verdura') || cNorm.includes('fruver'))) return true;
         if (targetCatId === 'carnes' && (cNorm.includes('carne') || cNorm.includes('prote'))) return true;
         if (targetCatId === 'granos' && (cNorm.includes('grano') || cNorm.includes('abarrote') || cNorm.includes('lacteo'))) return true;
+        if (targetCatId === 'bebidas' && (cNorm.includes('bebida') || cNorm.includes('licor') || cNorm.includes('cerveza') || cNorm.includes('gaseosa'))) return true;
         if (targetCatId === 'desechables' && (cNorm.includes('desechable') || cNorm.includes('empaque'))) return true;
         return false;
       });
@@ -2669,8 +2788,9 @@ Trucha 8`;
       if (!cat) {
         const catNames: Record<string, string> = {
           verduras: 'Verduras e Insumos',
-          carnes: 'Carnes y Proteínas (Saldo Cocina + Traslados)',
+          carnes: 'Carnes y Proteínas',
           granos: 'Granos y Abarrotes',
+          bebidas: 'Bebidas',
           desechables: 'Desechables y Empaques'
         };
         const newCat: CategoryGroup = {
