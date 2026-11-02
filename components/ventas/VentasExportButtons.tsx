@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Printer, Loader2 } from 'lucide-react';
+import { Download, FileText, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { VentaDiaria, PlatoRanking, VentasKPIs } from '@/services/ventasService';
+import { downloadVentasResumenPdf } from '@/lib/exportVentasResumenPdf';
 
 interface Props {
   diarias: VentaDiaria[];
@@ -16,12 +17,13 @@ export default function VentasExportButtons({
   diarias,
   ranking,
   kpis,
-  periodoNombre = 'Septiembre 2026'
+  periodoNombre = 'Octubre 2026'
 }: Props) {
-  const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const handleExportExcel = async () => {
-    setExporting(true);
+    setExportingExcel(true);
     try {
       const wb = XLSX.utils.book_new();
 
@@ -77,39 +79,59 @@ export default function VentasExportButtons({
       console.error('Error exportando Excel:', err);
       alert('Ocurrió un error al generar el archivo Excel.');
     } finally {
-      setExporting(false);
+      setExportingExcel(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleExportPdf = () => {
+    setExportingPdf(true);
+    try {
+      downloadVentasResumenPdf({
+        diarias,
+        kpis,
+        periodoNombre,
+        reportTitle: 'SALIDAS POR VENTA — RESUMEN DIARIO CONSOLIDADO'
+      });
+    } catch (err) {
+      console.error('Error exportando PDF de Ventas:', err);
+      alert('Ocurrió un error al generar el documento PDF.');
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   return (
     <div className="flex items-center gap-2">
+      {/* Botón Exportar PDF Estándar */}
+      <button
+        type="button"
+        onClick={handleExportPdf}
+        disabled={exportingPdf || diarias.length === 0}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+        title="Exportar informe PDF oficial de resumen diario de ventas"
+      >
+        {exportingPdf ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <FileText className="w-3.5 h-3.5 text-slate-300" />
+        )}
+        <span>Exportar PDF</span>
+      </button>
+
+      {/* Botón Exportar Excel */}
       <button
         type="button"
         onClick={handleExportExcel}
-        disabled={exporting}
-        className="px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+        disabled={exportingExcel}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-md text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
         title="Descargar reporte completo en Excel"
       >
-        {exporting ? (
+        {exportingExcel ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
         ) : (
-          <Download className="w-3.5 h-3.5 text-emerald-600" />
+          <Download className="w-3.5 h-3.5 text-slate-500" />
         )}
         <span>Exportar Excel</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={handlePrint}
-        className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer"
-        title="Imprimir o guardar en PDF"
-      >
-        <Printer className="w-3.5 h-3.5 text-slate-500" />
-        <span>Imprimir / PDF</span>
       </button>
     </div>
   );
