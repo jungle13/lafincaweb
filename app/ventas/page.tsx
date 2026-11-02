@@ -7,7 +7,10 @@ import {
   Award, 
   ListOrdered, 
   Loader2,
-  AlertCircle
+  AlertCircle,
+  UploadCloud,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 import VentasKPIHeader from '@/components/ventas/VentasKPIHeader';
 import VentasDiariasView from '@/components/ventas/VentasDiariasView';
@@ -15,7 +18,6 @@ import VentasProductosRankingView from '@/components/ventas/VentasProductosRanki
 import VentasTransaccionesView from '@/components/ventas/VentasTransaccionesView';
 import VentasExportButtons from '@/components/ventas/VentasExportButtons';
 import VentasUploadModal from '@/components/ventas/VentasUploadModal';
-import { UploadCloud } from 'lucide-react';
 import { 
   VentasKPIs, 
   VentaDiaria, 
@@ -26,7 +28,7 @@ import { usePeriodo } from '@/context/PeriodoContext';
 type TabView = 'TRANSACCIONES' | 'DIARIO' | 'PRODUCTOS';
 
 export default function VentasPage() {
-  const { currentPeriodo, selectedPeriodoId } = usePeriodo();
+  const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos } = usePeriodo();
   const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
   const periodoNombre = currentPeriodo?.nombre || 'Octubre 2026';
 
@@ -87,7 +89,7 @@ export default function VentasPage() {
   return (
     <div className="space-y-4 w-full font-normal">
       {/* 🏷️ Encabezado Principal Tipo Git */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-slate-900 text-white rounded-md">
             <DollarSign className="w-4 h-4" />
@@ -97,13 +99,32 @@ export default function VentasPage() {
               Salidas por Venta
             </h1>
             <p className="text-xs text-slate-500">
-              Registro diario de ventas y comandas
+              Registro diario de ventas y comandas • <span className="font-semibold text-slate-700">{periodoNombre}</span>
             </p>
           </div>
         </div>
 
-        {/* Acciones de Exportación */}
+        {/* Selector de Período y Acciones */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Selector de Mes / Período */}
+          {periodos && periodos.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              <select
+                value={periodoId}
+                onChange={(e) => setSelectedPeriodoId(e.target.value)}
+                className="bg-transparent font-semibold text-slate-800 outline-none cursor-pointer"
+                title="Seleccionar mes / período de ventas"
+              >
+                {periodos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre} {p.estado === 'ABIERTO' ? '• (Actual)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setUploadModalOpen(true)}
@@ -120,6 +141,26 @@ export default function VentasPage() {
           />
         </div>
       </div>
+
+      {/* 💡 Banner informativo si el período actual no tiene ventas registradas */}
+      {!loading && kpis.granTotalVentas === 0 && periodoId !== 'per-2026-10' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-amber-900 text-xs">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              No hay ventas registradas para <strong>{periodoNombre}</strong>. Las ventas de cierre están registradas en <strong>Octubre 2026</strong>.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedPeriodoId('per-2026-10')}
+            className="inline-flex items-center gap-1 font-bold text-amber-900 hover:text-amber-950 underline cursor-pointer shrink-0"
+          >
+            <span>Ver ventas de Octubre 2026</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <VentasUploadModal
         isOpen={uploadModalOpen}

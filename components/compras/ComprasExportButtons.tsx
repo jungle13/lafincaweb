@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, FileText, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { CompraFacturaGroup, CompraInsumoGroup, CompraDetalleItem } from '@/services/comprasService';
+import { downloadComprasFacturasPdf } from '@/lib/exportComprasFacturasPdf';
 
 interface Props {
   facturas: CompraFacturaGroup[];
@@ -18,10 +19,11 @@ export default function ComprasExportButtons({
   lineas,
   periodoNombre = 'Octubre 2026',
 }: Props) {
-  const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const handleExportExcel = async () => {
-    setExporting(true);
+    setExportingExcel(true);
     try {
       const wb = XLSX.utils.book_new();
 
@@ -80,23 +82,57 @@ export default function ComprasExportButtons({
     } catch (err) {
       console.error('Error exportando Excel:', err);
     } finally {
-      setExporting(false);
+      setExportingExcel(false);
+    }
+  };
+
+  const handleExportPdf = () => {
+    setExportingPdf(true);
+    try {
+      downloadComprasFacturasPdf({
+        facturas,
+        periodoNombre,
+        reportTitle: 'ENTRADAS POR COMPRAS — DETALLE POR FACTURA Y CATEGORÍA'
+      });
+    } catch (err) {
+      console.error('Error exportando PDF de Compras:', err);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleExportExcel}
-      disabled={exporting}
-      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
-    >
-      {exporting ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-      ) : (
-        <Download className="w-3.5 h-3.5" />
-      )}
-      <span>Exportar Excel</span>
-    </button>
+    <div className="flex items-center gap-2">
+      {/* Botón Exportar PDF por Factura y Categoría */}
+      <button
+        type="button"
+        onClick={handleExportPdf}
+        disabled={exportingPdf || facturas.length === 0}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+        title="Exportar informe PDF organizado por Factura y Categoría"
+      >
+        {exportingPdf ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <FileText className="w-3.5 h-3.5 text-slate-300" />
+        )}
+        <span>Exportar PDF</span>
+      </button>
+
+      {/* Botón Exportar Excel */}
+      <button
+        type="button"
+        onClick={handleExportExcel}
+        disabled={exportingExcel}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-md text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+      >
+        {exportingExcel ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <Download className="w-3.5 h-3.5 text-slate-500" />
+        )}
+        <span>Exportar Excel</span>
+      </button>
+    </div>
   );
 }

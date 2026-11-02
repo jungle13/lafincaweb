@@ -31,7 +31,7 @@ import { getCachedData, setCachedData } from '@/lib/dataCache';
 type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS';
 
 export default function ComprasPage() {
-  const { currentPeriodo, selectedPeriodoId } = usePeriodo();
+  const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos } = usePeriodo();
   const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
   const periodoNombre = currentPeriodo?.nombre || 'Octubre 2026';
   const cacheKey = `compras_data_${periodoId}`;
@@ -223,6 +223,23 @@ export default function ComprasPage() {
 
         {/* Acciones de Exportación */}
         <div className="flex items-center gap-2 flex-wrap">
+          {periodos && periodos.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              <select
+                value={periodoId}
+                onChange={(e) => setSelectedPeriodoId(e.target.value)}
+                className="bg-transparent font-semibold text-slate-800 outline-none cursor-pointer"
+                title="Seleccionar mes / período de compras"
+              >
+                {periodos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre} {p.estado === 'ABIERTO' ? '• (Actual)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <ComprasExportButtons
             facturas={filteredFacturas}
             insumos={filteredInsumos}

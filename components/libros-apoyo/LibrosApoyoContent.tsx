@@ -37,8 +37,11 @@ import {
   CheckSquare,
   ShieldAlert,
   ArrowLeft,
-  Smartphone
+  Smartphone,
+  Download,
+  FileText
 } from 'lucide-react';
+import { downloadCajaMenorResumenPdf } from '@/lib/exportCajaMenorPdf';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
 import Modal from '@/components/ui/Modal';
 import { formatMoney } from '@/lib/formatters';
@@ -441,6 +444,17 @@ export default function LibrosApoyoContent({
       title: formatDateTitle(d.fecha),
     }));
   }, [diarios]);
+
+  const handleExportResumenTotalizadoPdf = () => {
+    const currentMonthObj = availableMonths.find((m) => m.key === selectedMonth);
+    const label = currentMonthObj ? currentMonthObj.label : selectedMonth;
+    downloadCajaMenorResumenPdf({
+      mesLabel: label,
+      diarios: diariosDelMes,
+      kpis,
+      registros: registros
+    });
+  };
 
   const handleOpenDaySheet = (fecha: string) => {
     if (!openTabs.includes(fecha)) {
@@ -980,6 +994,15 @@ export default function LibrosApoyoContent({
                   >
                     Registro de Ítems
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleExportResumenTotalizadoPdf}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-semibold text-xs border border-slate-900 transition-colors cursor-pointer shadow-2xs"
+                    title="Exportar Resumen Totalizado en 1 hoja PDF tamaño Carta"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-slate-300" />
+                    <span>Exportar PDF</span>
+                  </button>
                 </div>
               </div>
 
@@ -1273,6 +1296,15 @@ export default function LibrosApoyoContent({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleExportResumenTotalizadoPdf}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs shadow-2xs cursor-pointer"
+                    title="Exportar Resumen Totalizado del Mes en PDF"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Exportar PDF Mes</span>
+                  </button>
                   {/* Si el usuario actual tiene la sesión ABIERTA (o es Admin y hay sesión abierta) */}
                   {sesionAbiertaDia && (isMyOpenSession || isAdmin) && (
                     <>

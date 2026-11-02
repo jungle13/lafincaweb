@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import catalogoOficial from '@/lib/catalogo-oficial.json';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
+import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
 import { 
   FileSpreadsheet,
   ClipboardList, 
@@ -2199,6 +2200,19 @@ export default function CosteoDiarioPage() {
   const rendimientoDia = ventasDia - consumoReal;
   const foodCostPct = ventasDia > 0 ? (consumoReal / ventasDia) * 100 : 0;
 
+  const handleExportInformePdf = () => {
+    if (!activeSheet) return;
+    try {
+      downloadInventarioConsolidadoPdf({
+        sheet: activeSheet,
+        companyName: 'RESTAURANTE CHOCLOS Y ASADOS LA FINCA',
+        reportTitle: 'INFORME DE INVENTARIO Y CIERRES (BODEGA Y COCINA)'
+      });
+    } catch (err) {
+      console.error('Error exportando PDF:', err);
+    }
+  };
+
   // Estadísticas detalladas para el modal de limpiar hojas (Cocina y Bodega)
   const clearSheetStats = useMemo(() => {
     if (!activeSheet) {
@@ -3055,6 +3069,15 @@ Trucha 8`;
               >
                 <ClipboardList className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
                 <span>Añadir Conteos</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportInformePdf}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-50 hover:text-black border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
+                title="Exportar informe de inventarios y cierres en PDF"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-700 group-hover:text-black" />
+                <span>Exportar informe</span>
               </button>
             </div>
 
