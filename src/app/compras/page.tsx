@@ -8,11 +8,11 @@ import {
   ListFilter, 
   Search, 
   X, 
-  Layers, 
   Calendar, 
-  Building2,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  FileSpreadsheet,
+  ArrowLeft
 } from 'lucide-react';
 import { usePeriodo } from '@/context/PeriodoContext';
 import ComprasKPIHeader from '@/components/compras/ComprasKPIHeader';
@@ -24,7 +24,8 @@ import {
   ComprasKPIs, 
   CompraFacturaGroup, 
   CompraInsumoGroup, 
-  CompraDetalleItem 
+  CompraDetalleItem,
+  MesComprasResumen
 } from '@/services/comprasService';
 import { getCachedData, setCachedData } from '@/lib/dataCache';
 
@@ -32,10 +33,47 @@ type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS';
 
 export default function ComprasPage() {
   const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos } = usePeriodo();
-  const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
-  const periodoNombre = currentPeriodo?.nombre || 'Octubre 2026';
-  const cacheKey = `compras_data_${periodoId}`;
 
+  // Estado para la vista de selección de mes a pantalla completa
+  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
+  const [mesesList, setMesesList] = useState<MesComprasResumen[]>([]);
+  const [loadingMeses, setLoadingMeses] = useState(true);
+  const [searchMonthQuery, setSearchMonthQuery] = useState('');
+
+  // Período activo cuando se entra al detalle
+  const activePeriodoId = selectedMonthId || selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
+
+  const periodoNombre = useMemo(() => {
+    if (!activePeriodoId) return 'Octubre 2026';
+    const foundMes = mesesList.find((m) => m.periodo_id === activePeriodoId);
+    if (foundMes) return foundMes.nombre;
+    const foundPeriodo = periodos?.find((p) => p.id === activePeriodoId);
+    return foundPeriodo?.nombre || 'Octubre 2026';
+  }, [activePeriodoId, mesesList, periodos]);
+
+  // Cargar el listado de meses con compras registradas
+  const loadMeses = useCallback(async () => {
+    setLoadingMeses(true);
+    try {
+      const res = await fetch(`/api/compras?view=MESES&t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.meses)) {
+          setMesesList(json.meses);
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando meses de compras:', err);
+    } finally {
+      setLoadingMeses(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMeses();
+  }, [loadMeses]);
+
+  const cacheKey = `compras_data_${activePeriodoId}`;
   const cached = getCachedData<{
     kpis: ComprasKPIs;
     facturas: CompraFacturaGroup[];
@@ -46,10 +84,10 @@ export default function ComprasPage() {
     fechas: string[];
   }>(cacheKey);
 
-  const [loading, setLoading] = useState(!cached);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabView>('FACTURAS');
 
-  // Datos del backend
+  // Datos del backend para el mes seleccionado
   const [kpis, setKpis] = useState<ComprasKPIs>(() => cached?.kpis || {
     totalFacturas: 0,
     totalDinero: 0,
@@ -64,17 +102,18 @@ export default function ComprasPage() {
   const [fechas, setFechas] = useState<string[]>(() => cached?.fechas || []);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtros activos
+  // Filtros activos en vista detalle
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState('');
   const [selectedProveedor, setSelectedProveedor] = useState('');
   const [selectedFecha, setSelectedFecha] = useState('');
 
   const loadData = useCallback(async (silent = false) => {
+    if (!selectedMonthId) return;
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/compras?periodo_id=${periodoId}&t=${Date.now()}`, {
+      const res = await fetch(`/api/compras?periodo_id=${activePeriodoId}&t=${Date.now()}`, {
         cache: 'no-store',
       });
       if (!res.ok) {
@@ -108,11 +147,13 @@ export default function ComprasPage() {
     } finally {
       setLoading(false);
     }
-  }, [periodoId, cacheKey]);
+  }, [selectedMonthId, activePeriodoId, cacheKey]);
 
   useEffect(() => {
-    loadData(Boolean(cached));
-  }, [loadData]);
+    if (selectedMonthId) {
+      loadData(Boolean(cached));
+    }
+  }, [selectedMonthId, loadData]);
 
   // Limpiar todos los filtros
   const clearFilters = () => {
@@ -137,19 +178,15 @@ export default function ComprasPage() {
   const filteredFacturas = useMemo(() => {
     const q = normalize(searchQuery);
     return facturas.filter((fac) => {
-      // Filtro Categoría
       if (selectedCategoria && fac.categoria !== selectedCategoria && !fac.items.some((it) => it.categoria === selectedCategoria)) {
         return false;
       }
-      // Filtro Proveedor
       if (selectedProveedor && fac.proveedor !== selectedProveedor) {
         return false;
       }
-      // Filtro Fecha
       if (selectedFecha && fac.fecha !== selectedFecha) {
         return false;
       }
-      // Buscador Inteligente
       if (q) {
         const matchHeader =
           normalize(fac.numero_factura).includes(q) ||
@@ -203,9 +240,137 @@ export default function ComprasPage() {
     });
   }, [lineas, searchQuery, selectedCategoria, selectedProveedor, selectedFecha]);
 
+  // Meses filtrados por el buscador en la vista previa
+  const filteredMeses = useMemo(() => {
+    const q = normalize(searchMonthQuery);
+    if (!q) return mesesList;
+    return mesesList.filter((m) =>
+      normalize(m.nombre).includes(q) ||
+      normalize(m.periodo_id).includes(q)
+    );
+  }, [mesesList, searchMonthQuery]);
+
+  const handleOpenMonth = (pId: string) => {
+    setSelectedMonthId(pId);
+    setSelectedPeriodoId(pId);
+  };
+
+  // =========================================================================
+  // VISTA 1: LISTADO DE MESES QUE TIENEN INFORMACIÓN (A PANTALLA COMPLETA)
+  // =========================================================================
+  if (selectedMonthId === null) {
+    return (
+      <div className="w-full max-w-5xl mx-auto p-4 md:p-8 animate-fade-in font-normal">
+        {/* Encabezado Principal */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hojas de Entradas por Compra</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Listado de meses con compras registradas ordenadas desde la más reciente.
+            </p>
+          </div>
+        </div>
+
+        {/* Buscador de Meses */}
+        <div className="relative mb-3">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchMonthQuery}
+            onChange={(e) => setSearchMonthQuery(e.target.value)}
+            placeholder="Buscar por mes o año..."
+            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-md text-xs text-slate-800 focus:outline-hidden focus:border-slate-500 transition-all placeholder:text-slate-400"
+          />
+        </div>
+
+        {/* Contador de Meses Registrados */}
+        <p className="text-[11px] text-slate-400 mb-3 font-medium">
+          {filteredMeses.length} {filteredMeses.length === 1 ? 'mes registrado' : 'meses registrados'}
+        </p>
+
+        {/* Listado de Tarjetas de Meses */}
+        {loadingMeses ? (
+          <div className="bg-white rounded-lg p-12 border border-slate-200 text-center text-slate-500 space-y-2">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400" />
+            <p className="text-xs font-medium">Cargando períodos de compras...</p>
+          </div>
+        ) : filteredMeses.length === 0 ? (
+          <div className="bg-white rounded-lg p-10 border border-slate-200 text-center text-slate-500">
+            <FileSpreadsheet className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+            <p className="text-xs font-medium text-slate-600">No se encontraron meses con compras registradas.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredMeses.map((m) => (
+              <div
+                key={m.periodo_id}
+                onClick={() => handleOpenMonth(m.periodo_id)}
+                className="group flex flex-col sm:flex-row sm:items-center justify-between p-3.5 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 rounded-lg cursor-pointer transition-all gap-2"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-md bg-slate-100 text-slate-600 group-hover:text-slate-900 transition-colors mt-0.5 sm:mt-0">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-semibold text-slate-900 group-hover:text-orange-600 transition-colors">
+                        {m.nombre} - Facturas de Compra
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>{m.total_facturas} {m.total_facturas === 1 ? 'factura registrada' : 'facturas registradas'}</span>
+                      <span>•</span>
+                      <span className="font-medium text-slate-700">
+                        Inversión total: ${m.total_dinero.toLocaleString('es-CO')} COP
+                      </span>
+                      {m.total_items > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>{m.total_items.toLocaleString('es-CO')} ítems comprados</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenMonth(m.periodo_id);
+                    }}
+                    className="text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md transition-colors cursor-pointer"
+                  >
+                    Abrir
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VISTA 2: DETALLE DEL MES SELECCIONADO
+  // =========================================================================
   return (
-    <div className="space-y-4 w-full font-normal">
-      {/* 🏷️ Encabezado Principal Tipo Git */}
+    <div className="space-y-4 w-full font-normal animate-fade-in">
+      {/* Botón para regresar a la lista de meses */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setSelectedMonthId(null)}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-md transition-all cursor-pointer shadow-2xs"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Volver a lista de meses</span>
+        </button>
+      </div>
+
+      {/* 🏷️ Encabezado Principal */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-slate-900 text-white rounded-md">
@@ -221,20 +386,23 @@ export default function ComprasPage() {
           </div>
         </div>
 
-        {/* Acciones de Exportación */}
+        {/* Selector de Período y Exportaciones */}
         <div className="flex items-center gap-2 flex-wrap">
-          {periodos && periodos.length > 0 && (
+          {mesesList && mesesList.length > 0 && (
             <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs shadow-2xs">
               <Calendar className="w-3.5 h-3.5 text-slate-500" />
               <select
-                value={periodoId}
-                onChange={(e) => setSelectedPeriodoId(e.target.value)}
+                value={activePeriodoId}
+                onChange={(e) => {
+                  setSelectedMonthId(e.target.value);
+                  setSelectedPeriodoId(e.target.value);
+                }}
                 className="bg-transparent font-semibold text-slate-800 outline-none cursor-pointer"
-                title="Seleccionar mes / período de compras"
+                title="Cambiar mes de compras"
               >
-                {periodos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} {p.estado === 'ABIERTO' ? '• (Actual)' : ''}
+                {mesesList.map((m) => (
+                  <option key={m.periodo_id} value={m.periodo_id}>
+                    {m.nombre}
                   </option>
                 ))}
               </select>
@@ -281,7 +449,7 @@ export default function ComprasPage() {
             )}
           </div>
 
-          {/* Grid de Filtros Select en Móvil */}
+          {/* Grid de Filtros Select */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-wrap items-center">
             {/* Filtro Proveedor */}
             <div className="w-full sm:min-w-[170px]">
@@ -348,7 +516,6 @@ export default function ComprasPage() {
 
       {/* 🗂️ Pestañas del Módulo */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 select-none">
-        {/* Pestaña Facturas (Default) */}
         <button
           type="button"
           onClick={() => setActiveTab('FACTURAS')}
@@ -371,7 +538,6 @@ export default function ComprasPage() {
           </span>
         </button>
 
-        {/* Pestaña Insumos Consolidados */}
         <button
           type="button"
           onClick={() => setActiveTab('INSUMOS')}
@@ -394,7 +560,6 @@ export default function ComprasPage() {
           </span>
         </button>
 
-        {/* Pestaña Líneas Detalladas */}
         <button
           type="button"
           onClick={() => setActiveTab('LINEAS')}

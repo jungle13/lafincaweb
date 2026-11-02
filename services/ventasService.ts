@@ -566,4 +566,98 @@ export async function getComparacionCuadreVentas(
     comparacion
   };
 }
+export interface MesVentasResumen {
+  periodo_id: string;
+  nombre: string;
+  total_dias: number;
+  gran_total: number;
+  venta_neta: number;
+  total_articulos: number;
+  ultima_fecha?: string;
+}
 
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+/**
+ * Obtener listado de meses que tienen ventas registradas
+ */
+export async function fetchMesesVentasResumen(): Promise<MesVentasResumen[]> {
+  try {
+    const { data: ventasData, error } = await supabase
+      .from('ventas_diarias')
+      .select('periodo_id, fecha, gran_total, venta_neta, total_articulos');
+
+    if (error) throw error;
+
+    const map = new Map<string, {
+      periodo_id: string;
+      total_dias: number;
+      gran_total: number;
+      venta_neta: number;
+      total_articulos: number;
+      fechas: string[];
+    }>();
+
+    (ventasData || []).forEach((v: any) => {
+      let pId = v.periodo_id;
+      if (!pId && v.fecha) {
+        pId = `per-${v.fecha.substring(0, 7)}`;
+      }
+      if (!pId) return;
+
+      if (!map.has(pId)) {
+        map.set(pId, {
+          periodo_id: pId,
+          total_dias: 0,
+          gran_total: 0,
+          venta_neta: 0,
+          total_articulos: 0,
+          fechas: [],
+        });
+      }
+      const entry = map.get(pId)!;
+      entry.total_dias += 1;
+      entry.gran_total += Number(v.gran_total || 0);
+      entry.venta_neta += Number(v.venta_neta || 0);
+      entry.total_articulos += Number(v.total_articulos || 0);
+      if (v.fecha) entry.fechas.push(v.fecha);
+    });
+
+    const result: MesVentasResumen[] = [];
+    for (const entry of Array.from(map.values())) {
+      if (entry.total_dias === 0 && entry.gran_total === 0) continue;
+
+      let nombre = entry.periodo_id;
+      const cleanKey = entry.periodo_id.replace(/^per-/, '');
+      const parts = cleanKey.split('-');
+      if (parts.length === 2) {
+        const year = parseInt(parts[0], 10);
+        const mNum = parseInt(parts[1], 10);
+        if (mNum >= 1 && mNum <= 12) {
+          nombre = `${MONTH_NAMES[mNum - 1]} ${year}`;
+        }
+      }
+
+      entry.fechas.sort().reverse();
+
+      result.push({
+        periodo_id: entry.periodo_id,
+        nombre,
+        total_dias: entry.total_dias,
+        gran_total: entry.gran_total,
+        venta_neta: entry.venta_neta,
+        total_articulos: entry.total_articulos,
+        ultima_fecha: entry.fechas[0] || '',
+      });
+    }
+
+    result.sort((a, b) => b.periodo_id.localeCompare(a.periodo_id));
+    return result;
+  } catch (err) {
+    console.error('Error en fetchMesesVentasResumen:', err);
+    return [];
+  }
+}

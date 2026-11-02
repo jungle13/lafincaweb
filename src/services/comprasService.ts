@@ -58,6 +58,15 @@ export interface ComprasKPIs {
   categorias: CategoriaKPI[];
 }
 
+export interface MesComprasResumen {
+  periodo_id: string;
+  nombre: string;
+  total_facturas: number;
+  total_dinero: number;
+  total_items: number;
+  ultima_fecha?: string;
+}
+
 export interface ComprasResponse {
   success: boolean;
   kpis: ComprasKPIs;
@@ -259,5 +268,86 @@ export async function fetchComprasData(periodoId: string = 'per-2026-10'): Promi
       fechas: [],
       error: err?.message || 'Error consultando compras',
     };
+  }
+}
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+/**
+ * Obtener listado de meses que tienen compras registradas
+ */
+export async function fetchMesesComprasResumen(): Promise<MesComprasResumen[]> {
+  try {
+    const { data: comprasData, error } = await supabase
+      .from('compras')
+      .select('periodo_id, fecha, valor_total, total_items');
+
+    if (error) throw error;
+
+    const map = new Map<string, {
+      periodo_id: string;
+      total_facturas: number;
+      total_dinero: number;
+      total_items: number;
+      fechas: string[];
+    }>();
+
+    (comprasData || []).forEach((c: any) => {
+      let pId = c.periodo_id;
+      if (!pId && c.fecha) {
+        pId = `per-${c.fecha.substring(0, 7)}`;
+      }
+      if (!pId) return;
+
+      if (!map.has(pId)) {
+        map.set(pId, {
+          periodo_id: pId,
+          total_facturas: 0,
+          total_dinero: 0,
+          total_items: 0,
+          fechas: [],
+        });
+      }
+      const entry = map.get(pId)!;
+      entry.total_facturas += 1;
+      entry.total_dinero += Number(c.valor_total || 0);
+      entry.total_items += Number(c.total_items || 0);
+      if (c.fecha) entry.fechas.push(c.fecha);
+    });
+
+    const result: MesComprasResumen[] = [];
+    for (const entry of Array.from(map.values())) {
+      if (entry.total_facturas === 0 && entry.total_dinero === 0) continue;
+
+      let nombre = entry.periodo_id;
+      const cleanKey = entry.periodo_id.replace(/^per-/, '');
+      const parts = cleanKey.split('-');
+      if (parts.length === 2) {
+        const year = parseInt(parts[0], 10);
+        const mNum = parseInt(parts[1], 10);
+        if (mNum >= 1 && mNum <= 12) {
+          nombre = `${MONTH_NAMES[mNum - 1]} ${year}`;
+        }
+      }
+
+      entry.fechas.sort().reverse();
+
+      result.push({
+        periodo_id: entry.periodo_id,
+        nombre,
+        total_facturas: entry.total_facturas,
+        total_dinero: entry.total_dinero,
+        total_items: entry.total_items,
+        ultima_fecha: entry.fechas[0] || '',
+      });
+    }
+
+    result.sort((a, b) => b.periodo_id.localeCompare(a.periodo_id));
+    return result;
+  } catch (err) {
+    console.error('Error en fetchMesesComprasResumen:', err);
+    return [];
   }
 }

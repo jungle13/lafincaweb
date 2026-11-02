@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   DollarSign, 
   Calendar, 
@@ -10,7 +10,10 @@ import {
   AlertCircle,
   UploadCloud,
   ChevronRight,
-  Info
+  Info,
+  Search,
+  FileSpreadsheet,
+  ArrowLeft
 } from 'lucide-react';
 import VentasKPIHeader from '@/components/ventas/VentasKPIHeader';
 import VentasDiariasView from '@/components/ventas/VentasDiariasView';
@@ -21,7 +24,8 @@ import VentasUploadModal from '@/components/ventas/VentasUploadModal';
 import { 
   VentasKPIs, 
   VentaDiaria, 
-  PlatoRanking 
+  PlatoRanking,
+  MesVentasResumen
 } from '@/services/ventasService';
 import { usePeriodo } from '@/context/PeriodoContext';
 
@@ -29,14 +33,49 @@ type TabView = 'DIARIO' | 'TRANSACCIONES' | 'PRODUCTOS';
 
 export default function VentasPage() {
   const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos } = usePeriodo();
-  
-  // Si no hay período seleccionado, arrancar en Octubre 2026 (per-2026-10) que tiene el historial activo
-  const periodoId = selectedPeriodoId || 'per-2026-10';
-  const periodoNombre = currentPeriodo?.nombre || (periodoId === 'per-2026-10' ? 'Octubre 2026' : 'Período Activo');
 
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabView>('DIARIO');
+  // Estado para la vista de selección de mes a pantalla completa
+  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
+  const [mesesList, setMesesList] = useState<MesVentasResumen[]>([]);
+  const [loadingMeses, setLoadingMeses] = useState(true);
+  const [searchMonthQuery, setSearchMonthQuery] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+
+  // Período activo cuando se entra al detalle
+  const activePeriodoId = selectedMonthId || selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
+
+  const periodoNombre = useMemo(() => {
+    if (!activePeriodoId) return 'Octubre 2026';
+    const foundMes = mesesList.find((m) => m.periodo_id === activePeriodoId);
+    if (foundMes) return foundMes.nombre;
+    const foundPeriodo = periodos?.find((p) => p.id === activePeriodoId);
+    return foundPeriodo?.nombre || 'Octubre 2026';
+  }, [activePeriodoId, mesesList, periodos]);
+
+  // Cargar el listado de meses con ventas registradas
+  const loadMeses = useCallback(async () => {
+    setLoadingMeses(true);
+    try {
+      const res = await fetch(`/api/ventas?view=MESES&t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.meses)) {
+          setMesesList(json.meses);
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando meses de ventas:', err);
+    } finally {
+      setLoadingMeses(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMeses();
+  }, [loadMeses]);
+
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabView>('DIARIO');
 
   const [kpis, setKpis] = useState<VentasKPIs>({
     granTotalVentas: 0,
@@ -57,25 +96,16 @@ export default function VentasPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadAllData = useCallback(async () => {
+    if (!selectedMonthId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/ventas?periodo_id=${periodoId}&t=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/ventas?periodo_id=${activePeriodoId}&t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: No se pudo obtener la información de ventas`);
       }
       const json = await res.json();
       if (json.success) {
-        // Si el periodo actual devuelve 0 ventas y el usuario está en per-2026-11 pero per-2026-10 tiene ventas,
-        // y no hay selección manual en localStorage, migrar a per-2026-10
-        if (json.kpis && json.kpis.granTotalVentas === 0 && periodoId === 'per-2026-11') {
-          const hasManualChoice = typeof window !== 'undefined' && localStorage.getItem('la_finca_periodo_id');
-          if (!hasManualChoice) {
-            setSelectedPeriodoId('per-2026-10');
-            return;
-          }
-        }
-
         if (json.kpis) setKpis(json.kpis);
         if (json.diarias) setDiarias(json.diarias);
         if (json.ranking) setRanking(json.ranking);
@@ -90,25 +120,176 @@ export default function VentasPage() {
     } finally {
       setLoading(false);
     }
-  }, [periodoId, setSelectedPeriodoId]);
+  }, [selectedMonthId, activePeriodoId]);
 
   useEffect(() => {
-    loadAllData();
-  }, [loadAllData]);
+    if (selectedMonthId) {
+      loadAllData();
+    }
+  }, [selectedMonthId, loadAllData]);
 
-  // Al subir un archivo .txt con éxito, sincronizar de inmediato al período del archivo subido
+  // Al subir un archivo .txt con éxito
   const handleUploadSuccess = (targetPeriodoId?: string) => {
-    if (targetPeriodoId && targetPeriodoId !== periodoId) {
+    loadMeses();
+    if (targetPeriodoId) {
+      setSelectedMonthId(targetPeriodoId);
       setSelectedPeriodoId(targetPeriodoId);
-    } else {
+    } else if (selectedMonthId) {
       loadAllData();
     }
   };
 
+  const normalize = (text: string) =>
+    (text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const filteredMeses = useMemo(() => {
+    const q = normalize(searchMonthQuery);
+    if (!q) return mesesList;
+    return mesesList.filter((m) =>
+      normalize(m.nombre).includes(q) ||
+      normalize(m.periodo_id).includes(q)
+    );
+  }, [mesesList, searchMonthQuery]);
+
+  const handleOpenMonth = (pId: string) => {
+    setSelectedMonthId(pId);
+    setSelectedPeriodoId(pId);
+  };
+
   const fechasDisponibles = (diarias || []).map((d) => d.fecha);
 
+  // =========================================================================
+  // VISTA 1: LISTADO DE MESES QUE TIENEN INFORMACIÓN (A PANTALLA COMPLETA)
+  // =========================================================================
+  if (selectedMonthId === null) {
+    return (
+      <div className="w-full max-w-5xl mx-auto p-4 md:p-8 animate-fade-in font-normal">
+        {/* Encabezado Principal */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hojas de Salidas por Venta</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Listado de meses con ventas registradas ordenadas desde la más reciente.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUploadModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs px-3.5 py-2 rounded-md font-medium shadow-2xs transition-colors self-start sm:self-auto cursor-pointer"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Importar Ventas (.txt)</span>
+          </button>
+        </div>
+
+        {/* Buscador de Meses */}
+        <div className="relative mb-3">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchMonthQuery}
+            onChange={(e) => setSearchMonthQuery(e.target.value)}
+            placeholder="Buscar por mes o año..."
+            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-md text-xs text-slate-800 focus:outline-hidden focus:border-slate-500 transition-all placeholder:text-slate-400"
+          />
+        </div>
+
+        {/* Contador de Meses Registrados */}
+        <p className="text-[11px] text-slate-400 mb-3 font-medium">
+          {filteredMeses.length} {filteredMeses.length === 1 ? 'mes registrado' : 'meses registrados'}
+        </p>
+
+        {/* Listado de Tarjetas de Meses */}
+        {loadingMeses ? (
+          <div className="bg-white rounded-lg p-12 border border-slate-200 text-center text-slate-500 space-y-2">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400" />
+            <p className="text-xs font-medium">Cargando períodos de ventas...</p>
+          </div>
+        ) : filteredMeses.length === 0 ? (
+          <div className="bg-white rounded-lg p-10 border border-slate-200 text-center text-slate-500">
+            <FileSpreadsheet className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+            <p className="text-xs font-medium text-slate-600">No se encontraron meses con ventas registradas.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredMeses.map((m) => (
+              <div
+                key={m.periodo_id}
+                onClick={() => handleOpenMonth(m.periodo_id)}
+                className="group flex flex-col sm:flex-row sm:items-center justify-between p-3.5 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 rounded-lg cursor-pointer transition-all gap-2"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-md bg-slate-100 text-slate-600 group-hover:text-slate-900 transition-colors mt-0.5 sm:mt-0">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-semibold text-slate-900 group-hover:text-orange-600 transition-colors">
+                        {m.nombre} - Salidas por Venta
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>{m.total_dias} {m.total_dias === 1 ? 'día registrado' : 'días registrados'}</span>
+                      <span>•</span>
+                      <span className="font-medium text-slate-700">
+                        Total facturado: ${m.gran_total.toLocaleString('es-CO')} COP
+                      </span>
+                      {m.total_articulos > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>{m.total_articulos.toLocaleString('es-CO')} artículos vendidos</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenMonth(m.periodo_id);
+                    }}
+                    className="text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md transition-colors cursor-pointer"
+                  >
+                    Abrir
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <VentasUploadModal
+          isOpen={uploadModalOpen}
+          onClose={() => setUploadModalOpen(false)}
+          onSuccess={handleUploadSuccess}
+        />
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VISTA 2: DETALLE DEL MES SELECCIONADO
+  // =========================================================================
   return (
-    <div className="space-y-4 w-full font-normal">
+    <div className="space-y-4 w-full font-normal animate-fade-in">
+      {/* Botón para regresar a la lista de meses */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setSelectedMonthId(null)}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-md transition-all cursor-pointer shadow-2xs"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Volver a lista de meses</span>
+        </button>
+      </div>
+
       {/* 🏷️ Encabezado Principal Tipo Git */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3">
@@ -127,19 +308,21 @@ export default function VentasPage() {
 
         {/* Selector de Período y Acciones */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Selector de Mes / Período */}
-          {periodos && periodos.length > 0 && (
+          {mesesList && mesesList.length > 0 && (
             <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs shadow-2xs">
               <Calendar className="w-3.5 h-3.5 text-slate-500" />
               <select
-                value={periodoId}
-                onChange={(e) => setSelectedPeriodoId(e.target.value)}
+                value={activePeriodoId}
+                onChange={(e) => {
+                  setSelectedMonthId(e.target.value);
+                  setSelectedPeriodoId(e.target.value);
+                }}
                 className="bg-transparent font-semibold text-slate-800 outline-none cursor-pointer"
                 title="Seleccionar mes / período de ventas"
               >
-                {periodos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} {p.id === 'per-2026-10' ? '• (Historial Activo)' : p.estado === 'ABIERTO' ? '• (Actual)' : ''}
+                {mesesList.map((m) => (
+                  <option key={m.periodo_id} value={m.periodo_id}>
+                    {m.nombre}
                   </option>
                 ))}
               </select>
@@ -162,26 +345,6 @@ export default function VentasPage() {
           />
         </div>
       </div>
-
-      {/* 💡 Banner informativo si el período actual no tiene ventas registradas */}
-      {!loading && kpis.granTotalVentas === 0 && periodoId !== 'per-2026-10' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-amber-900 text-xs animate-fade-in">
-          <div className="flex items-center gap-2">
-            <Info className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>
-              No hay ventas registradas para <strong>{periodoNombre}</strong>. El historial completo con el cierre del 31 está en <strong>Octubre 2026 ($238.271.863 COP)</strong>.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSelectedPeriodoId('per-2026-10')}
-            className="inline-flex items-center gap-1 font-bold text-amber-900 hover:text-amber-950 underline cursor-pointer shrink-0"
-          >
-            <span>Ver ventas de Octubre 2026</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
 
       <VentasUploadModal
         isOpen={uploadModalOpen}
@@ -271,10 +434,10 @@ export default function VentasPage() {
           <p className="text-xs text-slate-500 font-medium">Cargando registros de ventas...</p>
         </div>
       ) : activeTab === 'DIARIO' ? (
-        <VentasDiariasView diarias={diarias} periodoId={periodoId} />
+        <VentasDiariasView diarias={diarias} periodoId={activePeriodoId} />
       ) : activeTab === 'TRANSACCIONES' ? (
         <VentasTransaccionesView
-          periodoId={periodoId}
+          periodoId={activePeriodoId}
           fechasDisponibles={fechasDisponibles}
           categoriasDisponibles={categorias}
         />

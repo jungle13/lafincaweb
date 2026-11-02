@@ -5,7 +5,8 @@ import {
   getVentasPorProducto, 
   getVentasDetalle, 
   getVentasRentabilidad,
-  getComparacionCuadreVentas 
+  getComparacionCuadreVentas,
+  fetchMesesVentasResumen
 } from '@/services/ventasService';
 
 export const dynamic = 'force-dynamic';
@@ -14,8 +15,14 @@ export const revalidate = 0;
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const periodoId = searchParams.get('periodo_id') || 'per-2026-10';
     const view = searchParams.get('view') || 'ALL';
+
+    if (view === 'MESES') {
+      const meses = await fetchMesesVentasResumen();
+      return NextResponse.json({ success: true, meses });
+    }
+
+    const periodoId = searchParams.get('periodo_id') || 'per-2026-10';
     const fecha = searchParams.get('fecha') || 'ALL';
     const categoria = searchParams.get('categoria') || 'ALL';
     const search = searchParams.get('search') || '';
@@ -91,4 +98,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-
