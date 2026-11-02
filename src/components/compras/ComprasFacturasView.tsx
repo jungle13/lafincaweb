@@ -13,6 +13,7 @@ import {
 import { formatMoney } from '@/lib/formatters';
 import { CompraFacturaGroup } from '@/services/comprasService';
 import ComprasPagination from '@/components/compras/ComprasPagination';
+import { downloadComprasFacturasPdf } from '@/lib/exportComprasFacturasPdf';
 
 interface Props {
   facturas: CompraFacturaGroup[];
@@ -81,6 +82,16 @@ export default function ComprasFacturasView({ facturas }: Props) {
             className="text-slate-500 hover:text-slate-800 font-medium cursor-pointer"
           >
             Colapsar todas
+          </button>
+          <span>•</span>
+          <button
+            type="button"
+            onClick={() => downloadComprasFacturasPdf({ facturas, reportTitle: 'ENTRADAS POR COMPRAS — DETALLE POR FACTURA Y CATEGORÍA' })}
+            className="flex items-center gap-1 text-slate-700 hover:text-slate-900 font-semibold cursor-pointer"
+            title="Exportar informe PDF de facturas agrupadas por categoría"
+          >
+            <FileText className="w-3.5 h-3.5 text-slate-500" />
+            <span>Exportar PDF</span>
           </button>
         </div>
       </div>
