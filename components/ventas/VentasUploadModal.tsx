@@ -17,7 +17,7 @@ import {
 interface VentasUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (targetPeriodoId?: string) => void;
 }
 
 export default function VentasUploadModal({ isOpen, onClose, onSuccess }: VentasUploadModalProps) {

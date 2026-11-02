@@ -25,15 +25,17 @@ import {
 } from '@/services/ventasService';
 import { usePeriodo } from '@/context/PeriodoContext';
 
-type TabView = 'TRANSACCIONES' | 'DIARIO' | 'PRODUCTOS';
+type TabView = 'DIARIO' | 'TRANSACCIONES' | 'PRODUCTOS';
 
 export default function VentasPage() {
   const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos } = usePeriodo();
-  const periodoId = selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
-  const periodoNombre = currentPeriodo?.nombre || 'Octubre 2026';
+  
+  // Si no hay período seleccionado, arrancar en Octubre 2026 (per-2026-10) que tiene el historial activo
+  const periodoId = selectedPeriodoId || 'per-2026-10';
+  const periodoNombre = currentPeriodo?.nombre || (periodoId === 'per-2026-10' ? 'Octubre 2026' : 'Período Activo');
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabView>('TRANSACCIONES');
+  const [activeTab, setActiveTab] = useState<TabView>('DIARIO');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   const [kpis, setKpis] = useState<VentasKPIs>({
@@ -64,6 +66,16 @@ export default function VentasPage() {
       }
       const json = await res.json();
       if (json.success) {
+        // Si el periodo actual devuelve 0 ventas y el usuario está en per-2026-11 pero per-2026-10 tiene ventas,
+        // y no hay selección manual en localStorage, migrar a per-2026-10
+        if (json.kpis && json.kpis.granTotalVentas === 0 && periodoId === 'per-2026-11') {
+          const hasManualChoice = typeof window !== 'undefined' && localStorage.getItem('la_finca_periodo_id');
+          if (!hasManualChoice) {
+            setSelectedPeriodoId('per-2026-10');
+            return;
+          }
+        }
+
         if (json.kpis) setKpis(json.kpis);
         if (json.diarias) setDiarias(json.diarias);
         if (json.ranking) setRanking(json.ranking);
@@ -78,11 +90,20 @@ export default function VentasPage() {
     } finally {
       setLoading(false);
     }
-  }, [periodoId]);
+  }, [periodoId, setSelectedPeriodoId]);
 
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // Al subir un archivo .txt con éxito, sincronizar de inmediato al período del archivo subido
+  const handleUploadSuccess = (targetPeriodoId?: string) => {
+    if (targetPeriodoId && targetPeriodoId !== periodoId) {
+      setSelectedPeriodoId(targetPeriodoId);
+    } else {
+      loadAllData();
+    }
+  };
 
   const fechasDisponibles = (diarias || []).map((d) => d.fecha);
 
@@ -118,7 +139,7 @@ export default function VentasPage() {
               >
                 {periodos.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.nombre} {p.estado === 'ABIERTO' ? '• (Actual)' : ''}
+                    {p.nombre} {p.id === 'per-2026-10' ? '• (Historial Activo)' : p.estado === 'ABIERTO' ? '• (Actual)' : ''}
                   </option>
                 ))}
               </select>
@@ -144,11 +165,11 @@ export default function VentasPage() {
 
       {/* 💡 Banner informativo si el período actual no tiene ventas registradas */}
       {!loading && kpis.granTotalVentas === 0 && periodoId !== 'per-2026-10' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-amber-900 text-xs">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-amber-900 text-xs animate-fade-in">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
-              No hay ventas registradas para <strong>{periodoNombre}</strong>. Las ventas de cierre están registradas en <strong>Octubre 2026</strong>.
+              No hay ventas registradas para <strong>{periodoNombre}</strong>. El historial completo con el cierre del 31 está en <strong>Octubre 2026 ($238.271.863 COP)</strong>.
             </span>
           </div>
           <button
@@ -165,7 +186,7 @@ export default function VentasPage() {
       <VentasUploadModal
         isOpen={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
-        onSuccess={loadAllData}
+        onSuccess={handleUploadSuccess}
       />
 
       {/* 📊 Tarjetas de KPIs */}
@@ -173,19 +194,6 @@ export default function VentasPage() {
 
       {/* 🗂️ Pestañas del Módulo */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 select-none">
-        <button
-          type="button"
-          onClick={() => setActiveTab('TRANSACCIONES')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
-            activeTab === 'TRANSACCIONES'
-              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
-              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-          }`}
-        >
-          <ListOrdered className="w-3.5 h-3.5" />
-          <span>Transacciones Detalladas</span>
-        </button>
-
         <button
           type="button"
           onClick={() => setActiveTab('DIARIO')}
@@ -200,8 +208,21 @@ export default function VentasPage() {
           <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
             activeTab === 'DIARIO' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
           }`}>
-            {diarias.length}
+            {diarias.length} días
           </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('TRANSACCIONES')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'TRANSACCIONES'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <ListOrdered className="w-3.5 h-3.5" />
+          <span>Transacciones Detalladas</span>
         </button>
 
         <button
@@ -249,14 +270,14 @@ export default function VentasPage() {
           <Loader2 className="w-6 h-6 text-slate-600 animate-spin mx-auto" />
           <p className="text-xs text-slate-500 font-medium">Cargando registros de ventas...</p>
         </div>
+      ) : activeTab === 'DIARIO' ? (
+        <VentasDiariasView diarias={diarias} periodoId={periodoId} />
       ) : activeTab === 'TRANSACCIONES' ? (
         <VentasTransaccionesView
           periodoId={periodoId}
           fechasDisponibles={fechasDisponibles}
           categoriasDisponibles={categorias}
         />
-      ) : activeTab === 'DIARIO' ? (
-        <VentasDiariasView diarias={diarias} periodoId={periodoId} />
       ) : (
         <VentasProductosRankingView
           ranking={ranking}
