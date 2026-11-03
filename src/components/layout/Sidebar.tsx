@@ -39,6 +39,12 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'GESTIÓN DE PERÍODOS',
+    items: [
+      { label: 'Períodos Contables', href: '/periodos', icon: CalendarRange },
+    ],
+  },
+  {
     title: 'INVENTARIO & BODEGA',
     items: [
       { label: 'Entradas por Compra', href: '/compras', icon: ShoppingCart },

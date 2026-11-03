@@ -14,6 +14,7 @@ import {
   Menu,
   ArrowRight,
   ShieldCheck,
+  CalendarRange,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -23,6 +24,13 @@ export default function HomePage() {
   const greeting = user?.name === 'Eliana' ? 'Bienvenida' : 'Bienvenido';
 
   const QUICK_MODULES = [
+    {
+      title: 'Períodos Contables',
+      href: '/periodos',
+      icon: CalendarRange,
+      desc: 'Administración de meses operativos y apertura de ciclos para compras, ventas y costeo.',
+      color: 'text-indigo-600 bg-indigo-50 border-indigo-200 group-hover:border-indigo-400',
+    },
     {
       title: 'Costeo Diario Cocina',
       href: '/costeo-diario',
