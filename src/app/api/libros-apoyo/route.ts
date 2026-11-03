@@ -547,6 +547,133 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // 6.5. Importación de Flujos de Caja Completos (.txt / IA)
+    if (action === 'IMPORT_FLUJOS_CAJA') {
+      const { flujos = [], replaceDates = true, tipo_libro = 'CAJA_MENOR' } = body;
+      if (!Array.isArray(flujos) || flujos.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'No se recibieron flujos de caja válidos para importar' },
+          { status: 400 }
+        );
+      }
+
+      let totalSalidasInsertadas = 0;
+      const fechasProcesadas: string[] = [];
+
+      for (const flujo of flujos) {
+        const fecha = String(flujo.fecha || '').trim();
+        if (!fecha || fecha.length < 8) continue;
+        fechasProcesadas.push(fecha);
+
+        const salidas = Array.isArray(flujo.salidas) ? flujo.salidas : [];
+        const diaMes = Number(fecha.split('-')[2] || 1);
+        const periodoId = `per-${fecha.slice(0, 7)}`;
+        const responsable = String(flujo.cajera_responsable || flujo.responsables_dia || 'JOHANNA').toUpperCase().trim();
+        const cajaNombre = flujo.caja_nombre || 'Caja 1';
+
+        // 1. Si replaceDates está activo, borrar salidas previas de esa fecha
+        if (replaceDates) {
+          await supabase
+            .from('libro_caja_registros')
+            .delete()
+            .eq('tipo_libro', tipo_libro)
+            .eq('fecha', fecha);
+        }
+
+        // 2. Insertar salidas del flujo
+        if (salidas.length > 0) {
+          const payloadSalidas = salidas.map((s: any, idx: number) => ({
+            fecha,
+            dia_mes: diaMes,
+            orden_item: idx + 1,
+            tipo_libro,
+            periodo_id: periodoId,
+            clasificacion: String(s.clasificacion || 'Gasto Operativo').trim(),
+            categoria: String(s.categoria || 'Gastos Generales').trim(),
+            concepto: String(s.concepto || 'Registro Caja').trim(),
+            descripcion_beneficiario: String(s.descripcion_beneficiario || s.concepto || '').trim(),
+            valor_pagado: Number(s.valor_pagado || s.valor || 0),
+            soporte_factura: String(s.soporte_factura || s.soporte || `CUADERNO CAJA / ${responsable}`).trim(),
+            responsable_caja: s.responsable_caja ? String(s.responsable_caja).toUpperCase().trim() : responsable,
+            proveedor_fuente: String(s.proveedor_fuente || 'Gastos Menores / Caja Menor').trim(),
+            usuario_registro: responsable,
+            caja_nombre: cajaNombre,
+            es_ajuste: Boolean(s.es_ajuste),
+          }));
+
+          const { error: insErr } = await supabase.from('libro_caja_registros').insert(payloadSalidas);
+          if (insErr) throw insErr;
+          totalSalidasInsertadas += payloadSalidas.length;
+        }
+
+        // 3. Recalcular la hoja diaria
+        await recalcularHojaDiaria(fecha, tipo_libro);
+
+        // 4. Si el flujo incluía datos específicos de arqueo, actualizar la hoja diaria
+        const updateArqueo: Record<string, any> = {};
+        if (flujo.base_inicial !== undefined && flujo.base_inicial !== null && Number(flujo.base_inicial) > 0) {
+          updateArqueo.base_inicial = Number(flujo.base_inicial);
+        }
+        if (flujo.total_datafonos !== undefined && flujo.total_datafonos !== null) {
+          updateArqueo.total_datafonos = Number(flujo.total_datafonos);
+        }
+        if (flujo.total_otros_medios !== undefined && flujo.total_otros_medios !== null) {
+          updateArqueo.total_otros_medios = Number(flujo.total_otros_medios);
+        }
+        if (flujo.efectivo_fisico_cierre !== undefined && flujo.efectivo_fisico_cierre !== null && Number(flujo.efectivo_fisico_cierre) > 0) {
+          updateArqueo.efectivo_fisico_cierre = Number(flujo.efectivo_fisico_cierre);
+        }
+        if (flujo.venta_pos_total !== undefined && flujo.venta_pos_total !== null && Number(flujo.venta_pos_total) > 0) {
+          updateArqueo.venta_pos_total = Number(flujo.venta_pos_total);
+          updateArqueo.venta_efectivo_pos = Number(flujo.venta_pos_total);
+        }
+        if (flujo.observaciones !== undefined && flujo.observaciones !== '') {
+          updateArqueo.observaciones = String(flujo.observaciones || '');
+        }
+        if (responsable) {
+          updateArqueo.responsables_dia = responsable;
+        }
+
+        if (Object.keys(updateArqueo).length > 0) {
+          updateArqueo.updated_at = new Date().toISOString();
+          await supabase
+            .from('libro_caja_diario')
+            .update(updateArqueo)
+            .eq('fecha', fecha)
+            .eq('tipo_libro', tipo_libro);
+
+          // Re-calcular diferencia de cuadre con los nuevos valores
+          const { data: updatedSheet } = await supabase
+            .from('libro_caja_diario')
+            .select('*')
+            .eq('fecha', fecha)
+            .eq('tipo_libro', tipo_libro)
+            .maybeSingle();
+
+          if (updatedSheet) {
+            const sumatoria = Number(updatedSheet.efectivo_fisico_cierre || 0) +
+              Number(updatedSheet.total_datafonos || 0) +
+              Number(updatedSheet.total_otros_medios || 0) +
+              Number(updatedSheet.total_salidas || 0);
+            const posVal = Number(updatedSheet.venta_pos_total || 0);
+            await supabase
+              .from('libro_caja_diario')
+              .update({
+                diferencia_cuadre: sumatoria - posVal,
+              })
+              .eq('id', updatedSheet.id);
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        flujosProcesados: fechasProcesadas.length,
+        totalSalidasInsertadas,
+        fechas: fechasProcesadas,
+      });
+    }
+
     // 7. Importación Masiva desde Excel / TXT / IA
     if (action === 'BULK_IMPORT') {
       const { items = [], replaceDates = true, tipo_libro = 'CAJA_MENOR' } = body;

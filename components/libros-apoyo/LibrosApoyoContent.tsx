@@ -14,6 +14,7 @@ import {
   Plus,
   Trash2,
   Upload,
+  UploadCloud,
   FileSpreadsheet,
   Calendar,
   CheckCircle2,
@@ -43,6 +44,7 @@ import {
 } from 'lucide-react';
 import { downloadCajaMenorResumenPdf } from '@/lib/exportCajaMenorPdf';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
+import ImportarFlujoCajaModal from '@/components/libros-apoyo/ImportarFlujoCajaModal';
 import Modal from '@/components/ui/Modal';
 import { formatMoney } from '@/lib/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -1151,10 +1153,11 @@ export default function LibrosApoyoContent({
                     <button
                       type="button"
                       onClick={() => setIsImportModalOpen(true)}
-                      className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap"
+                      className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shadow-2xs transition-colors"
+                      title="Importar uno o múltiples flujos de caja desde archivo .txt escaneado con IA"
                     >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Importar Excel / IA</span>
+                      <UploadCloud className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Importar Flujo de Caja</span>
                     </button>
                   )}
                 </div>
@@ -2492,58 +2495,16 @@ export default function LibrosApoyoContent({
       </Modal>
 
       {/* ===================================================================== */}
-      {/* MODAL 4: IMPORTADOR DRAG & DROP (EXCEL / IA)                           */}
-      {/* ===================================================================== */}
-      <Modal
+      {/* MODAL 4: IMPORTADOR INTELIGENTE DE FLUJO DE CAJA (.TXT / IA) */}
+      <ImportarFlujoCajaModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        title="Importar Libro de Caja Menor (Excel Maestro o Escaneo IA)"
-        icon={<FileSpreadsheet className="w-5 h-5 text-slate-700" />}
-        maxWidth="max-w-2xl"
-      >
-        <div className="space-y-4 py-2 text-xs">
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={async (e) => {
-              e.preventDefault();
-              const file = e.dataTransfer.files?.[0];
-              if (file) {
-                const buffer = await file.arrayBuffer();
-                const wb = XLSX.read(buffer, { type: 'array' });
-                const ws = wb.Sheets[wb.SheetNames[0]];
-                const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-                alert(`Archivo leído: ${rows.length} filas.`);
-              }
-            }}
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-slate-300 hover:border-slate-900 rounded-xl p-6 text-center cursor-pointer bg-slate-50/70 transition-colors"
-          >
-            <Upload className="w-7 h-7 text-slate-500 mx-auto mb-2" />
-            <p className="font-bold text-slate-800 text-sm">
-              Arrastra aquí tu archivo COSTOS_GASTOS_OCTUBRE_2026.xlsx o haz clic para seleccionarlo
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block font-semibold text-slate-700">
-              O pega líneas escaneadas por IA:
-            </label>
-            <textarea
-              rows={3}
-              value={importTextRaw}
-              onChange={(e) => setImportTextRaw(e.target.value)}
-              placeholder="27/10/2026 | Costo / Insumo | Servicios | Hielo | Hielo en bolsa | 32000 | JOHANNA"
-              className="w-full p-2.5 rounded-lg border border-slate-200 font-mono text-xs"
-            />
-          </div>
-        </div>
-      </Modal>
+        onSuccess={async (count) => {
+          invalidateCache(CACHE_KEY);
+          await loadData(true);
+          alert(`¡Importación completada! Se procesaron ${count} flujos de caja exitosamente.`);
+        }}
+      />
     </div>
   );
 }
