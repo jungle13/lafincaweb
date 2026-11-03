@@ -4,57 +4,90 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   UploadCloud, 
-  FileText, 
   X, 
   Copy, 
   Check, 
   Sparkles, 
-  AlertCircle, 
-  FileCode,
-  ArrowRight
+  AlertCircle
 } from 'lucide-react';
 
+export interface ParsedFacturaItem {
+  nombre_original: string; // Nombre literal tal cual como se extrae de la factura sin modificaciones
+  nombre_insumo?: string;  // Nombre de insumo equivalente en catálogo (o vacío)
+  insumo_id?: string | null;
+  categoria?: string;
+  detalle?: string;
+  cantidad: number;
+  unidad?: string;
+  costo_unitario: number;
+}
+
 export interface ParsedFacturaData {
+  id: string;
   numeroFactura?: string;
   fecha?: string;
   proveedor?: string;
   categoriaPrincipal?: string;
   origen?: string;
   observaciones?: string;
-  lineas: {
-    nombre_insumo: string;
-    categoria?: string;
-    detalle?: string;
-    cantidad: number;
-    unidad?: string;
-    costo_unitario: number;
-  }[];
+  lineas: ParsedFacturaItem[];
+  guardada?: boolean;
 }
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onImportData: (data: ParsedFacturaData) => void;
+  onImportData: (data: ParsedFacturaData[]) => void;
 }
 
-const AI_PROMPT_TEMPLATE = `Actúa como un experto contable y de costeo para restaurantes. Analiza la imagen o archivo PDF de la factura / remisión de compra adjunta y genera un archivo de texto plano (.txt) estructurado con la información para el sistema "La Finca Costeo e Inventario".
+const AI_PROMPT_TEMPLATE = `Actúa como un experto contable y de costeo para restaurantes. Analiza la(s) foto(s), imagen(es) o archivo(s) PDF de la(s) factura(s) / remisión(es) de compra adjunta(s) y genera un archivo de texto plano (.txt) estructurado para el sistema "La Finca Costeo e Inventario".
 
 REGLAS DE EXTRACCIÓN:
-1. Extrae el número de factura o remisión, la fecha en formato YYYY-MM-DD, el nombre comercial del proveedor y la categoría principal.
-2. Extrae cada insumo o línea de la factura con su Nombre, Categoría aproximada (Carnes y Proteínas, Verduras e Insumos, Granos y Abarrotes, Lácteos, Bebidas, Desechables y Empaques, Otros Insumos y Servicios), Cantidad numérica exacta (usar punto decimal ej. 10.5), Unidad de medida (Kg, Und, Bolsa, Paq, Atado, Bulto, Lt, Porc), Costo Unitario en COP (solo dígitos enteros, sin puntos de miles ni símbolos de pesos ej. 34500) y Detalle / Gramaje original.
-3. No agregues saludos, explicaciones ni formato markdown extra; entrega estrictamente el siguiente texto plano:
+1. Puedes procesar UNA o MÚLTIPLES facturas a la vez en un solo archivo. Separa cada factura claramente con el delimitador:
+=== FACTURA ===
 
-FACTURA: [Número de Factura o Remisión]
+2. Para cada factura extrae los datos de comprobante:
+   - FACTURA: [Número de Factura o Remisión]
+   - FECHA: [YYYY-MM-DD]
+   - PROVEEDOR: [Nombre Comercial del Proveedor]
+   - CATEGORIA: [Categoría Principal aproximada: Carnes y Proteínas, Verduras e Insumos, Granos y Abarrotes, Lácteos, Bebidas, Desechables y Empaques, Otros Insumos y Servicios]
+   - ORIGEN: [Factura Electrónica / Remisión Bodega / Cuenta de Cobro / Compra Directa / Contado]
+   - OBSERVACIONES: [Notas opcionales o dejar vacío]
+
+3. Para cada insumo o ítem de la factura extrae en la tabla de INSUMOS:
+   - Insumo Factura: Nombre exacto y literal como aparece impreso en la factura original sin modificar ni resumir.
+   - Categoría: Categoría aproximada del insumo.
+   - Cantidad: Cantidad numérica exacta (usar punto decimal ej. 10.5).
+   - Unidad: Unidad de medida (Kg, Und, Bolsa, Paq, Atado, Bulto, Lt, Porc).
+   - Costo Unitario: Costo Unitario en COP (solo dígitos enteros, sin puntos de miles ni símbolos de pesos ej. 34500).
+   - Detalle: Detalle, gramaje o presentación original.
+
+4. No agregues saludos, explicaciones ni formato markdown extra; entrega estrictamente el siguiente texto plano:
+
+=== FACTURA ===
+FACTURA: [Número de Factura 1]
 FECHA: [YYYY-MM-DD]
-PROVEEDOR: [Nombre del Proveedor]
+PROVEEDOR: [Nombre del Proveedor 1]
 CATEGORIA: [Categoría Principal]
 ORIGEN: [Factura Electrónica / Remisión Bodega / Cuenta de Cobro]
-OBSERVACIONES: [Notas opcionales o dejar vacío]
+OBSERVACIONES: [Notas opcionales o vacío]
 
 INSUMOS:
-Insumo | Categoría | Cantidad | Unidad | Costo Unitario | Detalle
-[Nombre Insumo 1] | [Categoría] | [Cantidad] | [Unidad] | [Costo Unitario] | [Detalle]
-[Nombre Insumo 2] | [Categoría] | [Cantidad] | [Unidad] | [Costo Unitario] | [Detalle]`;
+Insumo Factura | Categoría | Cantidad | Unidad | Costo Unitario | Detalle
+[Nombre literal en factura 1] | [Categoría] | [Cantidad] | [Unidad] | [Costo Unitario] | [Detalle]
+[Nombre literal en factura 2] | [Categoría] | [Cantidad] | [Unidad] | [Costo Unitario] | [Detalle]
+
+=== FACTURA ===
+FACTURA: [Número de Factura 2]
+FECHA: [YYYY-MM-DD]
+PROVEEDOR: [Nombre del Proveedor 2]
+CATEGORIA: [Categoría Principal]
+ORIGEN: [Factura Electrónica]
+OBSERVACIONES: [Notas opcionales o vacío]
+
+INSUMOS:
+Insumo Factura | Categoría | Cantidad | Unidad | Costo Unitario | Detalle
+[Nombre literal en factura 1] | [Categoría] | [Cantidad] | [Unidad] | [Costo Unitario] | [Detalle]`;
 
 export default function ImportarComprasModal({ isOpen, onClose, onImportData }: Props) {
   const [dragOver, setDragOver] = useState(false);
@@ -90,13 +123,10 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
 
   const parseNumber = (val: string): number => {
     if (!val) return 0;
-    // Limpiar signo $, espacios, y formatear comas/puntos
     let clean = val.replace(/[$]/g, '').trim();
-    // Si viene en formato 34.500 o 34.500,00 (formato miles con punto)
     if (clean.includes('.') && clean.includes(',')) {
       clean = clean.replace(/\./g, '').replace(',', '.');
     } else if (clean.includes('.') && clean.split('.')[1]?.length === 3) {
-      // Punto usado como separador de miles (ej 34.500)
       clean = clean.replace(/\./g, '');
     } else if (clean.includes(',')) {
       clean = clean.replace(',', '.');
@@ -108,86 +138,137 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
   const parseTxtContent = (text: string) => {
     setError(null);
     try {
-      // 1. Verificar si es JSON directamente
-      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
-        const json = JSON.parse(text);
-        if (json.items || json.lineas) {
-          const parsed: ParsedFacturaData = {
-            numeroFactura: json.numero_factura || json.numeroFactura || '',
-            fecha: json.fecha || '',
-            proveedor: json.proveedor || '',
-            categoriaPrincipal: json.categoria || json.categoriaPrincipal || 'Carnes y Proteínas',
-            origen: json.origen || 'Factura Electrónica',
-            observaciones: json.observaciones || '',
-            lineas: (json.items || json.lineas || []).map((it: any) => ({
-              nombre_insumo: it.nombre_insumo || it.insumo || it.nombre || '',
-              categoria: it.categoria || 'Carnes y Proteínas',
-              detalle: it.detalle || it.nombre_insumo || '',
-              cantidad: parseNumber(String(it.cantidad || 1)),
-              unidad: it.unidad || 'Kg',
-              costo_unitario: parseNumber(String(it.costo_unitario || it.costo || 0)),
-            }))
-          };
-          onImportData(parsed);
-          onClose();
-          return;
+      const trimmed = text.trim();
+
+      // 1. Verificar si es JSON directamente (Array o un objeto con lista de facturas)
+      if (trimmed.startsWith('[') || (trimmed.startsWith('{') && (trimmed.includes('"facturas"') || trimmed.includes('"items"') || trimmed.includes('"lineas"')))) {
+        try {
+          const parsedJson = JSON.parse(trimmed);
+          let rawFacturasList: any[] = [];
+          if (Array.isArray(parsedJson)) {
+            rawFacturasList = parsedJson;
+          } else if (parsedJson.facturas && Array.isArray(parsedJson.facturas)) {
+            rawFacturasList = parsedJson.facturas;
+          } else if (parsedJson.items || parsedJson.lineas) {
+            rawFacturasList = [parsedJson];
+          }
+
+          if (rawFacturasList.length > 0) {
+            const mappedList: ParsedFacturaData[] = rawFacturasList.map((json: any, idx: number) => ({
+              id: `fac-json-${Date.now()}-${idx + 1}`,
+              numeroFactura: json.numero_factura || json.numeroFactura || '',
+              fecha: json.fecha || '',
+              proveedor: json.proveedor || '',
+              categoriaPrincipal: json.categoria || json.categoriaPrincipal || 'Carnes y Proteínas',
+              origen: json.origen || 'Factura Electrónica',
+              observaciones: json.observaciones || '',
+              lineas: (json.items || json.lineas || []).map((it: any) => ({
+                nombre_original: it.nombre_original || it.nombre_factura || it.nombre_insumo || it.insumo || it.nombre || '',
+                nombre_insumo: '',
+                insumo_id: null,
+                categoria: it.categoria || json.categoria || 'Carnes y Proteínas',
+                detalle: it.detalle || it.nombre_original || '',
+                cantidad: parseNumber(String(it.cantidad || 1)),
+                unidad: it.unidad || 'Kg',
+                costo_unitario: parseNumber(String(it.costo_unitario || it.costo || 0)),
+              }))
+            }));
+
+            onImportData(mappedList);
+            onClose();
+            return;
+          }
+        } catch {
+          // Si no era JSON válido, continuar con parseo de texto plano estándar
         }
       }
 
-      // 2. Parseo de formato estándar clave-valor + tabla de insumos
+      // 2. Parseo de formato estándar clave-valor con soporte de múltiples facturas
       const lines = text.split(/\r?\n/);
-      let numeroFactura = '';
-      let fecha = '';
-      let proveedor = '';
-      let categoriaPrincipal = '';
-      let origen = '';
-      let observaciones = '';
-      const itemsList: ParsedFacturaData['lineas'] = [];
-
+      const facturas: ParsedFacturaData[] = [];
+      let currentFac: ParsedFacturaData = {
+        id: `fac-1-${Date.now()}`,
+        numeroFactura: '',
+        fecha: '',
+        proveedor: '',
+        categoriaPrincipal: 'Carnes y Proteínas',
+        origen: 'Factura Electrónica',
+        observaciones: '',
+        lineas: []
+      };
       let isInsideItems = false;
 
+      const resetCurrentFac = () => {
+        if (currentFac.numeroFactura || currentFac.lineas.length > 0) {
+          facturas.push({ ...currentFac });
+        }
+        currentFac = {
+          id: `fac-${facturas.length + 1}-${Date.now()}`,
+          numeroFactura: '',
+          fecha: '',
+          proveedor: '',
+          categoriaPrincipal: 'Carnes y Proteínas',
+          origen: 'Factura Electrónica',
+          observaciones: '',
+          lineas: []
+        };
+        isInsideItems = false;
+      };
+
       for (let line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+        if (trimmedLine.startsWith('```')) continue;
 
-        // Limpiar marcas de bloque de código markdown ```txt o ```
-        if (trimmed.startsWith('```')) continue;
+        const upper = trimmedLine.toUpperCase();
 
-        const upper = trimmed.toUpperCase();
-
-        if (upper.startsWith('FACTURA:') || upper.startsWith('N° FACTURA:') || upper.startsWith('NUMERO FACTURA:')) {
-          numeroFactura = trimmed.split(/:(.+)/)[1]?.trim() || '';
+        // Delimitador explícito de nueva factura
+        if (upper.includes('=== FACTURA') || upper.includes('--- FACTURA') || upper.includes('===FACTURA')) {
+          resetCurrentFac();
           continue;
         }
+
+        // Si encontramos FACTURA: y ya teníamos una factura con datos, iniciar nueva
+        if (upper.startsWith('FACTURA:') || upper.startsWith('N° FACTURA:') || upper.startsWith('NUMERO FACTURA:') || upper.startsWith('NRO FACTURA:')) {
+          if (currentFac.numeroFactura || currentFac.lineas.length > 0) {
+            resetCurrentFac();
+          }
+          currentFac.numeroFactura = trimmedLine.split(/:(.+)/)[1]?.trim() || '';
+          continue;
+        }
+
         if (upper.startsWith('FECHA:')) {
-          const rawDate = trimmed.split(/:(.+)/)[1]?.trim() || '';
-          // Normalizar fecha si viene DD/MM/YYYY
+          const rawDate = trimmedLine.split(/:(.+)/)[1]?.trim() || '';
           if (rawDate.includes('/')) {
             const parts = rawDate.split('/');
             if (parts.length === 3 && parts[2].length === 4) {
-              fecha = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              currentFac.fecha = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
             } else {
-              fecha = rawDate;
+              currentFac.fecha = rawDate;
             }
           } else {
-            fecha = rawDate;
+            currentFac.fecha = rawDate;
           }
           continue;
         }
+
         if (upper.startsWith('PROVEEDOR:')) {
-          proveedor = trimmed.split(/:(.+)/)[1]?.trim() || '';
+          currentFac.proveedor = trimmedLine.split(/:(.+)/)[1]?.trim() || '';
           continue;
         }
+
         if (upper.startsWith('CATEGORIA:') || upper.startsWith('CATEGORÍA:')) {
-          categoriaPrincipal = trimmed.split(/:(.+)/)[1]?.trim() || '';
+          currentFac.categoriaPrincipal = trimmedLine.split(/:(.+)/)[1]?.trim() || 'Carnes y Proteínas';
           continue;
         }
+
         if (upper.startsWith('ORIGEN:') || upper.startsWith('SOPORTE:')) {
-          origen = trimmed.split(/:(.+)/)[1]?.trim() || '';
+          currentFac.origen = trimmedLine.split(/:(.+)/)[1]?.trim() || 'Factura Electrónica';
           continue;
         }
+
         if (upper.startsWith('OBSERVACIONES:') || upper.startsWith('NOTAS:')) {
-          observaciones = trimmed.split(/:(.+)/)[1]?.trim() || '';
+          currentFac.observaciones = trimmedLine.split(/:(.+)/)[1]?.trim() || '';
           continue;
         }
 
@@ -196,53 +277,51 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
           continue;
         }
 
-        // Si la línea contiene pipes `|`, tabulaciones `\t`, o comas
-        if (trimmed.includes('|') || trimmed.includes('\t') || isInsideItems) {
-          // Si es una línea de cabecera de tabla, ignorar
+        // Si es una línea de tabla o contiene pipes
+        if (trimmedLine.includes('|') || trimmedLine.includes('\t') || isInsideItems) {
           if (upper.includes('INSUMO') && (upper.includes('CANTIDAD') || upper.includes('COSTO') || upper.includes('PRECIO'))) {
             continue;
           }
-          if (trimmed.startsWith('|---') || trimmed.startsWith('---')) {
+          if (trimmedLine.startsWith('|---') || trimmedLine.startsWith('---')) {
             continue;
           }
 
-          // Separar por pipe o tab
           let cols: string[] = [];
-          if (trimmed.includes('|')) {
-            cols = trimmed.split('|').map(c => c.trim()).filter(c => c.length > 0);
-          } else if (trimmed.includes('\t')) {
-            cols = trimmed.split('\t').map(c => c.trim());
+          if (trimmedLine.includes('|')) {
+            cols = trimmedLine.split('|').map(c => c.trim()).filter(c => c.length > 0);
+          } else if (trimmedLine.includes('\t')) {
+            cols = trimmedLine.split('\t').map(c => c.trim());
           }
 
           if (cols.length >= 2) {
-            // Estructura esperada: Insumo | Categoría | Cantidad | Unidad | Costo Unitario | Detalle
-            // O flexible: Insumo | Cantidad | Unidad | Costo Unitario
-            let nombre_insumo = cols[0] || '';
-            let cat = cols[1] || categoriaPrincipal || 'Carnes y Proteínas';
+            let nombre_original = cols[0] || '';
+            let cat = cols[1] || currentFac.categoriaPrincipal || 'Carnes y Proteínas';
             let cantStr = cols[2] || '1';
-            let unidad = cols[3] || 'Und';
+            let unidad = cols[3] || 'Kg';
             let costoStr = cols[4] || '0';
             let detalle = cols[5] || '';
 
-            // Detectar si la columna 1 era cantidad numérica (ej: Insumo | Cantidad | Unidad | Costo)
+            // Si la columna 1 era número: Insumo | Cantidad | Unidad | Costo
             if (cols.length === 4 || cols.length === 5) {
               if (!isNaN(parseNumber(cols[1])) && parseNumber(cols[1]) > 0) {
                 cantStr = cols[1];
-                unidad = cols[2] || 'Und';
+                unidad = cols[2] || 'Kg';
                 costoStr = cols[3] || '0';
                 detalle = cols[4] || '';
-                cat = categoriaPrincipal || 'Carnes y Proteínas';
+                cat = currentFac.categoriaPrincipal || 'Carnes y Proteínas';
               }
             }
 
             const cantidad = parseNumber(cantStr) || 1;
             const costo_unitario = parseNumber(costoStr) || 0;
 
-            if (nombre_insumo.trim().length > 0) {
-              itemsList.push({
-                nombre_insumo,
+            if (nombre_original.trim().length > 0) {
+              currentFac.lineas.push({
+                nombre_original,
+                nombre_insumo: '',
+                insumo_id: null,
                 categoria: cat,
-                detalle: detalle || nombre_insumo,
+                detalle: detalle || nombre_original,
                 cantidad,
                 unidad,
                 costo_unitario,
@@ -252,34 +331,25 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
         }
       }
 
-      if (itemsList.length === 0) {
-        throw new Error('No se encontraron líneas de insumos válidas en el archivo TXT.');
+      // Añadir la última factura procesada si tiene datos
+      if (currentFac.numeroFactura || currentFac.lineas.length > 0) {
+        facturas.push(currentFac);
       }
 
-      const result: ParsedFacturaData = {
-        numeroFactura: numeroFactura || undefined,
-        fecha: fecha || undefined,
-        proveedor: proveedor || undefined,
-        categoriaPrincipal: categoriaPrincipal || undefined,
-        origen: origen || undefined,
-        observaciones: observaciones || undefined,
-        lineas: itemsList
-      };
+      if (facturas.length === 0) {
+        throw new Error('No se detectaron facturas ni insumos válidos en el archivo TXT. Asegúrate de usar el formato del prompt.');
+      }
 
-      onImportData(result);
+      onImportData(facturas);
       onClose();
     } catch (err: any) {
-      console.error('Error parseando archivo compras TXT:', err);
-      setError(err?.message || 'El formato del archivo no coincide con la estructura esperada.');
+      console.error('Error parseando archivo TXT:', err);
+      setError(err.message || 'Error procesando el formato del archivo TXT.');
     }
   };
 
   const handleFile = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.txt') && !file.name.toLowerCase().endsWith('.csv')) {
-      setError('Por favor selecciona un archivo de texto con extensión .txt o .csv.');
-      return;
-    }
-
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
@@ -288,7 +358,7 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
       }
     };
     reader.onerror = () => {
-      setError('Error al leer el archivo en el navegador.');
+      setError('Error al leer el archivo desde el dispositivo.');
     };
     reader.readAsText(file);
   };
@@ -322,10 +392,10 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">
-                Importar Factura de Compra (.txt)
+                Importar Factura(s) de Compra (.txt)
               </h2>
               <p className="text-xs text-slate-500">
-                Digitalización inteligente mediante IA o archivo estructurado
+                Extracción individual o múltiple generada por IA o archivo estructurado
               </p>
             </div>
           </div>
@@ -381,7 +451,7 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
               Arrastra tu archivo .txt aquí
             </p>
             <p className="text-slate-500 text-xs">
-              o haz clic para buscarlo en tu computador
+              o haz clic para buscarlo en tu computador (soporta 1 o múltiples facturas)
             </p>
           </div>
 
@@ -409,7 +479,7 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
             </div>
 
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              Pega este prompt en <strong>ChatGPT, Claude o Gemini</strong> junto con las fotos de tu factura. La IA extraerá los datos y generará el texto que puedes guardar como <strong>.txt</strong> y arrastrar en la zona superior.
+              Pega este prompt en <strong>ChatGPT, Claude o Gemini</strong> junto con las fotos o PDFs de una o varias facturas de compra. La IA extraerá los datos y generará un único archivo <strong>.txt</strong> que puedes arrastrar en la zona superior.
             </p>
           </div>
         </div>
