@@ -32,7 +32,7 @@ import { usePeriodo } from '@/context/PeriodoContext';
 type TabView = 'DIARIO' | 'TRANSACCIONES' | 'PRODUCTOS';
 
 export default function VentasPage() {
-  const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos } = usePeriodo();
+  const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos, isPeriodoCerrado } = usePeriodo();
 
   // Estado para la vista de selección de mes a pantalla completa
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
@@ -43,6 +43,7 @@ export default function VentasPage() {
 
   // Período activo cuando se entra al detalle
   const activePeriodoId = selectedMonthId || selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
+  const isCerrado = isPeriodoCerrado(activePeriodoId);
 
   const periodoNombre = useMemo(() => {
     if (!activePeriodoId) return 'Octubre 2026';
@@ -310,14 +311,16 @@ export default function VentasPage() {
             kpis={kpis}
             periodoNombre={periodoNombre}
           />
-          <button
-            type="button"
-            onClick={() => setUploadModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-colors cursor-pointer"
-          >
-            <UploadCloud className="w-3.5 h-3.5" />
-            <span>Importar Ventas (.txt)</span>
-          </button>
+          {!isCerrado && (
+            <button
+              type="button"
+              onClick={() => setUploadModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-colors cursor-pointer"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Importar Ventas (.txt)</span>
+            </button>
+          )}
         </div>
       </div>
 

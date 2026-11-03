@@ -426,7 +426,7 @@ export default function InventarioConsolidadoPage() {
   }, []);
 
   // Meses disponibles calculados dinámicamente con las hojas reales
-  const { periodos } = usePeriodo();
+  const { periodos, isPeriodoCerrado } = usePeriodo();
   const months: MonthItem[] = useMemo(() => {
     const extra = (periodos || []).map(p => p.codigo);
     return buildDynamicMonths(sheets, selectedMonth, extra);
@@ -448,6 +448,7 @@ export default function InventarioConsolidadoPage() {
     if (!activeTabId) return null;
     return sheets.find(s => s.id === activeTabId) || null;
   }, [sheets, activeTabId]);
+  const isCerrado = isPeriodoCerrado(activeSheet?.dateStr?.substring(0, 7) || selectedMonth);
 
   // Abrir y cerrar pestañas
   const handleOpenSheet = (sheetId: string) => {
@@ -1091,7 +1092,7 @@ export default function InventarioConsolidadoPage() {
               </button>
 
               {/* Botón Añadir Conteos: SOLO si está en Cocina Cierre o Bodega Cierre (NUNCA en Consolidado/Paralelo) */}
-              {isAddingAllowedInCurrentView && (
+              {isAddingAllowedInCurrentView && !isCerrado && (
                 <button
                   type="button"
                   onClick={() => setIsConteosDrawerOpen(true)}
@@ -2069,6 +2070,7 @@ export default function InventarioConsolidadoPage() {
               <div className="flex-1 overflow-y-auto p-4 space-y-6">
 
                 {/* Formulario Ingresar Cantidad */}
+                {!isCerrado ? (
                 <form 
                   onSubmit={handleAddInsumoRegistro}
                   className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 shadow-2xs"
@@ -2245,6 +2247,11 @@ export default function InventarioConsolidadoPage() {
                     )}
                   </button>
                 </form>
+                ) : (
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-xs text-center font-medium shadow-2xs">
+                    Período contable cerrado. Las funciones de registro, edición y borrado están inhabilitadas.
+                  </div>
+                )}
 
                 {/* Historial de Conteos y Movimientos */}
                 <div>
@@ -2293,6 +2300,7 @@ export default function InventarioConsolidadoPage() {
                               </div>
 
                               {/* Acciones Editar y Eliminar */}
+                              {!isCerrado && (
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
@@ -2311,6 +2319,7 @@ export default function InventarioConsolidadoPage() {
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
+                              )}
                             </div>
 
                             <div className="flex items-baseline justify-between">

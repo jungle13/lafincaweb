@@ -33,7 +33,7 @@ import { getCachedData, setCachedData } from '@/lib/dataCache';
 type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS';
 
 export default function ComprasPage() {
-  const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos } = usePeriodo();
+  const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos, isPeriodoCerrado } = usePeriodo();
 
   // Estado para la vista de selección de mes a pantalla completa
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
@@ -44,6 +44,7 @@ export default function ComprasPage() {
 
   // Período activo cuando se entra al detalle
   const activePeriodoId = selectedMonthId || selectedPeriodoId || currentPeriodo?.id || 'per-2026-10';
+  const isCerrado = isPeriodoCerrado(activePeriodoId);
 
   const periodoNombre = useMemo(() => {
     if (!activePeriodoId) return 'Octubre 2026';
@@ -411,7 +412,7 @@ export default function ComprasPage() {
             insumos={filteredInsumos}
             lineas={filteredLineas}
             periodoNombre={periodoNombre}
-            onAddCompra={() => setIsAddingCompra(true)}
+            onAddCompra={isCerrado ? undefined : () => setIsAddingCompra(true)}
           />
         </div>
       </div>

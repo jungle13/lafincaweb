@@ -33,7 +33,6 @@ export async function GET(req: Request) {
       .order('codigo', { ascending: false });
 
     if (pError || !periodosData || periodosData.length === 0) {
-      // Si la tabla estuviera vacía o en fallback
       periodosData = [
         {
           id: 'per-2026-11',
@@ -90,39 +89,49 @@ export async function GET(req: Request) {
       }
     });
 
-    // 4. Extraer estadísticas de Hojas de Costeo Diario
-    const { data: costeoRows } = await supabase
-      .from('costeo_diario')
-      .select('fecha');
+    // 4. Extraer estadísticas de Consolidado de Inventario (Cierre Bodega + Cierre Cocina)
+    const { data: cierresRows } = await supabase
+      .from('registros_costeo_cocina')
+      .select('fecha, tipo, valor_total')
+      .in('tipo', ['CIERRE', 'BODEGA_CIERRE']);
 
-    const costeoStats: Record<string, number> = {};
-    (costeoRows || []).forEach((s: any) => {
-      if (s.fecha && s.fecha.length >= 7) {
-        const pId = `per-${s.fecha.substring(0, 7)}`;
-        costeoStats[pId] = (costeoStats[pId] || 0) + 1;
+    // Agrupar por mes -> fecha -> suma de cierres
+    const cierresPorMes: Record<string, Record<string, number>> = {};
+    (cierresRows || []).forEach((r: any) => {
+      if (r.fecha && r.fecha.length >= 7) {
+        const mKey = r.fecha.substring(0, 7);
+        if (!cierresPorMes[mKey]) cierresPorMes[mKey] = {};
+        cierresPorMes[mKey][r.fecha] = (cierresPorMes[mKey][r.fecha] || 0) + Number(r.valor_total || 0);
       }
     });
 
-    // 5. Mapear períodos enriquecidos con métricas
+    const consolidadoPorMes: Record<string, number> = {};
+    Object.keys(cierresPorMes).forEach(mKey => {
+      const dates = Object.keys(cierresPorMes[mKey]).sort().reverse();
+      const latestDate = dates[0];
+      consolidadoPorMes[mKey] = Math.round(cierresPorMes[mKey][latestDate] || 0);
+    });
+
+    // 5. Mapear períodos enriquecidos con métricas exactas
     const periodosEnriquecidos = (periodosData || []).map((p: any) => {
-      const cStat = comprasStats[p.id] || { count: 0, total: 0 };
-      const vStat = ventasStats[p.id] || { count: 0, total: 0 };
-      const hojasCount = costeoStats[p.id] || 0;
+      const cStat = comprasStats[p.id] || comprasStats[`per-${p.codigo}`] || comprasStats[p.codigo] || { count: 0, total: 0 };
+      const vStat = ventasStats[p.id] || ventasStats[`per-${p.codigo}`] || ventasStats[p.codigo] || { count: 0, total: 0 };
+      const cleanKey = p.codigo || p.id.replace(/^per-/, '');
+      const consolidadoTotal = consolidadoPorMes[cleanKey] || 0;
 
       return {
         ...p,
         nombre: p.nombre || formatMonthName(p.codigo),
         stats: {
+          compras_total: Math.round(cStat.total),
           compras_facturas: cStat.count,
-          compras_total: cStat.total,
+          ventas_total: Math.round(vStat.total),
           ventas_dias: vStat.count,
-          ventas_total: vStat.total,
-          costeo_hojas: hojasCount,
+          consolidado_total: consolidadoTotal,
         }
       };
     });
 
-    // Período activo (el primero abierto, o el más reciente)
     const activo = periodosEnriquecidos.find((p: any) => p.estado === 'ABIERTO') || periodosEnriquecidos[0];
     const selectedPeriodo = periodoId
       ? periodosEnriquecidos.find((p: any) => p.id === periodoId || p.codigo === periodoId) || activo
@@ -134,13 +143,6 @@ export async function GET(req: Request) {
       activo,
       selectedPeriodo,
       fecha_corte: 'ACTUAL',
-      total_movs_aplicados: 0,
-      fechas_con_movimientos: [],
-      conteos_aplicados: [],
-      insumos: [],
-      stock: [],
-      conteo_cierre_fisico: {},
-      ajustes_aprobados: {},
     }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
@@ -310,4 +312,3 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: false, error: err?.message || 'Error al eliminar período' }, { status: 500 });
   }
 }
-

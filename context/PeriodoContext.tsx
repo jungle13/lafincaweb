@@ -15,6 +15,13 @@ export interface Periodo {
   fecha_cierre?: string;
   usuario_cierre?: string;
   observaciones_cierre?: string;
+  stats?: {
+    compras_total: number;
+    compras_facturas: number;
+    ventas_total: number;
+    ventas_dias: number;
+    consolidado_total: number;
+  };
 }
 
 interface PeriodoContextType {
@@ -24,6 +31,7 @@ interface PeriodoContextType {
   loading: boolean;
   setSelectedPeriodoId: (id: string) => void;
   refreshPeriodos: () => Promise<void>;
+  isPeriodoCerrado: (periodoId?: string) => boolean;
 }
 
 const PeriodoContext = createContext<PeriodoContextType | undefined>(undefined);
@@ -70,6 +78,14 @@ export function PeriodoProvider({ children }: { children: ReactNode }) {
 
   const currentPeriodo = periodos.find((p) => p.id === selectedPeriodoId || p.codigo === selectedPeriodoId) || periodos[0] || null;
 
+  const isPeriodoCerrado = (id?: string): boolean => {
+    const targetId = id || selectedPeriodoId || currentPeriodo?.id;
+    if (!targetId) return false;
+    const clean = targetId.replace(/^per-/, '');
+    const p = periodos.find(item => item.id === targetId || item.codigo === targetId || item.codigo === clean || targetId.includes(item.codigo));
+    return p ? p.estado === 'CERRADO' : false;
+  };
+
   return (
     <PeriodoContext.Provider
       value={{
@@ -79,6 +95,7 @@ export function PeriodoProvider({ children }: { children: ReactNode }) {
         loading,
         setSelectedPeriodoId,
         refreshPeriodos,
+        isPeriodoCerrado,
       }}
     >
       {children}

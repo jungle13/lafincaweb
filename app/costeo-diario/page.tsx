@@ -1418,7 +1418,8 @@ export default function CosteoDiarioPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
 
   // Meses disponibles calculados dinámicamente según las hojas cargadas
-  const { periodos } = usePeriodo();
+  const { periodos, isPeriodoCerrado } = usePeriodo();
+  const isCerrado = isPeriodoCerrado(selectedMonth);
   const months: MonthItem[] = useMemo(() => {
     const extra = (periodos || []).map(p => p.codigo);
     return buildDynamicMonths(sheets, selectedMonth, extra);
@@ -2027,6 +2028,7 @@ export default function CosteoDiarioPage() {
 
   // Current Active Sheet
   const activeSheet = sheets.find(s => s.id === activeTabId);
+  const isSheetCerrado = isPeriodoCerrado(activeSheet?.month || activeSheet?.dateStr || selectedMonth);
 
   // Sincronizar automáticamente el insumo abierto en el panel lateral con las actualizaciones del sheet
   useEffect(() => {
@@ -3012,6 +3014,7 @@ Trucha 8`;
             })}
 
             {/* Botón "+" para crear o abrir nueva hoja */}
+            {!isCerrado && (
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
@@ -3020,6 +3023,7 @@ Trucha 8`;
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
+            )}
           </div>
         </div>
 
@@ -3051,9 +3055,11 @@ Trucha 8`;
                   {conteosSuccessToast}
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => setIsClearModalOpen(true)}
+              {!isSheetCerrado && (
+                <>
+                <button
+                  type="button"
+                  onClick={() => setIsClearModalOpen(true)}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 hover:text-rose-900 border border-rose-200 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
                 title="Limpiar hoja y resetear datos de base de datos"
               >
@@ -3073,6 +3079,8 @@ Trucha 8`;
                 <ClipboardList className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
                 <span>Añadir Conteos</span>
               </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={handleExportInformePdf}
@@ -3122,13 +3130,15 @@ Trucha 8`;
                   Listado de hojas de costeo diario de cocina ordenadas desde la más reciente.
                 </p>
               </div>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs px-3.5 py-2 rounded-md font-medium shadow-2xs transition-colors self-start sm:self-auto"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nueva Hoja de Costeo</span>
-              </button>
+              {!isCerrado && (
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs px-3.5 py-2 rounded-md font-medium shadow-2xs transition-colors self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nueva Hoja de Costeo</span>
+                </button>
+              )}
             </div>
 
             {/* Buscador */}
@@ -4623,6 +4633,7 @@ Trucha 8`;
               {/* -------------------------------------------------------- */}
               {/* FORMULARIO LIMPIO ESTILO GITHUB                          */}
               {/* -------------------------------------------------------- */}
+              {!isSheetCerrado ? (
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-3 shadow-2xs">
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
                   {editingRegId ? 'Editar Registro' : 'Ingresar Cantidad'}
@@ -4826,6 +4837,11 @@ Trucha 8`;
                   )}
                 </form>
               </div>
+              ) : (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-xs text-center font-medium shadow-2xs">
+                  Período contable cerrado. Las funciones de registro, edición y borrado están inhabilitadas.
+                </div>
+              )}
 
               {/* -------------------------------------------------------- */}
               {/* HISTORIAL: LISTADO DE LAS VECES QUE SE HA INGRESADO     */}
@@ -4911,6 +4927,7 @@ Trucha 8`;
                           )}
                         </div>
 
+                        {!isSheetCerrado && (
                         <div className="flex items-center gap-1 shrink-0">
                           {/* Botón Lapicito para Editar */}
                           <button
@@ -4939,6 +4956,7 @@ Trucha 8`;
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                        )}
                       </div>
                     ))
                   )}
