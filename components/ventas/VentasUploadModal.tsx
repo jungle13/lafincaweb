@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   UploadCloud,
   FileText,
@@ -30,8 +31,7 @@ export default function VentasUploadModal({ isOpen, onClose, onSuccess }: Ventas
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
 
   const handleReset = () => {
     setSelectedFile(null);
@@ -39,6 +39,28 @@ export default function VentasUploadModal({ isOpen, onClose, onSuccess }: Ventas
     setError(null);
     setSaveSuccess(false);
   };
+
+  useEffect(() => {
+    setMounted(true);
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          handleReset();
+          onClose();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = 'unset';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [isOpen, onClose]);
+
+  if (!mounted || !isOpen) return null;
 
   const procesarArchivo = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.txt')) {
@@ -122,9 +144,20 @@ export default function VentasUploadModal({ isOpen, onClose, onSuccess }: Ventas
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-      <div className="relative w-full max-w-xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+      {/* Full-Screen Backdrop con desenfoque profesional */}
+      <div 
+        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+        onClick={() => {
+          handleReset();
+          onClose();
+        }}
+      />
+      <div 
+        className="relative z-10 w-full max-w-xl bg-white rounded-xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Encabezado */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2.5">
@@ -327,8 +360,9 @@ export default function VentasUploadModal({ isOpen, onClose, onSuccess }: Ventas
               )}
             </button>
           )}
-        </div>
+                </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

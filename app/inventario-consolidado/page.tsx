@@ -1786,7 +1786,7 @@ export default function InventarioConsolidadoPage() {
       {/* ============================================================ */}
       {isConteosDrawerOpen && (
         <div
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[65] transition-opacity"
+          className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-[9998] transition-opacity animate-in fade-in duration-200 cursor-pointer"
           onClick={() => setIsConteosDrawerOpen(false)}
         />
       )}
@@ -1950,7 +1950,7 @@ export default function InventarioConsolidadoPage() {
       {/* Backdrop desenfocado */}
       {activeDrawerInsumo && (
         <div
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[80] transition-opacity cursor-pointer"
+          className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-[9998] transition-opacity animate-in fade-in duration-200 cursor-pointer"
           onClick={() => setActiveDrawerInsumo(null)}
         />
       )}

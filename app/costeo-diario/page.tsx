@@ -4133,8 +4133,15 @@ Trucha 8`;
       {/* 3. MODAL: "+ NUEVA HOJA DE COSTEO" (Sobrio)                  */}
       {/* ============================================================ */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/50 backdrop-blur-2xs flex items-center justify-center p-4 pb-20 sm:pb-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+          <div 
+            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            onClick={() => setIsModalOpen(false)}
+          />
+          <div 
+            className="relative z-10 bg-white rounded-xl max-w-md w-full p-5 shadow-2xl border border-slate-200/90 animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Nueva Hoja de Costeo</h3>
@@ -4270,8 +4277,15 @@ Trucha 8`;
 
       {/* Modal de Confirmación para Limpiar / Resetear Hoja con Checkboxes */}
       {isClearModalOpen && activeSheet && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[80] flex items-center justify-center p-3 sm:p-4 pb-20 sm:pb-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+          <div 
+            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            onClick={() => setIsClearModalOpen(false)}
+          />
+          <div 
+            className="relative z-10 bg-white rounded-xl shadow-2xl border border-slate-200/90 w-full max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
                 <Trash2 className="w-5 h-5" />
@@ -4531,7 +4545,7 @@ Trucha 8`;
       {/* Backdrop con desenfoque */}
       {activeDrawerInsumo && (
         <div
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[65] transition-opacity"
+          className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-[9998] transition-opacity animate-in fade-in duration-200 cursor-pointer"
           onClick={() => setActiveDrawerInsumo(null)}
         />
       )}
@@ -4952,8 +4966,15 @@ Trucha 8`;
       {/* 4. MODAL: PREVISUALIZACIÓN DEL DOCUMENTO                     */}
       {/* ============================================================ */}
       {showPreviewModal && activeSheet && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-2xs flex items-center justify-center p-3 sm:p-4 pb-20 sm:pb-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+          <div 
+            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            onClick={() => setShowPreviewModal(false)}
+          />
+          <div 
+            className="relative z-10 bg-white rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             
             {/* Cabecera Modal */}
             <div className="bg-slate-900 text-white p-3 px-4 flex items-center justify-between shrink-0">
@@ -5044,7 +5065,7 @@ Trucha 8`;
       {/* ============================================================ */}
       {isConteosDrawerOpen && (
         <div
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-2xs z-[65] transition-opacity"
+          className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-[9998] transition-opacity animate-in fade-in duration-200 cursor-pointer"
           onClick={() => setIsConteosDrawerOpen(false)}
         />
       )}

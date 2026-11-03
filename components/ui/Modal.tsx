@@ -27,27 +27,32 @@ export default function Modal({
     setMounted(true);
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = 'unset';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     } else {
       document.body.style.overflow = 'unset';
     }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   if (!mounted || !isOpen) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Full-Screen Backdrop neutro (Estilo GitHub) */}
+      {/* Full-Screen Backdrop con desenfoque profesional */}
       <div 
-        className="fixed inset-0 bg-slate-950/60 backdrop-blur-[2px] transition-opacity animate-fade-in"
+        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
 
       {/* Modal Dialog Card: Amplio, fondo blanco sólido, bordes sobrios, espacioso y estético */}
       <div 
-        className={`relative z-10 bg-white rounded-t-2xl sm:rounded-xl border border-slate-200/90 shadow-2xl w-full ${maxWidth} max-h-[92vh] sm:max-h-[90vh] flex flex-col p-5 md:p-6 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:fade-in font-normal overflow-hidden`}
+        className={`relative z-10 bg-white rounded-t-2xl sm:rounded-xl border border-slate-200/90 shadow-2xl w-full ${maxWidth} max-h-[92vh] sm:max-h-[90vh] flex flex-col p-5 md:p-6 animate-in fade-in zoom-in-95 duration-200 font-normal overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile Swipe/Pull Handle indicator */}

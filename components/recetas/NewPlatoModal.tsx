@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface NewPlatoModalProps {
@@ -42,9 +43,16 @@ export default function NewPlatoModal({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-300 rounded-xl shadow-xl max-w-sm w-full p-5 space-y-4 animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+      <div 
+        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+        onClick={onClose}
+      />
+      <div 
+        className="relative z-10 bg-white border border-slate-200/90 rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
           <h3 className="text-sm font-bold text-slate-900">
             Nuevo Plato para Receta / Escandallo
@@ -139,7 +147,8 @@ export default function NewPlatoModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+            </div>
+    </div>,
+    document.body
   );
 }
