@@ -361,10 +361,11 @@ export default function NuevaCompraView({
     return lineas.filter(l => l.nombre_insumo.trim().length > 0).length;
   }, [lineas]);
 
-  // Ítems sin vincular
+  // Ítems sin vincular: SOLO aplica a líneas que provienen de una importación y aún no tienen insumo equivalente en BD
   const unlinkedItemsCount = useMemo(() => {
-    return lineas.filter(l => !l.nombre_insumo.trim()).length;
-  }, [lineas]);
+    if (scannedFacturas.length === 0) return 0;
+    return lineas.filter(l => l.nombre_factura_original.trim().length > 0 && !l.nombre_insumo.trim()).length;
+  }, [lineas, scannedFacturas.length]);
 
   // Guardar factura activa
   const handleSave = async (e: React.FormEvent) => {
@@ -385,13 +386,15 @@ export default function NuevaCompraView({
       return;
     }
 
-    // Verificar si hay insumos sin vincular a la base de datos
-    const unlinked = lineas.filter(l => !l.nombre_insumo.trim());
-    if (unlinked.length > 0) {
-      setErrorMessage(
-        `Hay ${unlinked.length} ${unlinked.length === 1 ? 'insumo sin vincular' : 'insumos sin vincular'} a la base de datos (campo "Insumo / Producto (BD)" vacío). Debes seleccionar o escribir el insumo equivalente para cada línea antes de guardar.`
-      );
-      return;
+    // Verificar si hay insumos importados sin vincular a la base de datos
+    if (scannedFacturas.length > 0) {
+      const unlinked = lineas.filter(l => l.nombre_factura_original.trim().length > 0 && !l.nombre_insumo.trim());
+      if (unlinked.length > 0) {
+        setErrorMessage(
+          `Hay ${unlinked.length} ${unlinked.length === 1 ? 'insumo sin vincular' : 'insumos sin vincular'} a la base de datos (campo "Insumo / Producto (BD)" vacío). Debes seleccionar o escribir el insumo equivalente para cada línea antes de guardar.`
+        );
+        return;
+      }
     }
 
     const lineasValidas = lineas.filter(l => l.nombre_insumo.trim().length > 0);
@@ -576,8 +579,8 @@ export default function NuevaCompraView({
         </div>
       )}
 
-      {/* Alerta de Advertencia de Insumos sin Vincular */}
-      {unlinkedItemsCount > 0 && (
+      {/* Alerta de Advertencia de Insumos sin Vincular: solo cuando se importan compras */}
+      {scannedFacturas.length > 0 && unlinkedItemsCount > 0 && (
         <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center justify-between gap-2.5 text-amber-800 text-xs animate-fade-in">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -770,8 +773,10 @@ export default function NuevaCompraView({
                 <tbody className="divide-y divide-slate-100">
                   {lineas.map((linea, index) => {
                     const subtotal = (Number(linea.cantidad) || 0) * (Number(linea.costo_unitario) || 0);
+                    const hasOriginalName = linea.nombre_factura_original.trim().length > 0;
                     const isLinked = Boolean(linea.insumo_id);
                     const isEmptyBD = !linea.nombre_insumo.trim();
+                    const showUnlinkedWarning = hasOriginalName && isEmptyBD;
 
                     return (
                       <tr key={linea.id} className="hover:bg-slate-50/60 transition-colors">
@@ -802,14 +807,14 @@ export default function NuevaCompraView({
                             value={linea.nombre_insumo}
                             onChange={(e) => handleUpdateLinea(linea.id, 'nombre_insumo', e.target.value)}
                             className={`w-full px-2 py-1 text-xs rounded-md focus:outline-hidden focus:ring-1 font-semibold transition-colors ${
-                              isEmptyBD
+                              showUnlinkedWarning
                                 ? 'bg-amber-50/80 border border-amber-300 text-amber-900 focus:ring-amber-500'
                                 : isLinked
                                   ? 'bg-white border border-emerald-300 text-slate-900 focus:ring-emerald-500'
                                   : 'bg-white border border-slate-200 text-slate-800 focus:ring-slate-900'
                             }`}
                           />
-                          {isEmptyBD && (
+                          {showUnlinkedWarning && (
                             <span className="block text-[10px] text-amber-600 font-medium mt-0.5">
                               ⚠️ Sin vincular en BD
                             </span>
@@ -913,7 +918,7 @@ export default function NuevaCompraView({
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs text-slate-500 border-t border-slate-100">
               <div className="flex items-center gap-3">
                 <span>{totalItemsCount} insumos vinculados</span>
-                {unlinkedItemsCount > 0 && (
+                {unlinkedItemsCount > 0 && scannedFacturas.length > 0 && (
                   <span className="text-amber-600 font-semibold">
                     • {unlinkedItemsCount} pendiente(s) de vincular
                   </span>
