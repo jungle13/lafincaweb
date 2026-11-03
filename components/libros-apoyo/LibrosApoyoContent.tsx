@@ -46,6 +46,7 @@ import SheetTabsBar from '@/components/sheets/SheetTabsBar';
 import Modal from '@/components/ui/Modal';
 import { formatMoney } from '@/lib/formatters';
 import { useAuth } from '@/context/AuthContext';
+import { usePeriodo } from '@/context/PeriodoContext';
 import {
   LibroCajaKPIs,
   LibroCajaDiario,
@@ -167,33 +168,113 @@ export default function LibrosApoyoContent({
   const [responsablesList, setResponsablesList] = useState<string[]>(() => cached?.responsables || CAJEROS_OFICIALES);
   const [conceptosSugeridos, setConceptosSugeridos] = useState<string[]>(() => cached?.conceptosSugeridos || []);
 
-  // Mes seleccionado para el panel izquierdo (dinámico según la base de datos)
+  // Conexión con Períodos Contables
+  const { periodos, isPeriodoCerrado } = usePeriodo();
+
+  // Estado para la vista de selección de mes a pantalla completa
+  const initialDateParam = searchParams.get('fecha');
+  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(() => {
+    if (modoCajeroHermetico) return '2026-11';
+    if (initialDateParam && initialDateParam.length >= 7) return initialDateParam.slice(0, 7);
+    return null;
+  });
+  const [searchMonthQuery, setSearchMonthQuery] = useState('');
+
+  // Mes seleccionado para el detalle (dinámico según la base de datos y períodos)
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-10');
 
-  // Lista dinámica de meses disponibles en la base de datos
+  // Período cerrado si corresponde al mes seleccionado
+  const isCerrado = isPeriodoCerrado(selectedMonthId || selectedMonth || '');
+
+  // Lista dinámica de meses disponibles combinando Periodos oficiales y registros
   const availableMonths = useMemo(() => {
     const monthNames: Record<string, string> = {
       '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
       '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
       '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
     };
-    const counts = new Map<string, number>();
+
+    const periodosMap = new Map<string, {
+      codigo: string;
+      periodo_id: string;
+      nombre: string;
+      estado: string;
+      diasCount: number;
+      totalSalidas: number;
+      totalInsumos: number;
+      totalGastosOp: number;
+      totalTurnos: number;
+    }>();
+
+    // 1. Períodos oficiales de PeriodoContext (donde Noviembre 2026 ya existe)
+    for (const p of periodos || []) {
+      const clean = p.codigo.replace(/^per-/, '');
+      const [year, month] = clean.split('-');
+      const defaultNombre = `${monthNames[month] || month} ${year}`;
+      periodosMap.set(clean, {
+        codigo: clean,
+        periodo_id: p.id || `per-${clean}`,
+        nombre: p.nombre || defaultNombre,
+        estado: p.estado || 'ABIERTO',
+        diasCount: 0,
+        totalSalidas: 0,
+        totalInsumos: 0,
+        totalGastosOp: 0,
+        totalTurnos: 0,
+      });
+    }
+
+    // 2. Si hay fechas en diarios que no estén en periodos, agregarlas
     for (const d of diarios) {
       if (!d.fecha) continue;
       const ym = d.fecha.slice(0, 7);
-      counts.set(ym, (counts.get(ym) || 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([ym, count]) => {
+      if (!periodosMap.has(ym)) {
         const [year, month] = ym.split('-');
-        return {
-          key: ym,
-          label: `${monthNames[month] || month} ${year}`,
-          count,
-        };
-      });
-  }, [diarios]);
+        periodosMap.set(ym, {
+          codigo: ym,
+          periodo_id: `per-${ym}`,
+          nombre: `${monthNames[month] || month} ${year}`,
+          estado: 'ABIERTO',
+          diasCount: 0,
+          totalSalidas: 0,
+          totalInsumos: 0,
+          totalGastosOp: 0,
+          totalTurnos: 0,
+        });
+      }
+    }
+
+    // 3. Totales por mes
+    for (const d of diarios) {
+      if (!d.fecha) continue;
+      const ym = d.fecha.slice(0, 7);
+      const item = periodosMap.get(ym);
+      if (item) {
+        item.diasCount += 1;
+        item.totalSalidas += Number(d.total_salidas || 0);
+        item.totalInsumos += Number(d.total_costos_insumos || 0);
+        item.totalGastosOp += Number(d.total_gastos_operativos || 0);
+        item.totalTurnos += Number(d.total_turnos_nomina || 0);
+      }
+    }
+
+    return Array.from(periodosMap.values())
+      .sort((a, b) => b.codigo.localeCompare(a.codigo))
+      .map((item) => ({
+        key: item.codigo,
+        codigo: item.codigo,
+        periodo_id: item.periodo_id,
+        nombre: item.nombre,
+        label: item.nombre,
+        estado: item.estado,
+        count: item.diasCount,
+        diasCount: item.diasCount,
+        totalSalidas: item.totalSalidas,
+        totalInsumos: item.totalInsumos,
+        totalGastosOp: item.totalGastosOp,
+        totalTurnos: item.totalTurnos,
+      }));
+  }, [periodos, diarios]);
 
   useEffect(() => {
     if (availableMonths.length > 0 && !availableMonths.some((m) => m.key === selectedMonth)) {
@@ -201,15 +282,79 @@ export default function LibrosApoyoContent({
     }
   }, [availableMonths, selectedMonth]);
 
-  // Hojas filtradas por el mes seleccionado en el panel izquierdo
+  // Hojas filtradas por el mes seleccionado
+  const activeMonthPrefix = selectedMonthId || selectedMonth;
   const diariosDelMes = useMemo(() => {
-    if (!selectedMonth) return diarios;
-    return diarios.filter((d) => d.fecha.startsWith(selectedMonth));
-  }, [diarios, selectedMonth]);
+    if (!activeMonthPrefix) return diarios;
+    return diarios.filter((d) => d.fecha && d.fecha.startsWith(activeMonthPrefix));
+  }, [diarios, activeMonthPrefix]);
+
+  const registrosDelMes = useMemo(() => {
+    if (!activeMonthPrefix) return registros;
+    return registros.filter((r) => r.fecha && r.fecha.startsWith(activeMonthPrefix));
+  }, [registros, activeMonthPrefix]);
 
   const selectedMonthLabel = useMemo(() => {
-    return availableMonths.find((m) => m.key === selectedMonth)?.label || 'Octubre 2026';
-  }, [availableMonths, selectedMonth]);
+    return availableMonths.find((m) => m.key === activeMonthPrefix)?.label || 'Octubre 2026';
+  }, [availableMonths, activeMonthPrefix]);
+
+  // Normalizador y filtrado de meses para el buscador
+  const normalize = (text: string) =>
+    (text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const filteredMeses = useMemo(() => {
+    const q = normalize(searchMonthQuery);
+    if (!q) return availableMonths;
+    return availableMonths.filter(
+      (m) => normalize(m.nombre).includes(q) || normalize(m.codigo).includes(q)
+    );
+  }, [availableMonths, searchMonthQuery]);
+
+  const handleOpenMonth = (codigo: string) => {
+    setSelectedMonthId(codigo);
+    setSelectedMonth(codigo);
+    setActiveTabId(null);
+    setOpenTabs([]);
+  };
+
+  // KPIs calculados dinámicamente para el mes seleccionado
+  const kpisMes = useMemo(() => {
+    if (!activeMonthPrefix) return kpis;
+    let totalCostosInsumos = 0;
+    let totalGastosOperativos = 0;
+    let totalTurnosNomina = 0;
+    let totalAjustesMes = 0;
+
+    for (const r of registrosDelMes) {
+      const val = Number(r.valor_pagado || 0);
+      if (r.es_ajuste) totalAjustesMes += val;
+      const cl = (r.clasificacion || '').toLowerCase();
+      if (cl.includes('insumo') || cl.includes('costo')) {
+        totalCostosInsumos += val;
+      } else if (cl.includes('nómina') || cl.includes('nomina') || cl.includes('turno')) {
+        totalTurnosNomina += val;
+      } else {
+        totalGastosOperativos += val;
+      }
+    }
+
+    const totalSalidasMes = totalCostosInsumos + totalGastosOperativos + totalTurnosNomina;
+
+    return {
+      totalSalidasMes,
+      totalCostosInsumos,
+      totalGastosOperativos,
+      totalTurnosNomina,
+      totalAjustesMes,
+      totalRegistros: registrosDelMes.length,
+      totalDiasActivos: diariosDelMes.length,
+      porCategoria: [],
+      porResponsable: [],
+    };
+  }, [activeMonthPrefix, registrosDelMes, diariosDelMes, kpis]);
 
   // Control para Contraer / Desplegar contenedor lateral izquierdo de Hojas por Fecha
   const [isSidebarOpen, setIsSidebarOpen] = useState(!modoCajeroHermetico);
@@ -475,7 +620,7 @@ export default function LibrosApoyoContent({
   // Filtrado de los registros en la vista Cronológica
   const filteredRegistros = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return registros.filter((r) => {
+    return registrosDelMes.filter((r) => {
       if (selectedClasificacion && r.clasificacion !== selectedClasificacion) return false;
       if (selectedCategoria && r.categoria !== selectedCategoria) return false;
       if (selectedResponsable && r.responsable_caja !== selectedResponsable) return false;
@@ -493,7 +638,7 @@ export default function LibrosApoyoContent({
       }
       return true;
     });
-  }, [registros, searchQuery, selectedClasificacion, selectedCategoria, selectedResponsable, selectedFechaFilter]);
+  }, [registrosDelMes, searchQuery, selectedClasificacion, selectedCategoria, selectedResponsable, selectedFechaFilter]);
 
   const totalFilteredMoney = useMemo(() => {
     return filteredRegistros.reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
@@ -722,7 +867,11 @@ export default function LibrosApoyoContent({
   };
 
   const handleDeleteRegistro = async (reg: LibroCajaRegistro) => {
-    if (!confirm(`¿Eliminar "${reg.concepto}" por $${formatMoney(reg.valor_pagado)} del día ${reg.fecha}?`)) return;
+    if (isCerrado) {
+      alert('El período contable está cerrado. No se permite eliminar registros.');
+      return;
+    }
+    if (!confirm(`¿Eliminar "${reg.concepto}" por ${formatMoney(reg.valor_pagado)} del día ${reg.fecha}?`)) return;
     try {
       const res = await fetch(
         `/api/libros-apoyo?id=${reg.id}&fecha=${reg.fecha}&is_admin=${isAdmin}&usuario=${encodeURIComponent(currentUsername)}`,
@@ -789,6 +938,101 @@ export default function LibrosApoyoContent({
   const dineroRecaudadoCajero = sumatoriaTotalDia;
   const diferenciaCuadreCajero = diferenciaCuadreDia;
 
+  // =========================================================================
+  // VISTA INTERMEDIA: LISTADO DE MESES A PANTALLA COMPLETA
+  // =========================================================================
+  if (selectedMonthId === null && !modoCajeroHermetico) {
+    return (
+      <div className="w-full max-w-5xl mx-auto p-4 md:p-8 animate-fade-in font-normal">
+        {/* Encabezado Principal */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hojas de Libro de Caja Menor</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Listado de meses con registros de caja menor ordenados desde el más reciente.
+            </p>
+          </div>
+        </div>
+
+        {/* Buscador de Meses */}
+        <div className="relative mb-3">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchMonthQuery}
+            onChange={(e) => setSearchMonthQuery(e.target.value)}
+            placeholder="Buscar por mes o año..."
+            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-md text-xs text-slate-800 focus:outline-hidden focus:border-slate-500 transition-all placeholder:text-slate-400"
+          />
+        </div>
+
+        {/* Contador de Meses Registrados */}
+        <p className="text-[11px] text-slate-400 mb-3 font-medium">
+          {filteredMeses.length} {filteredMeses.length === 1 ? 'mes registrado' : 'meses registrados'}
+        </p>
+
+        {/* Listado de Tarjetas de Meses */}
+        {filteredMeses.length === 0 ? (
+          <div className="bg-white rounded-lg p-10 border border-slate-200 text-center text-slate-500">
+            <FileSpreadsheet className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+            <p className="text-xs font-medium text-slate-600">No se encontraron meses registrados.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredMeses.map((m) => (
+              <div
+                key={m.codigo}
+                onClick={() => handleOpenMonth(m.codigo)}
+                className="group flex flex-col sm:flex-row sm:items-center justify-between p-3.5 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 rounded-lg cursor-pointer transition-all gap-2"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-md bg-slate-100 text-slate-600 group-hover:text-slate-900 transition-colors mt-0.5 sm:mt-0">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-semibold text-slate-900 group-hover:text-orange-600 transition-colors">
+                        {m.nombre} - Libro de Caja Menor
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>
+                        {m.diasCount} {m.diasCount === 1 ? 'día registrado' : 'días registrados'}
+                      </span>
+                      <span>•</span>
+                      <span className="font-medium text-slate-700">
+                        Total salidas: ${m.totalSalidas.toLocaleString('es-CO')} COP
+                      </span>
+                      {m.totalInsumos > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>Insumos: ${m.totalInsumos.toLocaleString('es-CO')} COP</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenMonth(m.codigo);
+                    }}
+                    className="text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md transition-colors cursor-pointer"
+                  >
+                    Abrir
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full max-h-full w-full overflow-hidden bg-slate-50 font-normal text-xs p-0 m-0">
       {/* 1. BARRA SUPERIOR: Hermética para Portal Cajero o Estándar SheetTabsBar para Administrador */}
@@ -853,59 +1097,68 @@ export default function LibrosApoyoContent({
               if (isAdmin) setIsNewSheetModalOpen(true);
               else setIsAbrirFlujoModalOpen(true);
             }}
+            onBackClick={() => {
+              setSelectedMonthId(null);
+              setActiveTabId(null);
+            }}
+            hideNewSheet={isCerrado}
             rightAction={
-              <div className="flex items-center gap-2 py-1">
-                {/* Botón de Abrir Flujo de Caja: SOLO si NO hay flujo abierto */}
-                {!hayFlujoAbierto && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFlujoAperturaFecha(activeTabId || new Date().toISOString().split('T')[0]);
-                      setFlujoAperturaEfectivoInicial('500.000');
-                      setIsAbrirFlujoModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap active:scale-95"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Abrir Flujo de Caja</span>
-                  </button>
-                )}
+              !isCerrado ? (
+                <div className="flex items-center gap-2 py-1">
+                  {/* Botón de Abrir Flujo de Caja: SOLO si el período está abierto y no hay flujo */}
+                  {!hayFlujoAbierto && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        const defaultDate = today.startsWith(selectedMonthId || '') ? today : `${selectedMonthId || '2026-11'}-01`;
+                        setFlujoAperturaFecha(activeTabId || defaultDate);
+                        setFlujoAperturaEfectivoInicial('500.000');
+                        setIsAbrirFlujoModalOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Abrir Flujo de Caja</span>
+                    </button>
+                  )}
 
-                {/* Enlace al Portal Cajero en NUEVA PESTAÑA */}
-                {currentSessionUser ? (
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md text-xs font-semibold cursor-pointer"
-                    title="Cerrar sesión"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Cerrar Sesión ({currentSessionUser.username})</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => window.open('/libros-apoyo/acceso', '_blank', 'noopener,noreferrer')}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-md text-xs font-semibold cursor-pointer"
-                    title="Abrir Portal Cajero en nueva pestaña"
-                  >
-                    <Lock className="w-3.5 h-3.5 text-slate-600" />
-                    <span className="hidden sm:inline">Portal Cajero</span>
-                    <ArrowUpRight className="w-3 h-3 text-slate-400" />
-                  </button>
-                )}
+                  {/* Enlace al Portal Cajero en NUEVA PESTAÑA */}
+                  {currentSessionUser ? (
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md text-xs font-semibold cursor-pointer"
+                      title="Cerrar sesión"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Cerrar Sesión ({currentSessionUser.username})</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => window.open('/libros-apoyo/acceso', '_blank', 'noopener,noreferrer')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-md text-xs font-semibold cursor-pointer"
+                      title="Abrir Portal Cajero en nueva pestaña"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-slate-600" />
+                      <span className="hidden sm:inline">Portal Cajero</span>
+                      <ArrowUpRight className="w-3 h-3 text-slate-400" />
+                    </button>
+                  )}
 
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setIsImportModalOpen(true)}
-                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Importar Excel / IA</span>
-                  </button>
-                )}
-              </div>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Importar Excel / IA</span>
+                    </button>
+                  )}
+                </div>
+              ) : null
             }
           />
         </div>
@@ -918,53 +1171,24 @@ export default function LibrosApoyoContent({
         {/* Izquierda: Meses | Derecha: Lista de Hojas de Libro de Caja Menor    */}
         {/* =================================================================== */}
         {activeTabId === null ? (
-          <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white overflow-hidden">
-            {/* Panel Izquierdo: Lista de Meses (idéntico a Costeo Diario Cocina) */}
-            {!modoCajeroHermetico && (
-            <aside className="w-full md:w-56 p-4 border-r border-slate-200 bg-slate-50/60 shrink-0 space-y-1">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">
-                Meses
-              </p>
-              {availableMonths.map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => setSelectedMonth(m.key)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium text-left transition-colors cursor-pointer ${
-                    selectedMonth === m.key
-                      ? 'bg-slate-200/80 text-slate-900 font-semibold'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-slate-500" />
-                    <span>{m.label}</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                    {m.count}
-                  </span>
-                </button>
-              ))}
-              {availableMonths.length === 0 && (
-                <div className="px-3 py-4 text-center text-xs text-slate-400">
-                  Sin meses registrados
-                </div>
-              )}
-            </aside>
-            )}
-
-            {/* Panel Derecho: Lista de Hojas de Libro de Caja Menor */}
+          <div className="flex-1 flex flex-col min-h-0 bg-white overflow-hidden">
+            {/* Panel Principal: Lista de Hojas de Libro de Caja Menor (Ancho Completo) */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
               {/* Encabezado Principal de Hojas */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-                      Hojas de Libro de Caja Menor
+                      Hojas de Libro de Caja Menor • {selectedMonthLabel}
                     </h1>
                     <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white font-mono text-[10px] font-bold">
                       {diariosDelMes.length} Hojas Activas
                     </span>
+                    {isCerrado && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold border border-slate-300">
+                        Período Cerrado (Solo Lectura)
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Selecciona una fecha para abrir su hoja detallada de caja, registrar gastos o auditar arqueo
@@ -1011,28 +1235,28 @@ export default function LibrosApoyoContent({
                 <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs">
                   <div className="text-[10px] font-bold text-slate-400 uppercase">Total Salidas Caja (Mes)</div>
                   <div className="text-base sm:text-lg font-black font-mono text-slate-900 mt-1">
-                    $ {formatMoney(kpis.totalSalidasMes)}
+                    $ {formatMoney(kpisMes.totalSalidasMes)}
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{kpis.totalRegistros} salidas registradas</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">{kpisMes.totalRegistros} salidas registradas</div>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs">
                   <div className="text-[10px] font-bold text-slate-400 uppercase">1. Insumos por Caja</div>
                   <div className="text-base sm:text-lg font-black font-mono text-emerald-700 mt-1">
-                    $ {formatMoney(kpis.totalCostosInsumos)}
+                    $ {formatMoney(kpisMes.totalCostosInsumos)}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">Carnes, verduras y servicios</div>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs">
                   <div className="text-[10px] font-bold text-slate-400 uppercase">2. Gastos Operativos</div>
                   <div className="text-base sm:text-lg font-black font-mono text-amber-700 mt-1">
-                    $ {formatMoney(kpis.totalGastosOperativos)}
+                    $ {formatMoney(kpisMes.totalGastosOperativos)}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">Transporte, aseo y varios</div>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs">
                   <div className="text-[10px] font-bold text-slate-400 uppercase">3. Turnos y Nómina</div>
                   <div className="text-base sm:text-lg font-black font-mono text-blue-700 mt-1">
-                    $ {formatMoney(kpis.totalTurnosNomina)}
+                    $ {formatMoney(kpisMes.totalTurnosNomina)}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">Pagos y vales de turno</div>
                 </div>
@@ -1099,13 +1323,16 @@ export default function LibrosApoyoContent({
                               </td>
                               <td className="py-2 px-3 font-mono text-[11px]">{r.responsable_caja}</td>
                               <td className="py-2 px-2 text-center">
+                                {!isCerrado && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteRegistro(r)}
-                                  className="p-1 text-slate-400 hover:text-rose-600"
+                                  className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                  title="Eliminar registro"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
+                              )}
                               </td>
                             </tr>
                           ))}
@@ -1156,7 +1383,20 @@ export default function LibrosApoyoContent({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {[...diariosDelMes].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((d) => (
+                        {diariosDelMes.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="text-center py-10 text-slate-500">
+                              <FileSpreadsheet className="w-7 h-7 mx-auto text-slate-300 mb-1.5" />
+                              <p className="font-semibold text-slate-700 text-xs">No hay hojas de flujo de caja registradas para {selectedMonthLabel}.</p>
+                              {!isCerrado && (
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                  Usa el botón &quot;+ Abrir Flujo de Caja&quot; para registrar el primer día del mes.
+                                </p>
+                              )}
+                            </td>
+                          </tr>
+                        ) : (
+                          [...diariosDelMes].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((d) => (
                           <tr key={d.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => handleOpenDaySheet(d.fecha)}>
                             <td className="py-2 px-3 font-mono font-bold text-slate-900">Día {String(d.dia_mes).padStart(2, '0')} ({d.fecha})</td>
                             <td className="py-2 px-3 text-slate-500">{d.responsables_dia}</td>
@@ -1168,7 +1408,8 @@ export default function LibrosApoyoContent({
                               <span className="text-orange-600 underline font-medium">Abrir</span>
                             </td>
                           </tr>
-                        ))}
+                        ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1218,7 +1459,7 @@ export default function LibrosApoyoContent({
                       <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
                     </button>
 
-                    {diarios.map((d) => {
+                    {diariosDelMes.map((d) => {
                       const isSelected = activeTabId === d.fecha;
                       return (
                         <button
@@ -1305,6 +1546,14 @@ export default function LibrosApoyoContent({
                     <FileText className="w-3.5 h-3.5 text-slate-500" />
                     <span>Exportar PDF Mes</span>
                   </button>
+                  {/* Si el período está CERRADO: No permitir aperturas, cierres ni modificaciones */}
+                  {isCerrado ? (
+                    <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 font-semibold text-xs flex items-center gap-1.5 border border-slate-200">
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Solo Lectura</span>
+                    </span>
+                  ) : (
+                    <>
                   {/* Si el usuario actual tiene la sesión ABIERTA (o es Admin y hay sesión abierta) */}
                   {sesionAbiertaDia && (isMyOpenSession || isAdmin) && (
                     <>
@@ -1382,6 +1631,8 @@ export default function LibrosApoyoContent({
                         </button>
                       )}
                     </div>
+                  )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1511,7 +1762,7 @@ export default function LibrosApoyoContent({
                     </h3>
                   </div>
 
-                  {isAdmin && (
+                  {isAdmin && !isCerrado && (
                     <button
                       type="button"
                       onClick={handleSaveArqueo}
@@ -1908,7 +2159,7 @@ export default function LibrosApoyoContent({
                             </td>
                             <td className="py-2 px-2 text-center">
                               {/* El cajero solo puede eliminar salidas de su propia sesión ABIERTA; el Admin puede siempre */}
-                              {(isAdmin || (sesionAbiertaDia && isMyOpenSession && r.sesion_id === sesionAbiertaDia.id)) ? (
+                              {(isAdmin || (sesionAbiertaDia && isMyOpenSession && r.sesion_id === sesionAbiertaDia.id)) && !isCerrado ? (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteRegistro(r)}

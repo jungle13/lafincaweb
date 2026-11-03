@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { TableProperties, FileSpreadsheet, Plus, X, LucideIcon } from 'lucide-react';
+import { TableProperties, FileSpreadsheet, Plus, X, ArrowLeft, LucideIcon } from 'lucide-react';
 
 export interface SheetTabItem {
   id: string;
@@ -20,6 +20,8 @@ interface SheetTabsBarProps {
   onCloseTab: (e: React.MouseEvent, tabId: string) => void;
   onNewSheetClick: () => void;
   rightAction?: React.ReactNode;
+  onBackClick?: () => void;
+  hideNewSheet?: boolean;
 }
 
 export default function SheetTabsBar({
@@ -32,11 +34,25 @@ export default function SheetTabsBar({
   onSelectTab,
   onCloseTab,
   onNewSheetClick,
-  rightAction
+  rightAction,
+  onBackClick,
+  hideNewSheet = false,
 }: SheetTabsBarProps) {
   return (
     <div className="bg-slate-100/90 border-b border-slate-200 px-3 pt-2 flex items-center justify-between overflow-x-auto select-none">
       <div className="flex items-center gap-1 min-w-0">
+        {/* Botón Volver (Flecha atrás opcional) */}
+        {onBackClick && (
+          <button
+            type="button"
+            onClick={onBackClick}
+            className="p-1.5 mr-1 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-md transition-colors cursor-pointer flex items-center justify-center shrink-0"
+            title="Volver a la lista de meses"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        )}
+
         {/* Pestaña Principal (ej: Vistas de Auditoría / Vistas de Costeo) */}
         <button
           onClick={onSelectMainTab}
@@ -81,14 +97,16 @@ export default function SheetTabsBar({
         })}
 
         {/* Botón "+" para crear nueva hoja */}
-        <button
-          type="button"
-          onClick={onNewSheetClick}
-          className="p-1.5 ml-1 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded-md transition-colors cursor-pointer flex items-center justify-center"
-          title="Crear nueva hoja"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
+        {!hideNewSheet && (
+          <button
+            type="button"
+            onClick={onNewSheetClick}
+            className="p-1.5 ml-1 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded-md transition-colors cursor-pointer flex items-center justify-center"
+            title="Crear nueva hoja"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {rightAction && (
