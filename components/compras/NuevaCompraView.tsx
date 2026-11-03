@@ -10,12 +10,13 @@ import {
   AlertCircle, 
   Receipt, 
   Package, 
-  Building2, 
-  Calendar as CalendarIcon,
-  Tag,
-  FileCheck
+  FileCheck,
+  UploadCloud,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { invalidateCache } from '@/lib/dataCache';
+import ImportarComprasModal, { ParsedFacturaData } from './ImportarComprasModal';
 
 export interface InsumoOption {
   id: string;
@@ -77,6 +78,10 @@ export default function NuevaCompraView({
   // Catálogo maestro para autocompletar insumos
   const [catalog, setCatalog] = useState<InsumoOption[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  // Modal de importación de TXT
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
 
   // Datos principales de la factura
   const [numeroFactura, setNumeroFactura] = useState('');
@@ -191,6 +196,38 @@ export default function NuevaCompraView({
 
       return updated;
     }));
+  };
+
+  // Manejar datos importados desde el archivo TXT
+  const handleImportData = (data: ParsedFacturaData) => {
+    setErrorMessage(null);
+    if (data.numeroFactura) setNumeroFactura(data.numeroFactura);
+    if (data.fecha) setFecha(data.fecha);
+    if (data.proveedor) setProveedor(data.proveedor);
+    if (data.categoriaPrincipal) setCategoriaPrincipal(data.categoriaPrincipal);
+    if (data.origen) setOrigen(data.origen);
+    if (data.observaciones) setObservaciones(data.observaciones);
+
+    if (data.lineas && data.lineas.length > 0) {
+      const mapped: LineaCompraDraft[] = data.lineas.map((l, idx): LineaCompraDraft => {
+        const matched = catalog.find(c => c.nombre.toLowerCase() === l.nombre_insumo.trim().toLowerCase());
+        const unitCost: number | '' = (typeof l.costo_unitario === 'number' && l.costo_unitario > 0)
+          ? l.costo_unitario
+          : (matched?.costo_unitario_kg ? Number(matched.costo_unitario_kg) : '');
+        return {
+          id: `linea-imp-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          insumo_id: matched ? matched.id : null,
+          nombre_insumo: l.nombre_insumo,
+          categoria: l.categoria || matched?.categoria || data.categoriaPrincipal || categoriaPrincipal,
+          detalle: l.detalle || l.nombre_insumo,
+          cantidad: l.cantidad,
+          unidad: l.unidad || matched?.unidad_medida || 'Kg',
+          costo_unitario: unitCost,
+        };
+      });
+      setLineas(mapped);
+      setImportSuccessMsg(`Se importaron ${mapped.length} insumos desde el archivo TXT. Revisa los datos y presiona "Guardar Factura".`);
+    }
   };
 
   // Total de la factura
@@ -317,7 +354,8 @@ export default function NuevaCompraView({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        {/* Acciones Superiores: Cancelar, Importar Compras y Guardar Factura */}
+        <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
           <button
             type="button"
             onClick={onCancel}
@@ -326,6 +364,18 @@ export default function NuevaCompraView({
           >
             Cancelar
           </button>
+
+          <button
+            type="button"
+            onClick={() => setImportModalOpen(true)}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-md transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+            title="Importar compras desde archivo TXT estructurado"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-slate-600" />
+            <span>Importar compras</span>
+          </button>
+
           <button
             type="button"
             onClick={handleSave}
@@ -337,6 +387,23 @@ export default function NuevaCompraView({
           </button>
         </div>
       </div>
+
+      {/* Alerta de Éxito al Importar */}
+      {importSuccessMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex items-center justify-between gap-2.5 text-emerald-800 text-xs animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{importSuccessMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setImportSuccessMsg(null)}
+            className="text-emerald-600 hover:text-emerald-900 cursor-pointer p-0.5"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Alerta de Error */}
       {errorMessage && (
@@ -625,7 +692,7 @@ export default function NuevaCompraView({
         </div>
       </div>
 
-      {/* 💰 Sección 3: Resumen Totalizado y Botones Finales */}
+      {/* 💰 Sección 3: Resumen Totalizado (Sin botón de guardar en la parte inferior) */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
         <div className="text-xs text-slate-500">
           <span>{totalItemsCount} {totalItemsCount === 1 ? 'insumo válido' : 'insumos válidos'} listados</span>
@@ -633,7 +700,7 @@ export default function NuevaCompraView({
           <span>Período destino: <strong className="text-slate-700">{periodoNombre}</strong></span>
         </div>
 
-        <div className="flex items-center gap-4 self-end sm:self-auto">
+        <div className="flex items-center gap-3 self-end sm:self-auto">
           <div className="text-right">
             <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
               Total Factura
@@ -642,18 +709,15 @@ export default function NuevaCompraView({
               ${totalFactura.toLocaleString('es-CO')} <span className="text-xs font-semibold text-slate-500">COP</span>
             </span>
           </div>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-md shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Guardar Factura</span>
-          </button>
         </div>
       </div>
+
+      {/* Modal para importar compras TXT y copiar prompt de IA */}
+      <ImportarComprasModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImportData={handleImportData}
+      />
     </div>
   );
 }
