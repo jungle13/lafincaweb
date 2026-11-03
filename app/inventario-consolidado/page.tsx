@@ -25,6 +25,7 @@ import {
   Download
 } from 'lucide-react';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
+import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
 
 interface RegistroItem {
@@ -425,9 +426,11 @@ export default function InventarioConsolidadoPage() {
   }, []);
 
   // Meses disponibles calculados dinámicamente con las hojas reales
+  const { periodos } = usePeriodo();
   const months: MonthItem[] = useMemo(() => {
-    return buildDynamicMonths(sheets, selectedMonth);
-  }, [sheets, selectedMonth]);
+    const extra = (periodos || []).map(p => p.codigo);
+    return buildDynamicMonths(sheets, selectedMonth, extra);
+  }, [sheets, selectedMonth, periodos]);
 
   // Hojas filtradas para la lista
   const filteredSheets = useMemo(() => {

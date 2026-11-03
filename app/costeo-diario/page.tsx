@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import catalogoOficial from '@/lib/catalogo-oficial.json';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
+import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
 import { 
   FileSpreadsheet,
@@ -1417,9 +1418,11 @@ export default function CosteoDiarioPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
 
   // Meses disponibles calculados dinámicamente según las hojas cargadas
+  const { periodos } = usePeriodo();
   const months: MonthItem[] = useMemo(() => {
-    return buildDynamicMonths(sheets, selectedMonth);
-  }, [sheets, selectedMonth]);
+    const extra = (periodos || []).map(p => p.codigo);
+    return buildDynamicMonths(sheets, selectedMonth, extra);
+  }, [sheets, selectedMonth, periodos]);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Modal State (+ Nueva Hoja de Costeo)

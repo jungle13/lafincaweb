@@ -586,6 +586,13 @@ const MONTH_NAMES = [
  */
 export async function fetchMesesVentasResumen(): Promise<MesVentasResumen[]> {
   try {
+    // 1. Obtener todos los períodos oficiales desde la tabla 'periodos'
+    const { data: periodosData } = await supabase
+      .from('periodos')
+      .select('id, codigo, nombre')
+      .order('codigo', { ascending: false });
+
+    // 2. Obtener todas las ventas registradas
     const { data: ventasData, error } = await supabase
       .from('ventas_diarias')
       .select('periodo_id, fecha, gran_total, venta_neta, total_articulos');
@@ -594,12 +601,26 @@ export async function fetchMesesVentasResumen(): Promise<MesVentasResumen[]> {
 
     const map = new Map<string, {
       periodo_id: string;
+      nombre: string;
       total_dias: number;
       gran_total: number;
       venta_neta: number;
       total_articulos: number;
       fechas: string[];
     }>();
+
+    // Inicializar con todos los períodos registrados para que aparezcan aunque tengan 0 días
+    (periodosData || []).forEach((p: any) => {
+      map.set(p.id, {
+        periodo_id: p.id,
+        nombre: p.nombre || p.id,
+        total_dias: 0,
+        gran_total: 0,
+        venta_neta: 0,
+        total_articulos: 0,
+        fechas: [],
+      });
+    });
 
     (ventasData || []).forEach((v: any) => {
       let pId = v.periodo_id;
@@ -609,8 +630,19 @@ export async function fetchMesesVentasResumen(): Promise<MesVentasResumen[]> {
       if (!pId) return;
 
       if (!map.has(pId)) {
+        let nombre = pId;
+        const cleanKey = pId.replace(/^per-/, '');
+        const parts = cleanKey.split('-');
+        if (parts.length === 2) {
+          const year = parseInt(parts[0], 10);
+          const mNum = parseInt(parts[1], 10);
+          if (mNum >= 1 && mNum <= 12) {
+            nombre = `${MONTH_NAMES[mNum - 1]} ${year}`;
+          }
+        }
         map.set(pId, {
           periodo_id: pId,
+          nombre,
           total_dias: 0,
           gran_total: 0,
           venta_neta: 0,
@@ -628,24 +660,11 @@ export async function fetchMesesVentasResumen(): Promise<MesVentasResumen[]> {
 
     const result: MesVentasResumen[] = [];
     for (const entry of Array.from(map.values())) {
-      if (entry.total_dias === 0 && entry.gran_total === 0) continue;
-
-      let nombre = entry.periodo_id;
-      const cleanKey = entry.periodo_id.replace(/^per-/, '');
-      const parts = cleanKey.split('-');
-      if (parts.length === 2) {
-        const year = parseInt(parts[0], 10);
-        const mNum = parseInt(parts[1], 10);
-        if (mNum >= 1 && mNum <= 12) {
-          nombre = `${MONTH_NAMES[mNum - 1]} ${year}`;
-        }
-      }
-
       entry.fechas.sort().reverse();
 
       result.push({
         periodo_id: entry.periodo_id,
-        nombre,
+        nombre: entry.nombre,
         total_dias: entry.total_dias,
         gran_total: entry.gran_total,
         venta_neta: entry.venta_neta,

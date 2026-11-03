@@ -17,7 +17,8 @@ import {
   Loader2,
   Wallet,
   Bot,
-  Layers
+  Layers,
+  CalendarRange
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 

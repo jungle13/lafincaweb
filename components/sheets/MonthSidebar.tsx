@@ -37,7 +37,8 @@ export function formatMonthLabel(key: string): string {
  */
 export function buildDynamicMonths(
   items: { month?: string; dateStr?: string }[],
-  selectedMonth?: string
+  selectedMonth?: string,
+  extraMonthKeys?: string[]
 ): MonthItem[] {
   const map = new Map<string, number>();
 
@@ -47,6 +48,15 @@ export function buildDynamicMonths(
       map.set(mKey, (map.get(mKey) || 0) + 1);
     }
   });
+
+  if (extraMonthKeys && Array.isArray(extraMonthKeys)) {
+    extraMonthKeys.forEach(k => {
+      const cleanKey = k.replace(/^per-/, '');
+      if (cleanKey && cleanKey.length >= 7 && !map.has(cleanKey)) {
+        map.set(cleanKey, 0);
+      }
+    });
+  }
 
   if (selectedMonth && selectedMonth.length >= 7 && !map.has(selectedMonth)) {
     map.set(selectedMonth, 0);

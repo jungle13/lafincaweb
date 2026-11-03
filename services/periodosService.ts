@@ -58,6 +58,53 @@ export async function getAllPeriodos(): Promise<PeriodoInventario[]> {
 /**
  * Obtiene el periodo activo actual (ABIERTO o EN_CONCILIACION)
  */
+/**
+ * Crea un nuevo periodo contable en Supabase
+ */
+export async function createPeriodo(
+  codigo: string,
+  nombre?: string,
+  estado: 'ABIERTO' | 'CERRADO' = 'ABIERTO',
+  observaciones?: string
+): Promise<PeriodoInventario> {
+  const MONTH_NAMES = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  const [yearStr, monthStr] = codigo.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const lastDay = new Date(year, month, 0).getDate();
+  const fecha_inicio = `${codigo}-01`;
+  const fecha_fin = `${codigo}-${String(lastDay).padStart(2, '0')}`;
+  const nombrePeriodo = nombre?.trim() || `${MONTH_NAMES[month - 1]} ${year}`;
+  const id = `per-${codigo}`;
+
+  const payload = {
+    id,
+    codigo,
+    nombre: nombrePeriodo,
+    fecha_inicio,
+    fecha_fin,
+    estado,
+    inicial_registrado: true,
+    inventario_inicial: {},
+    conteo_cierre_fisico: {},
+    ajustes_aprobados: {},
+    observaciones_cierre: observaciones || null,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('periodos')
+    .insert([payload])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as PeriodoInventario;
+}
+
 export async function getActivePeriodo(): Promise<PeriodoInventario | null> {
   try {
     const { data, error } = await supabase

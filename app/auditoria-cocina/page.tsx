@@ -13,6 +13,7 @@ import {
 import { PlatoReceta, getPlatoDeductions, RECETAS_PLATOS_POS } from '@/lib/recetasData';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
+import { usePeriodo } from '@/context/PeriodoContext';
 import NewSheetDateModal from '@/components/sheets/NewSheetDateModal';
 import AuditoriaInsumoRow, { InsumoAuditItem } from '@/components/auditoria/AuditoriaInsumoRow';
 import AddInsumoModal from '@/components/auditoria/AddInsumoModal';
