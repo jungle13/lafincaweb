@@ -4148,11 +4148,11 @@ Trucha 8`;
       {isModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
           <div 
-            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-0 transition-opacity animate-in fade-in duration-200"
             onClick={() => setIsModalOpen(false)}
           />
           <div 
-            className="relative z-10 bg-white rounded-xl max-w-md w-full p-5 shadow-2xl border border-slate-200/90 animate-in fade-in zoom-in-95 duration-200"
+            className="relative z-10 isolate bg-white rounded-xl max-w-md w-full p-5 shadow-2xl border border-slate-200/90 animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
@@ -4292,11 +4292,11 @@ Trucha 8`;
       {isClearModalOpen && activeSheet && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
           <div 
-            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-0 transition-opacity animate-in fade-in duration-200"
             onClick={() => setIsClearModalOpen(false)}
           />
           <div 
-            className="relative z-10 bg-white rounded-xl shadow-2xl border border-slate-200/90 w-full max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200"
+            className="relative z-10 isolate bg-white rounded-xl shadow-2xl border border-slate-200/90 w-full max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3">
@@ -4565,7 +4565,7 @@ Trucha 8`;
 
       {/* Contenedor Drawer deslizante de DERECHA A IZQUIERDA */}
       <aside
-        className={`fixed inset-y-0 right-0 z-[70] w-full sm:w-[500px] md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 z-[9999] isolate w-full sm:w-[500px] md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
           activeDrawerInsumo ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
         aria-label="Administrador de Insumo"
@@ -4989,11 +4989,11 @@ Trucha 8`;
       {showPreviewModal && activeSheet && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
           <div 
-            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-0 transition-opacity animate-in fade-in duration-200"
             onClick={() => setShowPreviewModal(false)}
           />
           <div 
-            className="relative z-10 bg-white rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            className="relative z-10 isolate bg-white rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             
@@ -5092,7 +5092,7 @@ Trucha 8`;
       )}
 
       <aside
-        className={`fixed inset-y-0 right-0 z-[70] w-full sm:w-[700px] md:w-[820px] lg:w-[880px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 z-[9999] isolate w-full sm:w-[700px] md:w-[820px] lg:w-[880px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
           isConteosDrawerOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
         aria-label="Panel Añadir Conteos"

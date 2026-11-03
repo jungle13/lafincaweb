@@ -305,13 +305,13 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
       {/* Full-Screen Backdrop con desenfoque profesional */}
       <div 
-        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-0 transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
 
       {/* Modal Dialog Card centrado y elevado sobre toda la vista */}
       <div 
-        className="relative z-10 bg-white rounded-xl shadow-2xl border border-slate-200/90 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200"
+        className="relative z-10 isolate bg-white rounded-xl shadow-2xl border border-slate-200/90 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabecera del Modal */}

@@ -46,13 +46,13 @@ export default function Modal({
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Full-Screen Backdrop con desenfoque profesional */}
       <div 
-        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-0 transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
 
       {/* Modal Dialog Card: Amplio, fondo blanco sólido, bordes sobrios, espacioso y estético */}
       <div 
-        className={`relative z-10 bg-white rounded-t-2xl sm:rounded-xl border border-slate-200/90 shadow-2xl w-full ${maxWidth} max-h-[92vh] sm:max-h-[90vh] flex flex-col p-5 md:p-6 animate-in fade-in zoom-in-95 duration-200 font-normal overflow-hidden`}
+        className={`relative z-10 isolate bg-white rounded-t-2xl sm:rounded-xl border border-slate-200/90 shadow-2xl w-full ${maxWidth} max-h-[92vh] sm:max-h-[90vh] flex flex-col p-5 md:p-6 animate-in fade-in zoom-in-95 duration-200 font-normal overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile Swipe/Pull Handle indicator */}

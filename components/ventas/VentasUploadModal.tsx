@@ -148,14 +148,14 @@ export default function VentasUploadModal({ isOpen, onClose, onSuccess }: Ventas
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
       {/* Full-Screen Backdrop con desenfoque profesional */}
       <div 
-        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-0 transition-opacity animate-in fade-in duration-200"
         onClick={() => {
           handleReset();
           onClose();
         }}
       />
       <div 
-        className="relative z-10 w-full max-w-xl bg-white rounded-xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200"
+        className="relative z-10 isolate w-full max-w-xl bg-white rounded-xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Encabezado */}

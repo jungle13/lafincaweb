@@ -1796,7 +1796,7 @@ export default function InventarioConsolidadoPage() {
       )}
 
       <aside
-        className={`fixed inset-y-0 right-0 z-[70] w-full sm:w-[700px] md:w-[800px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 z-[9999] isolate w-full sm:w-[700px] md:w-[800px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
           isConteosDrawerOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
       >
@@ -1961,7 +1961,7 @@ export default function InventarioConsolidadoPage() {
 
       {/* Contenedor Drawer deslizante de DERECHA A IZQUIERDA */}
       <aside
-        className={`fixed inset-y-0 right-0 z-[90] w-full sm:w-[500px] md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 z-[9999] isolate w-full sm:w-[500px] md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-out ${
           activeDrawerInsumo ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
         aria-label="Administrador de Insumo Consolidado"
