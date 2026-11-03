@@ -411,12 +411,6 @@ export default function ImportarComprasModal({ isOpen, onClose, onImportData }: 
             <p className="text-[11px] text-slate-600 leading-relaxed">
               Pega este prompt en <strong>ChatGPT, Claude o Gemini</strong> junto con las fotos de tu factura. La IA extraerá los datos y generará el texto que puedes guardar como <strong>.txt</strong> y arrastrar en la zona superior.
             </p>
-
-            <div className="relative">
-              <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg text-[11px] font-mono leading-relaxed overflow-x-auto max-h-48 border border-slate-800 select-all">
-                {AI_PROMPT_TEMPLATE}
-              </pre>
-            </div>
           </div>
         </div>
 
