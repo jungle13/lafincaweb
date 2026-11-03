@@ -278,21 +278,17 @@ export default function VentasPage() {
   // =========================================================================
   return (
     <div className="space-y-4 w-full font-normal animate-fade-in">
-      {/* Botón para regresar a la lista de meses */}
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => setSelectedMonthId(null)}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-md transition-all cursor-pointer shadow-2xs"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Volver a lista de meses</span>
-        </button>
-      </div>
-
       {/* 🏷️ Encabezado Principal Tipo Git */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setSelectedMonthId(null)}
+            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-md border border-slate-200 transition-colors cursor-pointer"
+            title="Volver a la lista de meses"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
           <div className="p-2 bg-slate-900 text-white rounded-md">
             <DollarSign className="w-4 h-4" />
           </div>
@@ -306,29 +302,14 @@ export default function VentasPage() {
           </div>
         </div>
 
-        {/* Selector de Período y Acciones */}
+        {/* Acciones del Encabezado */}
         <div className="flex items-center gap-2 flex-wrap">
-          {mesesList && mesesList.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs shadow-2xs">
-              <Calendar className="w-3.5 h-3.5 text-slate-500" />
-              <select
-                value={activePeriodoId}
-                onChange={(e) => {
-                  setSelectedMonthId(e.target.value);
-                  setSelectedPeriodoId(e.target.value);
-                }}
-                className="bg-transparent font-semibold text-slate-800 outline-none cursor-pointer"
-                title="Seleccionar mes / período de ventas"
-              >
-                {mesesList.map((m) => (
-                  <option key={m.periodo_id} value={m.periodo_id}>
-                    {m.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
+          <VentasExportButtons
+            diarias={diarias}
+            ranking={ranking}
+            kpis={kpis}
+            periodoNombre={periodoNombre}
+          />
           <button
             type="button"
             onClick={() => setUploadModalOpen(true)}
@@ -337,12 +318,6 @@ export default function VentasPage() {
             <UploadCloud className="w-3.5 h-3.5" />
             <span>Importar Ventas (.txt)</span>
           </button>
-          <VentasExportButtons
-            diarias={diarias}
-            ranking={ranking}
-            kpis={kpis}
-            periodoNombre={periodoNombre}
-          />
         </div>
       </div>
 

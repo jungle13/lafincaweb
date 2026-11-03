@@ -1,7 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { Download, FileText, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { 
+  Download, 
+  FileText, 
+  Loader2, 
+  SlidersHorizontal, 
+  ChevronDown, 
+  Plus 
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { CompraFacturaGroup, CompraInsumoGroup, CompraDetalleItem } from '@/services/comprasService';
 import { downloadComprasFacturasPdf } from '@/lib/exportComprasFacturasPdf';
@@ -11,6 +18,7 @@ interface Props {
   insumos: CompraInsumoGroup[];
   lineas: CompraDetalleItem[];
   periodoNombre?: string;
+  onAddCompra?: () => void;
 }
 
 export default function ComprasExportButtons({
@@ -18,11 +26,28 @@ export default function ComprasExportButtons({
   insumos,
   lineas,
   periodoNombre = 'Octubre 2026',
+  onAddCompra,
 }: Props) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleExportExcel = async () => {
+    setDropdownOpen(false);
     setExportingExcel(true);
     try {
       const wb = XLSX.utils.book_new();
@@ -87,6 +112,7 @@ export default function ComprasExportButtons({
   };
 
   const handleExportPdf = () => {
+    setDropdownOpen(false);
     setExportingPdf(true);
     try {
       downloadComprasFacturasPdf({
@@ -103,36 +129,73 @@ export default function ComprasExportButtons({
 
   return (
     <div className="flex items-center gap-2">
-      {/* Botón Exportar PDF por Factura y Categoría */}
-      <button
-        type="button"
-        onClick={handleExportPdf}
-        disabled={exportingPdf || facturas.length === 0}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
-        title="Exportar informe PDF organizado por Factura y Categoría"
-      >
-        {exportingPdf ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
-          <FileText className="w-3.5 h-3.5 text-slate-300" />
-        )}
-        <span>Exportar PDF</span>
-      </button>
+      {/* 🛠️ Dropdown Utilidades */}
+      <div className="relative" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          disabled={exportingPdf || exportingExcel}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-md text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+          title="Menú de utilidades y exportación"
+        >
+          {exportingPdf || exportingExcel ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
+          ) : (
+            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" />
+          )}
+          <span>Utilidades</span>
+          <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
+        </button>
 
-      {/* Botón Exportar Excel */}
-      <button
-        type="button"
-        onClick={handleExportExcel}
-        disabled={exportingExcel}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-md text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
-      >
-        {exportingExcel ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
-          <Download className="w-3.5 h-3.5 text-slate-500" />
+        {/* Menú Desplegable */}
+        {dropdownOpen && (
+          <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 animate-in fade-in duration-100">
+            <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-0.5">
+              Exportación de Datos
+            </div>
+
+            {/* Opción PDF */}
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={facturas.length === 0}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors text-left cursor-pointer disabled:opacity-40"
+            >
+              <FileText className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-800">Exportar PDF</div>
+                <div className="text-[10px] text-slate-500">Por factura y categoría</div>
+              </div>
+            </button>
+
+            {/* Opción Excel */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={facturas.length === 0}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors text-left cursor-pointer disabled:opacity-40"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-800">Exportar Excel</div>
+                <div className="text-[10px] text-slate-500">Libro consolidado (3 hojas)</div>
+              </div>
+            </button>
+          </div>
         )}
-        <span>Exportar Excel</span>
-      </button>
+      </div>
+
+      {/* ➕ Botón Añadir Compra */}
+      {onAddCompra && (
+        <button
+          type="button"
+          onClick={onAddCompra}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Añadir compra</span>
+        </button>
+      )}
     </div>
   );
 }
