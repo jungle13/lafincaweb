@@ -5,7 +5,11 @@ import catalogoOficial from '@/lib/catalogo-oficial.json';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
+import ImportarConteosModal from '@/components/costeo-diario/ImportarConteosModal';
+import VistaPreviaConteosView from '@/components/costeo-diario/VistaPreviaConteosView';
+import { ConteoArchivoParsed, SeccionConteoKey } from '@/lib/conteosParser';
 import { 
+  UploadCloud,
   FileSpreadsheet,
   ClipboardList, 
   Plus, 
@@ -1584,6 +1588,11 @@ export default function CosteoDiarioPage() {
   const [conteosRawText, setConteosRawText] = useState('');
   const [parsedConteosList, setParsedConteosList] = useState<ParsedConteoItem[]>([]);
   const [conteosSuccessToast, setConteosSuccessToast] = useState('');
+  // Estado del Importador TXT y Modo Vista Previa
+  const [isImportTxtModalOpen, setIsImportTxtModalOpen] = useState(false);
+  const [previewConteosData, setPreviewConteosData] = useState<ConteoArchivoParsed | null>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isSavingPreview, setIsSavingPreview] = useState(false);
 
   // Atender enlaces profundos desde notificaciones operativas (?section=...)
   useEffect(() => {
@@ -2697,6 +2706,212 @@ export default function CosteoDiarioPage() {
   });
 
   
+
+  const handleImportConteosSuccess = (parsed: ConteoArchivoParsed) => {
+    setPreviewConteosData(parsed);
+    setIsPreviewMode(true);
+  };
+
+  const handleConfirmPreview = async (confirmedData: ConteoArchivoParsed) => {
+    try {
+      setIsSavingPreview(true);
+
+      const targetDate = activeSheet?.dateStr || confirmedData.fecha || new Date().toISOString().split('T')[0];
+
+      let targetSheet = sheets.find(s => s.dateStr === targetDate);
+      if (!targetSheet) {
+        targetSheet = {
+          id: `sheet-${targetDate}`,
+          month: targetDate.substring(0, 7),
+          dateStr: targetDate,
+          title: `Costeo del ${targetDate}`,
+          posSales: 0,
+          categories: []
+        };
+      }
+
+      let updatedCategories = [...targetSheet.categories];
+      const now = new Date();
+      const horaAuto = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+      let totalCountSumados = 0;
+      const apiCalls: Promise<any>[] = [];
+      const sectionKeys = Object.keys(confirmedData.secciones) as SeccionConteoKey[];
+
+      for (const sKey of sectionKeys) {
+        const sec = confirmedData.secciones[sKey];
+        const validItems = sec.items.filter(it => it.isMatched && it.catalogItemId);
+        if (validItems.length === 0) continue;
+
+        const targetType: 'INVENTARIO_INICIAL_COCINA' | 'BODEGA_A_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'CONSUMO' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' =
+          sKey === 'COCINA_APERTURA' ? 'INVENTARIO_INICIAL_COCINA' :
+          sKey === 'TRASLADOS' ? 'BODEGA_A_COCINA' :
+          sKey === 'DEVOLUCIONES' ? 'DEVOLUCION_COCINA' :
+          sKey === 'COCINA_CIERRE' ? 'COCINA_CIERRE' :
+          sKey === 'CONSUMOS' ? 'CONSUMO' :
+          sKey === 'BODEGA_APERTURA' ? 'BODEGA_APERTURA' : 'BODEGA_CIERRE';
+
+        validItems.forEach(pItem => {
+          totalCountSumados++;
+          const targetCatId = mapCategoryToGroupId(pItem.categoria);
+          let cat = updatedCategories.find(c => {
+            if (c.id === targetCatId) return true;
+            const cNorm = normalizeStrHelper(c.name);
+            if (targetCatId === 'verduras' && (cNorm.includes('verdura') || cNorm.includes('fruver'))) return true;
+            if (targetCatId === 'carnes' && (cNorm.includes('carne') || cNorm.includes('prote'))) return true;
+            if (targetCatId === 'granos' && (cNorm.includes('grano') || cNorm.includes('abarrote') || cNorm.includes('lacteo'))) return true;
+            if (targetCatId === 'bebidas' && (cNorm.includes('bebida') || cNorm.includes('licor') || cNorm.includes('cerveza') || cNorm.includes('gaseosa'))) return true;
+            if (targetCatId === 'desechables' && (cNorm.includes('desechable') || cNorm.includes('empaque'))) return true;
+            return false;
+          });
+
+          if (!cat) {
+            const catNames: Record<string, string> = {
+              verduras: 'Verduras e Insumos',
+              carnes: 'Carnes y Proteínas',
+              granos: 'Granos y Abarrotes',
+              bebidas: 'Bebidas',
+              desechables: 'Desechables y Empaques'
+            };
+            const newCat: CategoryGroup = {
+              id: targetCatId,
+              name: catNames[targetCatId] || 'Insumos Varios',
+              items: [],
+              subtotal: 0,
+              itemsCount: 0
+            };
+            updatedCategories.push(newCat);
+            cat = newCat;
+          }
+
+          const activeCat = cat;
+
+          const newReg: InsumoRegistro = {
+            id: `reg-import-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            hora: horaAuto,
+            usuario: 'Administradora',
+            tipo: targetType,
+            presentacion: pItem.unidad === 'Porción' ? 'Porcion' : 'Entero',
+            origen: sKey === 'DEVOLUCIONES' ? 'Cocina Principal' : 'Bodega General',
+            destino: sKey === 'DEVOLUCIONES' ? 'Bodega General' : 'Cocina Principal',
+            cantidad: pItem.cantidad,
+            unidad: pItem.unidad,
+            costoUnitario: pItem.costoUnitario,
+            total: pItem.subtotal,
+            detalleCalculo: pItem.detalle || `Importado vía TXT (${pItem.cantidad} ${pItem.unidad})`,
+            observaciones: `Importación conteo (+) (${sKey})`
+          };
+
+          const existingItem = activeCat.items.find(
+            it => normalizeStrHelper(it.name) === normalizeStrHelper(pItem.nombreCanonical)
+          );
+
+          if (existingItem) {
+            const updatedRegs = [...(existingItem.registros || []), newReg];
+            const newTotalQty = Number(
+              updatedRegs.reduce(
+                (acc, r) => acc + (r.tipo === 'DEVOLUCION_COCINA' ? -r.cantidad : r.cantidad),
+                0
+              ).toFixed(2)
+            );
+            const newTotalCost = Math.round(newTotalQty * (existingItem.unitPrice || pItem.costoUnitario));
+
+            const updatedItem: InsumoItem = {
+              ...existingItem,
+              qty: Math.max(0, newTotalQty),
+              total: Math.max(0, newTotalCost),
+              registros: updatedRegs
+            };
+
+            updatedCategories = updatedCategories.map(c => {
+              if (c.id !== activeCat.id) return c;
+              return {
+                ...c,
+                items: c.items.map(it => it.id === existingItem.id ? updatedItem : it)
+              };
+            });
+          } else {
+            const newItem: InsumoItem = {
+              id: `it-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              name: pItem.nombreCanonical,
+              qty: pItem.cantidad,
+              unit: pItem.unidad,
+              unitPrice: pItem.costoUnitario,
+              total: pItem.subtotal,
+              registros: [newReg]
+            };
+
+            updatedCategories = updatedCategories.map(c => {
+              if (c.id !== activeCat.id) return c;
+              return {
+                ...c,
+                items: [...c.items, newItem]
+              };
+            });
+          }
+        });
+
+        const payloadItems = validItems.map(p => ({
+          insumo_id: p.catalogItemId,
+          nombre_insumo: p.nombreCanonical,
+          categoria: p.categoria,
+          cantidad: p.cantidad,
+          unidad: p.unidad,
+          costo_unitario: p.costoUnitario,
+          total: p.subtotal,
+          observaciones: p.detalle || `Importación TXT (+) (${sKey})`
+        }));
+
+        apiCalls.push(
+          fetch('/api/costeo-diario', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fecha: targetDate,
+              targetView: sKey,
+              actionMode: 'SUMAR',
+              items: payloadItems
+            })
+          })
+        );
+      }
+
+      updatedCategories = updatedCategories.map(c => ({
+        ...c,
+        subtotal: c.items.reduce((sum, it) => sum + (Number(it.total) || 0), 0),
+        itemsCount: c.items.length
+      }));
+
+      const finalSheet: CosteoSheet = {
+        ...targetSheet,
+        categories: updatedCategories
+      };
+
+      const sheetExists = sheets.some(s => s.id === finalSheet.id);
+      const newSheets = sheetExists
+        ? sheets.map(s => s.id === finalSheet.id ? finalSheet : s)
+        : [finalSheet, ...sheets];
+
+      setSheets(newSheets);
+      setActiveTabId(finalSheet.id);
+      if (!openTabs.includes(finalSheet.id)) {
+        setOpenTabs(prev => [...prev, finalSheet.id]);
+      }
+
+      await Promise.all(apiCalls);
+
+      setIsPreviewMode(false);
+      setPreviewConteosData(null);
+      setConteosSuccessToast(`✓ ${totalCountSumados} insumos sumados exitosamente a la Hoja de Costeo Diario`);
+      setTimeout(() => setConteosSuccessToast(''), 5000);
+    } catch (err: unknown) {
+      console.error('Error al confirmar conteos importados:', err);
+      alert('Ocurrió un error al guardar los conteos en la base de datos.');
+    } finally {
+      setIsSavingPreview(false);
+    }
+  };
+
   // Handlers para el módulo de Añadir Conteos
   const handleParseConteos = (text: string) => {
     const parsed = parseBulkConteosText(text, catalogItems);
@@ -3092,6 +3307,15 @@ Trucha 8`;
               </button>
               <button
                 type="button"
+                onClick={() => setIsImportTxtModalOpen(true)}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
+                title="Importar conteos estructurados mediante archivo TXT o fotos con IA"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
+                <span>Importar Conteos</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setIsConteosDrawerOpen(true);
                   setConteosTargetView(activeOperationalView === 'CONSUMOS' ? 'COCINA_CIERRE' : activeOperationalView);
@@ -3155,13 +3379,24 @@ Trucha 8`;
                 </p>
               </div>
               {!isCerrado && (
-                <button
-                  onClick={() => setIsModalOpen(true)}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsImportTxtModalOpen(true)}
+                    className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 text-xs px-3 py-2 rounded-md font-semibold shadow-2xs transition-colors cursor-pointer"
+                    title="Importar conteos masivos por TXT / IA"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Importar Conteos</span>
+                  </button>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
                   className="flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs px-3.5 py-2 rounded-md font-medium shadow-2xs transition-colors self-start sm:self-auto"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Nueva Hoja de Costeo</span>
                 </button>
+                </div>
               )}
             </div>
 

@@ -868,6 +868,8 @@ export async function POST(request: Request) {
         targetTipo = 'BODEGA_APERTURA';
       } else if (rawTarget === 'BODEGA_CIERRE') {
         targetTipo = 'BODEGA_CIERRE';
+      } else if (rawTarget === 'CONSUMOS' || rawTarget === 'CONSUMO') {
+        targetTipo = 'CONSUMO';
       }
 
       const rowsToInsert = itemsList.map((it: any) => {
