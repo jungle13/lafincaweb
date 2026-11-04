@@ -117,8 +117,9 @@ export default function ComprasExportButtons({
     try {
       downloadComprasFacturasPdf({
         facturas,
+        lineas,
         periodoNombre,
-        reportTitle: 'ENTRADAS POR COMPRAS — DETALLE POR FACTURA Y CATEGORÍA'
+        reportTitle: 'ENTRADAS POR COMPRAS — COSTOS DIRECTOS (MATERIA PRIMA)'
       });
     } catch (err) {
       console.error('Error exportando PDF de Compras:', err);

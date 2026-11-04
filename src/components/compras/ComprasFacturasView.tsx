@@ -86,7 +86,7 @@ export default function ComprasFacturasView({ facturas }: Props) {
           <span>•</span>
           <button
             type="button"
-            onClick={() => downloadComprasFacturasPdf({ facturas, reportTitle: 'ENTRADAS POR COMPRAS — DETALLE POR FACTURA Y CATEGORÍA' })}
+            onClick={() => downloadComprasFacturasPdf({ facturas, reportTitle: 'ENTRADAS POR COMPRAS — COSTOS DIRECTOS (MATERIA PRIMA)' })}
             className="flex items-center gap-1 text-slate-700 hover:text-slate-900 font-semibold cursor-pointer"
             title="Exportar informe PDF de facturas agrupadas por categoría"
           >
