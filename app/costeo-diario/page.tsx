@@ -3349,7 +3349,19 @@ Trucha 8`;
       {/* 2. ÁREA PRINCIPAL CON SCROLL EXCLUSIVO PARA LOS LISTADOS      */}
       {/* ============================================================ */}
       <div className="flex-1 overflow-y-auto min-h-0 bg-white">
-        {isLoadingSheets ? (
+        {isPreviewMode && previewConteosData ? (
+          <VistaPreviaConteosView
+            previewData={previewConteosData}
+            catalog={catalogItems}
+            targetDate={activeSheet?.dateStr || previewConteosData.fecha || new Date().toISOString().split('T')[0]}
+            isSaving={isSavingPreview}
+            onConfirm={handleConfirmPreview}
+            onCancel={() => {
+              setIsPreviewMode(false);
+              setPreviewConteosData(null);
+            }}
+          />
+        ) : isLoadingSheets ? (
           <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500">
             <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
             <span className="text-xs font-medium">Cargando hojas de costeo desde la base de datos...</span>
@@ -5786,6 +5798,13 @@ Trucha 8`;
         </div>
       </aside>
 
+      {/* Modal Modular de Importaci?n de Conteos TXT / IA */}
+      <ImportarConteosModal
+        isOpen={isImportTxtModalOpen}
+        onClose={() => setIsImportTxtModalOpen(false)}
+        catalog={catalogItems}
+        onImportSuccess={handleImportConteosSuccess}
+      />
     </div>
   );
 }
