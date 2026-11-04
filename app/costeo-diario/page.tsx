@@ -4009,7 +4009,7 @@ Trucha 8`;
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono font-medium text-emerald-700">
-                        +${costoTraslados.toLocaleString('es-CO')} <span className="text-[10px] text-emerald-600 font-sans font-normal">(suma)</span>
+                        +${costoTraslados.toLocaleString('es-CO')}
                       </span>
                       {activeOperationalView === 'TRASLADOS' && (
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
@@ -4032,7 +4032,7 @@ Trucha 8`;
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono font-medium text-amber-700">
-                        -${totalDevoluciones.toLocaleString('es-CO')} <span className="text-[10px] text-amber-600 font-sans font-normal">(resta)</span>
+                        -${totalDevoluciones.toLocaleString('es-CO')}
                       </span>
                       {activeOperationalView === 'DEVOLUCIONES' && (
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
@@ -4055,7 +4055,7 @@ Trucha 8`;
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono font-medium text-blue-700">
-                        -${costoCierre.toLocaleString('es-CO')} <span className="text-[10px] text-blue-600 font-sans font-normal">(resta)</span>
+                        -${costoCierre.toLocaleString('es-CO')}
                       </span>
                       {activeOperationalView === 'COCINA_CIERRE' && (
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
@@ -4078,7 +4078,7 @@ Trucha 8`;
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono font-medium text-purple-700">
-                        +${costoConsumos.toLocaleString('es-CO')} <span className="text-[10px] text-purple-600 font-sans font-normal">(suma)</span>
+                        +${costoConsumos.toLocaleString('es-CO')}
                       </span>
                       {activeOperationalView === 'CONSUMOS' && (
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
@@ -4106,7 +4106,7 @@ Trucha 8`;
                   <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                     <span className="font-bold text-slate-900">Rendimiento :</span>
                     <span className={`font-mono font-bold ${rendimientoDia >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      ${rendimientoDia >= 0 ? '+' : '-'}${Math.abs(rendimientoDia).toLocaleString('es-CO')} COP
+                      {rendimientoDia >= 0 ? '+$' : '-$'}{Math.abs(rendimientoDia).toLocaleString('es-CO')} COP
                     </span>
                   </div>
 
