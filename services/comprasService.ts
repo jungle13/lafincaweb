@@ -216,7 +216,7 @@ export async function fetchComprasData(periodoId: string = 'per-2026-10'): Promi
       c.totalDinero += item.valor_compra;
     });
 
-    // Categorías ordenadas según imagen oficial
+    // Categorías ordenadas según imagen oficial (Costos Directos / Materia Prima)
     const orderCat = [
       'Carnes y Proteínas',
       'Verduras y Frutas',
@@ -226,25 +226,30 @@ export async function fetchComprasData(periodoId: string = 'per-2026-10'): Promi
       'Otros Insumos y Servicios',
     ];
 
+    const totalDineroMateriaPrima = orderCat.reduce(
+      (acc, cat) => acc + (catTotalsMap.get(cat)?.totalDinero || 0),
+      0
+    );
+
     const categoriasKPI: CategoriaKPI[] = orderCat.map((catName) => {
       const d = catTotalsMap.get(catName) || { numCompras: 0, totalDinero: 0 };
       return {
         categoria: catName,
         numCompras: d.numCompras,
         totalDinero: d.totalDinero,
-        porcentaje: totalDinero > 0 ? (d.totalDinero / totalDinero) * 100 : 0,
+        porcentaje: totalDineroMateriaPrima > 0 ? (d.totalDinero / totalDineroMateriaPrima) * 100 : 0,
       };
     });
 
     const proveedores = Array.from(new Set(facturas.map((f) => f.proveedor))).sort();
-    const categorias = orderCat;
+    const categorias = Array.from(new Set([...orderCat, ...Array.from(catTotalsMap.keys())]));
     const fechas = Array.from(new Set(facturas.map((f) => f.fecha))).sort().reverse();
 
     return {
       success: true,
       kpis: {
         totalFacturas,
-        totalDinero,
+        totalDinero: totalDineroMateriaPrima,
         totalItems,
         categorias: categoriasKPI,
       },
