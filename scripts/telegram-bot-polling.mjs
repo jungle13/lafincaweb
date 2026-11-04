@@ -88,10 +88,13 @@ async function consultarMovimientosCocina(fecha, tipo, categoria, insumo) {
     // Normalizar tipo de movimiento
     if (tipo && tipo.trim() !== '' && tipo.toUpperCase() !== 'TODOS') {
       const t = tipo.trim().toUpperCase();
-      if (t.includes('CIERR')) q = q.eq('tipo', 'CIERRE');
+      if ((t.includes('CIERR') || t.includes('BEBIDA')) && (t.includes('BODEGA') || t.includes('GENERAL'))) q = q.eq('tipo', 'BODEGA_CIERRE');
+      else if (t.includes('APER') && t.includes('BODEGA')) q = q.eq('tipo', 'BODEGA_APERTURA');
+      else if (t.includes('CIERR')) q = q.eq('tipo', 'CIERRE');
       else if (t.includes('APER')) q = q.eq('tipo', 'APERTURA');
-      else if (t.includes('TRAS')) q = q.eq('tipo', 'TRASLADO');
+      else if (t.includes('TRAS') || t.includes('MOV')) q = q.eq('tipo', 'TRASLADO');
       else if (t.includes('DEV')) q = q.eq('tipo', 'DEVOLUCION');
+      else if (t.includes('CONSUM')) q = q.eq('tipo', 'CONSUMO');
       else q = q.eq('tipo', t);
     }
 
@@ -394,9 +397,9 @@ async function consultarCompras(params = {}) {
 
 
 // 4.1 Consultar Libro de Caja Menor (Salidas, Gastos, Nómina/Turnos, Compras Menores)
-export async function consultarLibroCaja(params = {}) {
+async function consultarLibroCaja(params = {}) {
   try {
-    const { fecha, clasificacion, categoria, concepto, responsable } = params || {};
+    const { fecha, fecha_fin, clasificacion, categoria, concepto, responsable, ver_resumen_diario } = params || {};
 
     let q = supabase
       .from('libro_caja_registros')
@@ -420,21 +423,81 @@ export async function consultarLibroCaja(params = {}) {
     const totalOperativos = rows.filter((r) => (r.clasificacion || '').includes('Operativo')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
     const totalNomina = rows.filter((r) => (r.clasificacion || '').includes('Nómina') || (r.clasificacion || '').includes('Turno')).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
 
+    const porCategoriaMap = {};
+    const porResponsableMap = {};
+    for (const r of rows) {
+      const cKey = r.categoria || 'Otros';
+      porCategoriaMap[cKey] = porCategoriaMap[cKey] || { cantidad: 0, total_cop: 0 };
+      porCategoriaMap[cKey].cantidad += 1;
+      porCategoriaMap[cKey].total_cop += Number(r.valor_pagado || 0);
+
+      const rKey = r.responsable_caja || 'GENERAL';
+      porResponsableMap[rKey] = porResponsableMap[rKey] || { cantidad: 0, total_cop: 0 };
+      porResponsableMap[rKey].cantidad += 1;
+      porResponsableMap[rKey].total_cop += Number(r.valor_pagado || 0);
+    }
+
+    // Consultar libro_caja_diario para obtener el arqueo y cuadre diario oficial
+    let cuadreDiario = undefined;
+    let qDiario = supabase
+      .from('libro_caja_diario')
+      .select('fecha, dia_mes, base_inicial, venta_pos_total, venta_efectivo_pos, total_datafonos, total_salidas, efectivo_fisico_cierre, total_costos_insumos, total_gastos_operativos, total_turnos_nomina, diferencia_cuadre, responsables_dia, estado, observaciones');
+
+    if (fecha && fecha.trim() !== '') {
+      qDiario = qDiario.eq('fecha', fecha.trim());
+    }
+
+    const { data: diariosData } = await qDiario.order('fecha', { ascending: false }).limit(fecha ? 1 : 5);
+    if (diariosData && diariosData.length > 0) {
+      cuadreDiario = diariosData.map((d) => {
+        const diff = Number(d.diferencia_cuadre || 0);
+        return {
+          fecha: d.fecha,
+          dia_mes: d.dia_mes,
+          estado_periodo: d.estado,
+          cajeras_responsables: d.responsables_dia,
+          base_inicial_caja_cop: Number(d.base_inicial || 500000),
+          venta_pos_total_cop: Number(d.venta_pos_total || 0),
+          venta_efectivo_pos_cop: Number(d.venta_efectivo_pos || 0),
+          datafonos_tarjetas_cop: Number(d.total_datafonos || 0),
+          total_salidas_caja_cop: Number(d.total_salidas || 0),
+          desglose_salidas_3_bloques: {
+            insumos_por_caja_cop: Number(d.total_costos_insumos || 0),
+            gastos_operativos_cop: Number(d.total_gastos_operativos || 0),
+            turnos_y_nomina_cop: Number(d.total_turnos_nomina || 0)
+          },
+          efectivo_fisico_cierre_cop: Number(d.efectivo_fisico_cierre || 0),
+          diferencia_cuadre_cop: diff,
+          estado_cuadre: diff === 0 ? 'CUADRADO EXACTO' : diff > 0 ? `SOBRANTE (+$${Math.abs(diff).toLocaleString('es-CO')} COP)` : `FALTANTE (-$${Math.abs(diff).toLocaleString('es-CO')} COP)`,
+          observaciones_planillas: d.observaciones || 'Sin notas'
+        };
+      });
+    }
+
     return {
-      modulo: 'Libro de Caja Menor (Octubre 2026)',
-      total_registros: rows.length,
+      modulo: 'Libro de Caja Menor (La Finca)',
+      total_registros_coincidentes: rows.length,
       total_salidas_cop: total,
-      desglose_bloques: {
+      desglose_3_bloques: {
         costos_materia_prima_cop: totalInsumos,
         gastos_operativos_cop: totalOperativos,
         pago_turnos_nomina_cop: totalNomina,
       },
-      registros: rows.slice(0, 35).map((r) => ({
+      cuadre_diario_oficial: cuadreDiario,
+      top_categorias: Object.entries(porCategoriaMap)
+        .map(([cat, st]) => ({ categoria: cat, registros: st.cantidad, total_cop: st.total_cop }))
+        .sort((a, b) => b.total_cop - a.total_cop)
+        .slice(0, 5),
+      top_cajeras: Object.entries(porResponsableMap)
+        .map(([resp, st]) => ({ cajera: resp, registros: st.cantidad, total_cop: st.total_cop }))
+        .sort((a, b) => b.total_cop - a.total_cop)
+        .slice(0, 4),
+      muestra_registros: rows.slice(0, 15).map((r) => ({
         fecha: r.fecha,
         clasificacion: r.clasificacion,
         categoria: r.categoria,
         concepto: r.concepto,
-        descripcion: r.descripcion_beneficiario,
+        beneficiario: r.descripcion_beneficiario,
         valor_cop: Number(r.valor_pagado || 0),
         cajera: r.responsable_caja,
       })),
@@ -443,8 +506,6 @@ export async function consultarLibroCaja(params = {}) {
     return { exito: false, error: err.message };
   }
 }
-
-// 5. Consultar Ventas y Precios de Platos en Carta
 
 function normalizarTerminoBusqueda(term) {
   const limpio = term.trim().toLowerCase();
@@ -538,15 +599,81 @@ async function consultarCosteoDiario(fecha) {
   try {
     let query = supabase
       .from('costeo_diario')
-      .select('fecha, titulo, pos_sales, costo_bruto, devoluciones, costo_neto, food_cost_porcentaje, costo_apertura, costo_cierre, consumo_real')
+      .select('fecha, titulo, pos_sales, costo_bruto, devoluciones, costo_neto, food_cost_porcentaje, costo_apertura, costo_cierre, consumo_real, costo_consumos, estado')
       .order('fecha', { ascending: false })
       .limit(fecha ? 1 : 5);
 
-    if (fecha) query = query.eq('fecha', fecha);
-    const { data } = await query;
-    return { costeo: data || [] };
-  } catch (e) {
-    return { error: e.message };
+    if (fecha && fecha.trim() !== '') query = query.eq('fecha', fecha.trim());
+    const { data, error } = await query;
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return { mensaje: `No se encontraron hojas de costeo diario para la fecha ${fecha || 'reciente'}.` };
+    }
+
+    const hojasEnriquecidas = await Promise.all(
+      data.map(async (r) => {
+        const { data: movs } = await supabase
+          .from('registros_costeo_cocina')
+          .select('tipo, valor_total, cantidad, nombre_insumo')
+          .eq('fecha', r.fecha);
+
+        const sumPorTipo = {};
+        (movs || []).forEach((m) => {
+          const t = m.tipo || 'DESCONOCIDO';
+          sumPorTipo[t] = sumPorTipo[t] || { total: 0, count: 0 };
+          sumPorTipo[t].total += Number(m.valor_total || 0);
+          sumPorTipo[t].count += 1;
+        });
+
+        const aperturaCocina = sumPorTipo['APERTURA']?.total || Number(r.costo_apertura || 0);
+        const trasladosMovs = sumPorTipo['TRASLADO']?.total || Number(r.costo_bruto || 0);
+        const devolucionesBodega = sumPorTipo['DEVOLUCION']?.total || Number(r.devoluciones || 0);
+        const cierreCocina = sumPorTipo['CIERRE']?.total || Number(r.costo_cierre || 0);
+        const consumosInternos = sumPorTipo['CONSUMO']?.total || Number(r.costo_consumos || 0);
+
+        const consumoRealCalculado = aperturaCocina + trasladosMovs - devolucionesBodega - cierreCocina + consumosInternos;
+        const consumoRealFinal = Number(r.consumo_real || consumoRealCalculado);
+        const ventasPos = Number(r.pos_sales || 0);
+        const rendimiento = ventasPos - consumoRealFinal;
+        const foodCostPct = ventasPos > 0 ? Number(((consumoRealFinal / ventasPos) * 100).toFixed(1)) : Number(r.food_cost_porcentaje || 0);
+
+        const bodegaApertura = sumPorTipo['BODEGA_APERTURA']?.total || 0;
+        const bodegaCierre = sumPorTipo['BODEGA_CIERRE']?.total || 0;
+
+        return {
+          modulo: 'Hoja de Costeo Diario',
+          fecha: r.fecha,
+          titulo: r.titulo || `Hoja de Costeo Diario (${r.fecha})`,
+          estado_periodo: r.estado || 'ACTIVO',
+          liquidacion_cocina_del_dia: {
+            costo_cocina_apertura_cop: aperturaCocina,
+            costo_movimientos_a_cocina_cop: trasladosMovs,
+            costo_devoluciones_a_bodega_cop: devolucionesBodega,
+            costo_cocina_cierre_cop: cierreCocina,
+            costo_consumos_cop: consumosInternos,
+            costo_consumo_real_total_cop: consumoRealFinal,
+            total_ventas_del_dia_pos_cop: ventasPos,
+            rendimiento_cop: rendimiento,
+            rendimiento_formato: `${rendimiento >= 0 ? '+' : '-'}$${Math.abs(rendimiento).toLocaleString('es-CO')} COP`,
+            food_cost_porcentaje: `${foodCostPct}%`
+          },
+          liquidacion_bodega_del_dia: {
+            bodega_apertura_cop: bodegaApertura,
+            bodega_cierre_cop: bodegaCierre,
+            items_en_bodega_cierre: sumPorTipo['BODEGA_CIERRE']?.count || 0
+          }
+        };
+      })
+    );
+
+    return {
+      modulo: 'Hoja de Costeo Diario (La Finca)',
+      total_hojas: hojasEnriquecidas.length,
+      hojas: hojasEnriquecidas
+    };
+  } catch (err) {
+    return { exito: false, error: err.message };
   }
 }
 
@@ -601,54 +728,63 @@ async function registrarUsuario(chatId, sender, ultimoTexto) {
 }
 
 const systemPrompt = `
-Eres el Asistente Operativo oficial de "La Finca" (Asador, Restaurante y Control de Carnes) en Telegram.
-Tu misión es entregar respuestas de negocio ULTRA PUNTUALES, DIRECTAS Y EJECUTIVAS.
+Eres el Asistente Operativo oficial de "La Finca" (Asador, Restaurante y Control de Inventarios) en Telegram.
+Tu misión es entregar respuestas de negocio ULTRA PUNTUALES, DIRECTAS Y EJECUTIVAS sobre los módulos de La Finca.
 
-CALENDARIO Y FECHAS DE REFERENCIA (AÑO OPERATIVO 2026):
-- Fecha de referencia actual: Octubre 2026.
-- Sábado pasado: 2026-10-24
-- Domingo pasado: 2026-10-25
-- Lunes pasado: 2026-10-26
-
-REGLAS DE FORMATO ESTRICTAS:
+REGLAS GENERALES:
 1. CERO EMOJIS: Prohibido incluir emojis en tus respuestas.
-2. CERO RELLENO: No saludes, no te presentes, no uses frases de cortesía ni despedidas. Ve directo al dato numérico.
+2. CERO RELLENO: No saludes, no te presentes, no uses frases de cortesía ni despedidas. Ve directo al dato numérico y al desglose.
 3. FORMATO NUMÉRICO Y MONETARIO:
    - Valores en pesos colombianos con separador de miles: $XX.XXX COP.
    - Cantidades con su unidad clara: Kg, Und, Porciones.
-4. ESTRUCTURA DE RESPUESTA:
-   - Para cierres de cocina (ej: "con cuántas carnes cerramos el domingo"):
-     Usa consultar_movimientos_cocina con tipo: 'CIERRE', fecha: '2026-10-25', categoria: 'CARNE'.
-     Si piden "solo cantidades", lista cada corte con su cantidad y unidad sin precios:
-     - Insumo: Cantidad Unidad
-     Total: Cantidad total Kg
-   - Para aperturas de cocina (ej: "con cuánto abrimos"):
-     Usa consultar_movimientos_cocina con tipo: 'APERTURA'.
-   - Para traslados o "bajadas a cocina":
-     Usa consultar_movimientos_cocina con tipo: 'TRASLADO':
-     * Lista cada insumo: - Insumo: Cantidad Unidad | Costo Unitario: $COP | Total: $COP
-     * Total Traslado: $COP.
-   - Si piden ventas de fin de semana (sábado y domingo):
-     Usa consultar_ventas con fecha: '2026-10-24', fecha_fin: '2026-10-25' y el producto.
-     Muestra siempre el desglose: Sábado 2026-10-24: X unidades | Domingo 2026-10-25: Y unidades | Total: Z unidades.
-   - Si piden "precio de venta" o "precio en carta" de un plato (ej: Tamal, Mazamorra, Churrasco, etc.):
-     Usa consultar_ventas buscando el producto para devolver el precio de venta al público en carta.
-   - Si piden "costo de insumo" o "costo de catálogo" de materia prima:
-     Usa consultar_insumos_precios.
-   - Para compras del restaurante (módulo Entradas por Compra):
-     * Total compras o resumen general: Usa consultar_compras sin parámetros. Devuelve total dinero ($COP), total facturas y desglose por categorías.
-     * Compras por categoría (ej: "cuánto se gastó en carnes", "total compras verduras"): Usa consultar_compras con categoria.
-     * Costo de compra de un insumo (ej: "a cómo compramos la sobrebarriga", "a cómo el pollo", "último costo de adquisición"): Usa consultar_compras con insumo. Devuelve último costo unitario, proveedor, factura, fecha y total acumulado.
-     * Compras por proveedor o factura: Usa consultar_compras con proveedor o numero_factura.
-5. OBLIGATORIO: Siempre consulta los datos reales de la base de datos usando las herramientas. NUNCA inventes números.
-`;
+   - Rendimiento siempre con signo explícito: +$XX.XXX COP o -$XX.XXX COP.
+
+4. MÓDULO HOJA DE COSTEO DIARIO (antes Costeo Diario Cocina):
+   - Muestra la liquidación diaria con esta estructura ejecutiva:
+     LIQUIDACIÓN COCINA DEL DÍA ({fecha}):
+     - Costo Cocina Apertura: $X COP
+     - Costo Movimientos a Cocina: +$X COP
+     - Costo Devoluciones a Bodega: -$X COP
+     - Costo Cocina Cierre: -$X COP
+     - Costo Consumos: +$X COP
+     - Costo Consumo Real: $X COP
+     - Total de Ventas del día: $X COP
+     - Rendimiento: +$X COP / -$X COP
+     - Food Cost: X.X%
+     LIQUIDACIÓN BODEGA DEL DÍA:
+     - Bodega Apertura: $X COP
+     - Bodega Cierre: $X COP
+   - Si piden datos de la hoja de costeo, consumo real, rendimiento, food cost o ventas del día: Usa consultar_costeo_diario.
+   - Si piden cantidades o cortes específicos (ej: carnes con que cerramos, bajadas a cocina, insumos en bodega): Usa consultar_movimientos_cocina con el tipo exacto (CIERRE, APERTURA, TRASLADO, DEVOLUCION, CONSUMO, BODEGA_APERTURA, BODEGA_CIERRE).
+
+5. MÓDULO LIBRO DE CAJA MENOR:
+   - Administrado por cajeras oficiales (Johanna turno principal, Neymar, María, Carolina, Daniela, Lucero).
+   - Base Inicial diaria estándar: $500.000 COP.
+   - Salidas organizadas en 3 BLOQUES:
+     1. Insumos por Caja / Materia Prima (carnes, verduras, lácteos, compras menores de emergencia).
+     2. Gastos Operativos (transporte, hielo, aseo, servicios, recargas, etc.).
+     3. Turnos y Nómina (pagos de turnos de meseros, cocineros, vales, préstamos).
+   - Estructura ejecutiva de CUADRE DIARIO ({fecha}):
+     - Responsables: {Cajeras}
+     - Estado Período: {CERRADA / ACTIVA}
+     - Base Inicial: $500.000 COP
+     - Venta POS Total: $X COP (Efectivo: $X COP | Datáfonos: $X COP)
+     - Total Salidas de Caja: $X COP
+       * Insumos por Caja: $X COP
+       * Gastos Operativos: $X COP
+       * Turnos y Nómina: $X COP
+     - Efectivo Físico Cierre: $X COP
+     - Diferencia Cuadre: $X COP ({CUADRADO / SOBRANTE / FALTANTE})
+   - Si piden arqueo de caja, salidas, pagos de turnos, gastos operativos o compras de insumos por caja menor: Usa consultar_libro_caja.
+
+6. REGLA ESTRICTA DE BASE DE DATOS: Siempre consulta los datos reales de la base de datos usando las herramientas. NUNCA inventes números.`;
 
 const tools = [
   {
     type: 'function',
     function: {
       name: 'consultar_libro_caja',
-      description: 'Consulta el Libro de Caja Menor (salidas de caja, pagos de turnos de personal, compras menores en efectivo, hielo, transporte, préstamos y gastos por cajera).',
+      description: 'Consulta el Libro de Caja Menor: Cuadre y arqueo diario oficial (base inicial, venta POS total, venta efectivo, datáfonos, total salidas, efectivo físico de cierre, diferencia de cuadre, cajeras Johanna, Neymar, María, etc.), salidas en sus 3 bloques (1. Insumos por caja, 2. Gastos operativos, 3. Turnos y nómina) y registros individuales por concepto, soporte de planilla o cajera.',
       parameters: {
         type: 'object',
         properties: {
@@ -712,7 +848,7 @@ const tools = [
     type: 'function',
     function: {
       name: 'consultar_costeo_diario',
-      description: 'Consulta consumo real, food cost %, ventas POS y costos de una fecha.',
+      description: 'Consulta la Hoja de Costeo Diario de una fecha: Liquidación Cocina del Día (Cocina Apertura, Movimientos a Cocina, Devoluciones, Cocina Cierre, Consumos, Consumo Real, Ventas POS del día, Rendimiento y Food Cost %) y Liquidación Bodega del Día (Bodega Apertura, Bodega Cierre de bebidas y abarrotes).',
       parameters: {
         type: 'object',
         properties: {
