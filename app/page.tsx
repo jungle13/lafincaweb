@@ -32,7 +32,7 @@ export default function HomePage() {
       color: 'text-indigo-600 bg-indigo-50 border-indigo-200 group-hover:border-indigo-400',
     },
     {
-      title: 'Costeo Diario Cocina',
+      title: 'Hoja de Costeo Diario',
       href: '/costeo-diario',
       icon: FileSpreadsheet,
       desc: 'Aperturas, traslados desde bodega, devoluciones y cierres diarios de carnes.',

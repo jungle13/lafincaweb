@@ -54,7 +54,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'COSTEO DIARIO E INVENTARIO',
     items: [
-      { label: 'Costeo Diario Cocina', href: '/costeo-diario', icon: FileSpreadsheet },
+      { label: 'Hoja de Costeo Diario', href: '/costeo-diario', icon: FileSpreadsheet },
       { label: 'Inventario Consolidado Diario', href: '/inventario-consolidado', icon: Layers },
     ],
   },

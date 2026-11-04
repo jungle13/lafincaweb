@@ -286,7 +286,7 @@ function formatDateToTitle(dateStr: string): string {
   const diaSemana = dias[dateObj.getDay()];
   const mesNombre = meses[dateObj.getMonth()];
 
-  return `${diaSemana}, ${day} de ${mesNombre} de ${year} - Hoja Costeo Cocina`;
+  return `${diaSemana}, ${day} de ${mesNombre} de ${year} - Hoja de Costeo Diario`;
 }
 
 // Lista inicial vacía: se carga 100% desde Supabase
@@ -2195,11 +2195,35 @@ export default function CosteoDiarioPage() {
     }, 0);
   };
 
+  const calculateCostoBodegaApertura = (sheet?: CosteoSheet): number => {
+    if (!sheet) return 0;
+    return sheet.categories.reduce((acc, cat) => {
+      return acc + cat.items.reduce((cAcc, it) => {
+        const regs = it.registros || [];
+        const sum = regs.filter(r => r.tipo === 'BODEGA_APERTURA').reduce((s, r) => s + r.total, 0);
+        return cAcc + sum;
+      }, 0);
+    }, 0);
+  };
+
+  const calculateCostoBodegaCierre = (sheet?: CosteoSheet): number => {
+    if (!sheet) return 0;
+    return sheet.categories.reduce((acc, cat) => {
+      return acc + cat.items.reduce((cAcc, it) => {
+        const regs = it.registros || [];
+        const sum = regs.filter(r => r.tipo === 'BODEGA_CIERRE').reduce((s, r) => s + r.total, 0);
+        return cAcc + sum;
+      }, 0);
+    }, 0);
+  };
+
   const costoApertura = calculateCostoApertura(activeSheet);
   const costoTraslados = calculateCostoTraslados(activeSheet);
   const totalDevoluciones = calculateTotalDevoluciones(activeSheet);
   const costoCierre = calculateCostoCierre(activeSheet);
   const costoConsumos = calculateCostoConsumos(activeSheet);
+  const costoBodegaApertura = calculateCostoBodegaApertura(activeSheet);
+  const costoBodegaCierre = calculateCostoBodegaCierre(activeSheet);
   const consumoReal = Math.max(0, costoApertura + costoTraslados - totalDevoluciones - costoCierre + costoConsumos);
   const ventasDia = activeSheet?.posSales || 0;
   const rendimientoDia = ventasDia - consumoReal;
@@ -3125,9 +3149,9 @@ Trucha 8`;
           <div className="flex-1 p-4 md:p-8 max-w-5xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
               <div>
-                <h1 className="text-xl font-bold text-slate-900">Hojas de Costeo</h1>
+                <h1 className="text-xl font-bold text-slate-900">Hojas de Costeo Diario</h1>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Listado de hojas de costeo diario de cocina ordenadas desde la más reciente.
+                  Listado de hojas de costeo diario ordenadas desde la más reciente.
                 </p>
               </div>
               {!isCerrado && (
@@ -3935,60 +3959,135 @@ Trucha 8`;
               })}
             </div>
 
-            {/* Columna Derecha: Contenedor Adicional de Liquidación y Enlaces */}
+            {/* Columna Derecha: Contenedor de Liquidaciones y Enlaces de Navegación */}
             <aside className="w-full lg:w-80 xl:w-88 shrink-0 space-y-4 lg:sticky lg:top-4">
               <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs space-y-4">
-                {/* Encabezado */}
+                {/* Encabezado: LIQUIDACIÓN COCINA DEL DIA */}
                 <div className="border-b border-slate-100 pb-2.5">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                    Liquidación del Día
+                    LIQUIDACIÓN COCINA DEL DIA
                   </h3>
                 </div>
 
-                {/* Cifras Operativas */}
-                <div className="space-y-2.5 text-xs">
-                  {/* 1. Costo Cocina Apertura */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Costo Cocina Apertura :</span>
-                    <span className="font-mono font-medium text-slate-900">
-                      ${costoApertura.toLocaleString('es-CO')}
+                {/* Cifras Operativas Linkeadas a sus respectivas hojas */}
+                <div className="space-y-1.5 text-xs">
+                  {/* 1. Costo Cocina Apertura (Linkeado) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveOperationalView('COCINA_APERTURA')}
+                    className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between cursor-pointer ${
+                      activeOperationalView === 'COCINA_APERTURA'
+                        ? 'bg-slate-100 text-slate-950 font-bold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={activeOperationalView === 'COCINA_APERTURA' ? 'underline' : ''}>
+                      Costo Cocina Apertura :
                     </span>
-                  </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-medium text-slate-900">
+                        ${costoApertura.toLocaleString('es-CO')}
+                      </span>
+                      {activeOperationalView === 'COCINA_APERTURA' && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                      )}
+                    </div>
+                  </button>
 
-                  {/* 2. Costo Movimientos a Cocina (suma) */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Costo Movimientos a Cocina :</span>
-                    <span className="font-mono font-medium text-emerald-700">
-                      +${costoTraslados.toLocaleString('es-CO')} <span className="text-[10px] text-emerald-600 font-sans font-normal">(suma)</span>
+                  {/* 2. Costo Movimientos a Cocina (suma) (Linkeado) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveOperationalView('TRASLADOS')}
+                    className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between cursor-pointer ${
+                      activeOperationalView === 'TRASLADOS'
+                        ? 'bg-slate-100 text-slate-950 font-bold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={activeOperationalView === 'TRASLADOS' ? 'underline' : ''}>
+                      Costo Movimientos a Cocina :
                     </span>
-                  </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-medium text-emerald-700">
+                        +${costoTraslados.toLocaleString('es-CO')} <span className="text-[10px] text-emerald-600 font-sans font-normal">(suma)</span>
+                      </span>
+                      {activeOperationalView === 'TRASLADOS' && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                      )}
+                    </div>
+                  </button>
 
-                  {/* 3. Costo Devoluciones a Bodega (resta) */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Costo Devoluciones a Bodega :</span>
-                    <span className="font-mono font-medium text-amber-700">
-                      -${totalDevoluciones.toLocaleString('es-CO')} <span className="text-[10px] text-amber-600 font-sans font-normal">(resta)</span>
+                  {/* 3. Costo Devoluciones a Bodega (resta) (Linkeado) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveOperationalView('DEVOLUCIONES')}
+                    className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between cursor-pointer ${
+                      activeOperationalView === 'DEVOLUCIONES'
+                        ? 'bg-slate-100 text-slate-950 font-bold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={activeOperationalView === 'DEVOLUCIONES' ? 'underline' : ''}>
+                      Costo Devoluciones a Bodega :
                     </span>
-                  </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-medium text-amber-700">
+                        -${totalDevoluciones.toLocaleString('es-CO')} <span className="text-[10px] text-amber-600 font-sans font-normal">(resta)</span>
+                      </span>
+                      {activeOperationalView === 'DEVOLUCIONES' && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                      )}
+                    </div>
+                  </button>
 
-                  {/* 4. Costo Cocina Cierre (resta) */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Costo Cocina Cierre :</span>
-                    <span className="font-mono font-medium text-blue-700">
-                      -${costoCierre.toLocaleString('es-CO')} <span className="text-[10px] text-blue-600 font-sans font-normal">(resta)</span>
+                  {/* 4. Costo Cocina Cierre (resta) (Linkeado) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveOperationalView('COCINA_CIERRE')}
+                    className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between cursor-pointer ${
+                      activeOperationalView === 'COCINA_CIERRE'
+                        ? 'bg-slate-100 text-slate-950 font-bold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={activeOperationalView === 'COCINA_CIERRE' ? 'underline' : ''}>
+                      Costo Cocina Cierre :
                     </span>
-                  </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-medium text-blue-700">
+                        -${costoCierre.toLocaleString('es-CO')} <span className="text-[10px] text-blue-600 font-sans font-normal">(resta)</span>
+                      </span>
+                      {activeOperationalView === 'COCINA_CIERRE' && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                      )}
+                    </div>
+                  </button>
 
-                  {/* Costo Consumos (suma) */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Costo Consumos :</span>
-                    <span className="font-mono font-medium text-purple-700">
-                      +${costoConsumos.toLocaleString('es-CO')} <span className="text-[10px] text-purple-600 font-sans font-normal">(suma)</span>
+                  {/* 5. Costo Consumos (suma) (Linkeado) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveOperationalView('CONSUMOS')}
+                    className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between cursor-pointer ${
+                      activeOperationalView === 'CONSUMOS'
+                        ? 'bg-slate-100 text-slate-950 font-bold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={activeOperationalView === 'CONSUMOS' ? 'underline' : ''}>
+                      Costo Consumos :
                     </span>
-                  </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-medium text-purple-700">
+                        +${costoConsumos.toLocaleString('es-CO')} <span className="text-[10px] text-purple-600 font-sans font-normal">(suma)</span>
+                      </span>
+                      {activeOperationalView === 'CONSUMOS' && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                      )}
+                    </div>
+                  </button>
 
-                  {/* 5. Costo Consumo Real Total */}
-                  <div className="flex items-center justify-between pt-2.5 pb-2.5 border-t border-b border-slate-200 bg-slate-50/80 -mx-4 px-4 my-1">
+                  {/* Costo Consumo Real Total */}
+                  <div className="flex items-center justify-between pt-2.5 pb-2.5 border-t border-b border-slate-200 bg-slate-50/80 -mx-4 px-4 my-2">
                     <span className="font-bold text-slate-900">Costo Consumo Real :</span>
                     <span className="font-mono font-black text-slate-900 text-sm">
                       ${consumoReal.toLocaleString('es-CO')} <span className="text-[10px] text-slate-500 font-sans font-normal">(Total)</span>
@@ -4007,7 +4106,7 @@ Trucha 8`;
                   <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                     <span className="font-bold text-slate-900">Rendimiento :</span>
                     <span className={`font-mono font-bold ${rendimientoDia >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      ${rendimientoDia >= 0 ? '+' : ''}${rendimientoDia.toLocaleString('es-CO')} COP
+                      ${rendimientoDia >= 0 ? '+' : '-'}${Math.abs(rendimientoDia).toLocaleString('es-CO')} COP
                     </span>
                   </div>
 
@@ -4020,117 +4119,59 @@ Trucha 8`;
                   </div>
                 </div>
 
-                {/* Enlaces Estéticos en formato link sobrio */}
+                {/* LIQUIDACIÓN BODEGA DEL DIA */}
                 <div className="border-t border-slate-200 pt-3">
-                  <div className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => setActiveOperationalView('COCINA_APERTURA')}
-                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
-                        activeOperationalView === 'COCINA_APERTURA'
-                          ? 'text-slate-950 font-bold underline'
-                          : 'text-slate-600 hover:text-slate-900 hover:underline'
-                      }`}
-                    >
-                      <span>Cocina Apertura</span>
-                      {activeOperationalView === 'COCINA_APERTURA' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveOperationalView('TRASLADOS')}
-                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
-                        activeOperationalView === 'TRASLADOS'
-                          ? 'text-slate-950 font-bold underline'
-                          : 'text-slate-600 hover:text-slate-900 hover:underline'
-                      }`}
-                    >
-                      <span>Traslados Bodega a Cocina</span>
-                      {activeOperationalView === 'TRASLADOS' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveOperationalView('DEVOLUCIONES')}
-                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
-                        activeOperationalView === 'DEVOLUCIONES'
-                          ? 'text-slate-950 font-bold underline'
-                          : 'text-slate-600 hover:text-slate-900 hover:underline'
-                      }`}
-                    >
-                      <span>Devoluciones Cocina a Bodega</span>
-                      {activeOperationalView === 'DEVOLUCIONES' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveOperationalView('COCINA_CIERRE')}
-                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
-                        activeOperationalView === 'COCINA_CIERRE'
-                          ? 'text-slate-950 font-bold underline'
-                          : 'text-slate-600 hover:text-slate-900 hover:underline'
-                      }`}
-                    >
-                      <span>Cocina Cierre</span>
-                      {activeOperationalView === 'COCINA_CIERRE' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveOperationalView('CONSUMOS')}
-                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
-                        activeOperationalView === 'CONSUMOS'
-                          ? 'text-slate-950 font-bold underline'
-                          : 'text-slate-600 hover:text-slate-900 hover:underline'
-                      }`}
-                    >
-                      <span>Consumos</span>
-                      {activeOperationalView === 'CONSUMOS' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
-                      )}
-                    </button>
+                  <div className="border-b border-slate-100 pb-2 mb-2">
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      LIQUIDACIÓN BODEGA DEL DIA
+                    </h3>
                   </div>
 
-                  {/* Separador */}
-                  <div className="border-t border-slate-200 my-2.5" />
-
-                  <div className="space-y-1">
+                  <div className="space-y-1.5 text-xs">
+                    {/* Bodega Apertura con total liquidado */}
                     <button
                       type="button"
                       onClick={() => setActiveOperationalView('BODEGA_APERTURA')}
-                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
+                      className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between cursor-pointer ${
                         activeOperationalView === 'BODEGA_APERTURA'
-                          ? 'text-slate-950 font-bold underline'
-                          : 'text-slate-600 hover:text-slate-900 hover:underline'
+                          ? 'bg-slate-100 text-slate-950 font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
-                      <span>Bodega Apertura</span>
-                      {activeOperationalView === 'BODEGA_APERTURA' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
-                      )}
+                      <span className={activeOperationalView === 'BODEGA_APERTURA' ? 'underline' : ''}>
+                        Bodega Apertura :
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-medium text-slate-900">
+                          ${costoBodegaApertura.toLocaleString('es-CO')}
+                        </span>
+                        {activeOperationalView === 'BODEGA_APERTURA' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                        )}
+                      </div>
                     </button>
 
+                    {/* Bodega Cierre con total liquidado */}
                     <button
                       type="button"
                       onClick={() => setActiveOperationalView('BODEGA_CIERRE')}
-                      className={`w-full text-left text-xs py-1 transition-colors flex items-center justify-between cursor-pointer ${
+                      className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between cursor-pointer ${
                         activeOperationalView === 'BODEGA_CIERRE'
-                          ? 'text-slate-950 font-bold underline'
-                          : 'text-slate-600 hover:text-slate-900 hover:underline'
+                          ? 'bg-slate-100 text-slate-950 font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
-                      <span>Bodega Cierre</span>
-                      {activeOperationalView === 'BODEGA_CIERRE' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
-                      )}
+                      <span className={activeOperationalView === 'BODEGA_CIERRE' ? 'underline' : ''}>
+                        Bodega Cierre :
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-medium text-slate-900">
+                          ${costoBodegaCierre.toLocaleString('es-CO')}
+                        </span>
+                        {activeOperationalView === 'BODEGA_CIERRE' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                        )}
+                      </div>
                     </button>
                   </div>
                 </div>

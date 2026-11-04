@@ -12,39 +12,39 @@ export interface OperationalAlert {
   ruta: string;
 }
 
-// Alertas del día anterior para el módulo de Costeo Diario Cocina
+// Alertas del día anterior para el módulo de Hoja de Costeo Diario
 const INITIAL_ALERTS: OperationalAlert[] = [
   {
     id: 'cocina-cierre-ayer',
-    modulo: 'Costeo Diario Cocina',
+    modulo: 'Hoja de Costeo Diario',
     submodulo: 'Cocina Cierre',
     mensaje: 'Falta diligenciar el submódulo de Cocina Cierre',
     ruta: '/costeo-diario?section=COCINA_CIERRE',
   },
   {
     id: 'cocina-apertura-ayer',
-    modulo: 'Costeo Diario Cocina',
+    modulo: 'Hoja de Costeo Diario',
     submodulo: 'Cocina Apertura',
     mensaje: 'Falta diligenciar el submódulo de Cocina Apertura',
     ruta: '/costeo-diario?section=COCINA_APERTURA',
   },
   {
     id: 'traslados-ayer',
-    modulo: 'Costeo Diario Cocina',
+    modulo: 'Hoja de Costeo Diario',
     submodulo: 'Traslados',
     mensaje: 'Falta diligenciar el submódulo de Traslados',
     ruta: '/costeo-diario?section=TRASLADOS',
   },
   {
     id: 'bodega-apertura-ayer',
-    modulo: 'Costeo Diario Cocina',
+    modulo: 'Hoja de Costeo Diario',
     submodulo: 'Bodega Apertura',
     mensaje: 'Falta diligenciar el submódulo de Bodega Apertura',
     ruta: '/costeo-diario?section=BODEGA_APERTURA',
   },
   {
     id: 'bodega-cierre-ayer',
-    modulo: 'Costeo Diario Cocina',
+    modulo: 'Hoja de Costeo Diario',
     submodulo: 'Bodega Cierre',
     mensaje: 'Falta diligenciar el submódulo de Bodega Cierre',
     ruta: '/costeo-diario?section=BODEGA_CIERRE',

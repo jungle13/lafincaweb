@@ -10,7 +10,7 @@ import OperationalNotificationBell from '@/components/notifications/OperationalN
 const VIEW_TITLES: Record<string, string> = {
   '/periodos': 'Gestión de Períodos Contables',
   '/': 'Bienvenida • Inicio',
-  '/costeo-diario': 'Costeo Diario Cocina',
+  '/costeo-diario': 'Hoja de Costeo Diario',
   '/libros-apoyo': 'Libros de Apoyo • Libro de Caja Menor',
   '/auditoria-cocina': 'Auditoría Cocina',
   '/recetas': 'Fichas Técnicas / Recetas',
