@@ -167,8 +167,88 @@ export default function VentasProductosRankingView({
         </div>
       </div>
 
-      {/* Tabla de Ranking */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+      {/* Vista Móvil de Ranking de Menú (Tarjetas md:hidden) */}
+      <div className="grid grid-cols-1 gap-2 md:hidden">
+        {filteredAndSorted.map((p, index) => {
+          const isTop3 = index < 3 && selectedCat === 'ALL' && !searchQuery;
+          const pctBar = (p.gran_total / maxTotal) * 100;
+
+          return (
+            <div
+              key={p.codigo_producto}
+              className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs space-y-2 text-xs"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  {isTop3 ? (
+                    <span
+                      className={`w-6 h-6 rounded-full inline-flex items-center justify-center font-bold text-xs shrink-0 ${
+                        index === 0
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : index === 1
+                          ? 'bg-slate-200 text-slate-800 border border-slate-300'
+                          : 'bg-orange-100 text-orange-800 border border-orange-300'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                  ) : (
+                    <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 font-mono text-[11px] inline-flex items-center justify-center shrink-0">
+                      {index + 1}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-900 block truncate">
+                      {p.nombre_producto}
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="font-mono text-[10px] text-slate-400">#{p.codigo_producto}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-[10px] text-slate-600 font-medium">
+                        {p.categoria}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="font-mono font-black text-sm text-slate-900 block">
+                    $ {formatMoney(p.gran_total)}
+                  </span>
+                  <span className="font-mono text-[11px] font-bold text-emerald-700">
+                    {formatMoney(p.cantidad_total)} {p.unidad}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-slate-100 text-[10px] font-mono">
+                <div>
+                  <span className="font-sans text-slate-400">Venta Neta: </span>
+                  <span className="font-semibold text-blue-700">$ {formatMoney(p.venta_neta)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-sans text-slate-400">Precio Prom: </span>
+                  <span className="font-semibold text-slate-700">$ {formatMoney(p.precio_promedio)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-0.5">
+                <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full rounded-full transition-all"
+                    style={{ width: `${Math.max(pctBar, 3)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-semibold text-slate-600 shrink-0">
+                  {p.porcentaje_ventas_total.toFixed(2)}% del menú
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tabla de Ranking (Escritorio hidden md:block) */}
+      <div className="hidden md:block bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

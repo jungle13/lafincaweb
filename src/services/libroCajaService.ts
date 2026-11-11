@@ -193,6 +193,17 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
     es_ajuste: Boolean(r.es_ajuste),
   }));
 
+  // Filtrar días vacíos sin movimientos (ej. días futuros pre-creados con $0 y 'Sin Movimientos')
+  const fechasConRegistros = new Set(registros.map((r) => r.fecha));
+  const fechasConSesiones = new Set(sesiones.map((s) => s.fecha));
+  const diariosActivos = diarios.filter(
+    (d) =>
+      d.total_salidas > 0 ||
+      fechasConRegistros.has(d.fecha) ||
+      fechasConSesiones.has(d.fecha) ||
+      (d.responsables_dia && d.responsables_dia !== 'Sin Movimientos')
+  );
+
   let totalCostosInsumos = 0;
   let totalGastosOperativos = 0;
   let totalTurnosNomina = 0;
@@ -258,14 +269,14 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
     totalTurnosNomina,
     totalAjustesMes,
     totalRegistros: registros.length,
-    totalDiasActivos: diarios.filter((d) => d.total_salidas > 0).length,
+    totalDiasActivos: diariosActivos.length,
     porCategoria,
     porResponsable,
   };
 
   return {
     kpis,
-    diarios,
+    diarios: diariosActivos,
     registros,
     sesiones,
     usuarios: (usuariosRes.data || []) as LibroCajaUsuario[],

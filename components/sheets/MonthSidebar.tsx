@@ -85,30 +85,36 @@ export default function MonthSidebar({
   title = 'Meses'
 }: MonthSidebarProps) {
   return (
-    <aside className="w-full md:w-56 p-4 border-r border-slate-200 bg-slate-50/60 shrink-0 space-y-1">
-      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">
+    <aside className="w-full md:w-56 p-2.5 md:p-4 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/60 shrink-0 md:space-y-1">
+      <p className="hidden md:block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">
         {title}
       </p>
-      {months.map(m => (
-        <button
-          key={m.key}
-          type="button"
-          onClick={() => onSelectMonth(m.key)}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium text-left transition-colors cursor-pointer ${
-            selectedMonth === m.key
-              ? 'bg-slate-200/80 text-slate-900 font-semibold'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-slate-500" />
-            <span>{m.label}</span>
-          </div>
-          <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-            {m.count}
-          </span>
-        </button>
-      ))}
+      <div className="flex md:flex-col items-center md:items-stretch gap-1.5 overflow-x-auto no-scrollbar">
+        {months.map(m => (
+          <button
+            key={m.key}
+            type="button"
+            onClick={() => onSelectMonth(m.key)}
+            className={`shrink-0 md:w-full flex items-center justify-between gap-2 px-3 py-1.5 md:py-2 rounded-md text-xs font-medium text-left transition-colors cursor-pointer whitespace-nowrap ${
+              selectedMonth === m.key
+                ? 'bg-slate-900 text-white md:bg-slate-200/80 md:text-slate-900 font-semibold'
+                : 'bg-white md:bg-transparent border md:border-0 border-slate-200 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 md:gap-2">
+              <Calendar className={`w-3.5 h-3.5 md:w-4 md:h-4 ${selectedMonth === m.key ? 'text-orange-400 md:text-slate-500' : 'text-slate-500'}`} />
+              <span>{m.label}</span>
+            </div>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+              selectedMonth === m.key
+                ? 'bg-slate-800 text-slate-200 border-slate-700 md:bg-white md:text-slate-500 md:border-slate-200'
+                : 'text-slate-500 bg-slate-50 md:bg-white border-slate-200'
+            }`}>
+              {m.count}
+            </span>
+          </button>
+        ))}
+      </div>
     </aside>
   );
 }

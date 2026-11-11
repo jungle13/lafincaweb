@@ -81,26 +81,28 @@ export default function RecetaPlatoRow({
             </div>
 
             {/* Resumen Financiero: Precio Venta POS, Costo Total Insumos, Margen */}
-            <div className="space-y-2 text-xs bg-slate-50 border border-slate-200 rounded-lg p-3">
-              {/* Precio de Venta al Público en POS */}
-              <div className="flex items-center justify-between text-slate-600">
-                <span className="text-slate-500 font-medium text-[11px]">Precio Venta POS:</span>
-                <span className="font-bold text-slate-900 font-mono text-xs">
-                  ${plato.precioVentaPos.toLocaleString('es-CO')}
-                </span>
-              </div>
+            <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 sm:p-3 space-y-1.5 sm:space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-1 gap-1.5 sm:gap-2">
+                {/* Precio de Venta al Público en POS */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-slate-600">
+                  <span className="text-slate-500 font-medium text-[10px] sm:text-[11px]">Precio Venta POS:</span>
+                  <span className="font-bold text-slate-900 font-mono text-xs sm:text-xs">
+                    ${plato.precioVentaPos.toLocaleString('es-CO')}
+                  </span>
+                </div>
 
-              {/* Costo Total de Insumos */}
-              <div className="flex items-center justify-between text-slate-600 pt-0.5">
-                <span className="text-slate-500 font-medium text-[11px]">Costo Proteínas / Insumos:</span>
-                <span className="font-semibold text-slate-800 font-mono">
-                  ${Math.round(costoTotal).toLocaleString('es-CO')}
-                </span>
+                {/* Costo Total de Insumos */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-slate-600">
+                  <span className="text-slate-500 font-medium text-[10px] sm:text-[11px]">Costo Proteínas:</span>
+                  <span className="font-semibold text-slate-800 font-mono text-xs">
+                    ${Math.round(costoTotal).toLocaleString('es-CO')}
+                  </span>
+                </div>
               </div>
 
               {/* Margen Bruto Estimado */}
               <div className="flex items-center justify-between pt-1.5 border-t border-slate-200">
-                <span className="font-medium text-slate-700 text-[11px]">Margen Bruto:</span>
+                <span className="font-medium text-slate-700 text-[10px] sm:text-[11px]">Margen Bruto:</span>
                 <span className="font-mono font-bold text-xs text-emerald-700">
                   {margenPorcentaje}%
                   <span className="text-[10px] font-normal text-slate-500 ml-1">

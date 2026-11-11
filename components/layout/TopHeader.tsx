@@ -86,20 +86,21 @@ export default function TopHeader() {
 
         <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-            <User className="w-4 h-4 text-slate-600" />
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+            <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />
           </div>
-          <span className="text-xs font-semibold text-slate-800">
+          <span className="hidden sm:inline text-xs font-semibold text-slate-800">
             {user?.name || 'Usuario'}
           </span>
           <button
             onClick={handleLogout}
             type="button"
             title="Cerrar sesión"
-            className="ml-1 px-2 py-1 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer font-medium"
+            className="ml-0.5 sm:ml-1 px-1.5 sm:px-2 py-1 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer font-medium whitespace-nowrap"
           >
-            Cerrar Sesión
+            <span className="sm:hidden">Salir</span>
+            <span className="hidden sm:inline">Cerrar Sesión</span>
           </button>
         </div>
       </div>

@@ -469,6 +469,98 @@ export default function ProductosVentaPage() {
       </div>
 
       {/* ------------------------------------------------------------ */}
+      {/* VISTA MÓVIL EN TARJETAS ESCANEABLES (md:hidden)               */}
+      {/* ------------------------------------------------------------ */}
+      <div className="grid grid-cols-1 gap-2 md:hidden">
+        {loading ? (
+          <div className="p-8 text-center bg-white border border-slate-200 rounded-lg text-slate-400 text-xs flex flex-col items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin mb-2 text-slate-400" />
+            <span>Cargando productos...</span>
+          </div>
+        ) : filteredProductos.length === 0 ? (
+          <div className="p-8 text-center bg-white border border-slate-200 rounded-lg text-slate-400 text-xs">
+            No se encontraron productos con el filtro actual.
+          </div>
+        ) : (
+          filteredProductos.map((item) => (
+            <div
+              key={item.id}
+              className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-2.5 text-xs"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(item)}
+                    className="font-bold text-slate-900 hover:text-orange-600 text-left text-xs leading-snug block truncate w-full"
+                  >
+                    {item.nombre}
+                  </button>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    <span className="font-mono text-[10px] text-slate-400">
+                      {item.codigo}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                      {CATEGORY_LABELS[item.categoria] || item.categoria}
+                    </span>
+                    {item.subcategoria && (
+                      <span className="text-[10px] text-slate-500">
+                        • {SUBCATEGORY_LABELS[item.subcategoria] || item.subcategoria}
+                      </span>
+                    )}
+                    {item.es_receta ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                        <span>Receta</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                        <span>Sin Receta</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(item)}
+                    className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80"
+                    title="Editar Producto"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item)}
+                    className="p-1.5 rounded-lg bg-rose-50/60 hover:bg-rose-100 text-rose-600 border border-rose-200/60"
+                    title="Eliminar Producto"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-100 font-mono text-[11px]">
+                <div className="bg-slate-50/80 p-1.5 rounded-lg">
+                  <span className="text-[9px] font-sans text-slate-400 uppercase block">Precio Neto</span>
+                  <span className="font-semibold text-slate-700">${formatMoney(item.precio_neto)}</span>
+                </div>
+                <div className="bg-slate-50/80 p-1.5 rounded-lg">
+                  <span className="text-[9px] font-sans text-slate-400 uppercase block">Impoconsumo</span>
+                  <span className="text-slate-600">${formatMoney(item.impoconsumo)}</span>
+                </div>
+                <div className="bg-orange-50/70 border border-orange-200/70 p-1.5 rounded-lg text-right">
+                  <span className="text-[9px] font-sans font-bold text-orange-800 uppercase block">Precio Venta</span>
+                  <span className="font-black text-slate-900">${formatMoney(item.precio_total)}</span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------ */}
       {/* MODAL CREAR / EDITAR PRODUCTO (Espacioso y Minimalista)      */}
       {/* ------------------------------------------------------------ */}
       <Modal

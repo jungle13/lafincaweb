@@ -993,7 +993,7 @@ export default function InventarioConsolidadoPage() {
   const isAddingAllowedInCurrentView = viewMode === 'COCINA_CIERRE' || viewMode === 'BODEGA_CIERRE';
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 -mb-20 md:mb-0 bg-white overflow-hidden font-sans select-none">
+    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 bg-white overflow-hidden font-sans select-none">
       
       {/* ============================================================ */}
       {/* 1. BARRA SUPERIOR DE PESTAÑAS (TABS)                          */}
@@ -1634,23 +1634,32 @@ export default function InventarioConsolidadoPage() {
                                     <div
                                       key={item.id}
                                       onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
-                                      className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 px-4 items-center text-xs hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                                      className="flex items-center justify-between sm:grid sm:grid-cols-12 gap-2 p-2.5 px-3.5 sm:px-4 text-xs hover:bg-blue-50/50 cursor-pointer transition-colors group"
                                       title="Clic para ver historial, editar o añadir cantidades a este insumo"
                                     >
                                       <div 
-                                        className="col-span-5 font-semibold text-slate-900 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer group select-none"
+                                        className="min-w-0 flex-1 sm:col-span-5 font-semibold text-slate-900 hover:text-blue-600 transition-colors cursor-pointer group select-none"
                                         onClick={() => handleOpenInsumoManager(cat.id, cat.name, item)}
-                                        title="Clic para ver historial o añadir cantidades a este insumo"
                                       >
-                                        <span className="truncate group-hover:underline">{item.name}</span>
-                                        {viewMode === 'CONSOLIDADO' && metrics.hasCocina && metrics.hasBodega && (
-                                          <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0.2 rounded font-normal shrink-0">
-                                            Cocina + Bodega
-                                          </span>
-                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="truncate group-hover:underline">{item.name}</span>
+                                          {viewMode === 'CONSOLIDADO' && metrics.hasCocina && metrics.hasBodega && (
+                                            <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0.2 rounded font-normal shrink-0">
+                                              Coc+Bod
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="sm:hidden text-[10px] font-mono font-normal text-slate-400 mt-0.5">
+                                          ${Math.round(metrics.unitPrice).toLocaleString('es-CO')}/{item.unit}
+                                          {viewMode === 'CONSOLIDADO' && metrics.hasCocina && metrics.hasBodega && (
+                                            <span className="ml-1.5 text-slate-400">
+                                              • Coc: {metrics.cocinaQty} / Bod: {metrics.bodegaQty}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
 
-                                      <div className="col-span-3 sm:text-right font-mono font-medium text-slate-800">
+                                      <div className="hidden sm:block sm:col-span-3 sm:text-right font-mono font-medium text-slate-800">
                                         <span>{displayQty} {item.unit}</span>
                                         {viewMode === 'CONSOLIDADO' && metrics.hasCocina && metrics.hasBodega && (
                                           <span className="block text-[10px] text-slate-400 font-sans">
@@ -1659,12 +1668,17 @@ export default function InventarioConsolidadoPage() {
                                         )}
                                       </div>
 
-                                      <div className="col-span-2 sm:text-right font-mono text-slate-500">
+                                      <div className="hidden sm:block sm:col-span-2 sm:text-right font-mono text-slate-500">
                                         ${Math.round(metrics.unitPrice).toLocaleString('es-CO')}/{item.unit}
                                       </div>
 
-                                      <div className="col-span-2 sm:text-right font-mono font-bold text-slate-950">
-                                        ${Math.round(displayTotal).toLocaleString('es-CO')}
+                                      <div className="shrink-0 text-right sm:col-span-2 font-mono">
+                                        <span className="font-bold text-slate-950 block">
+                                          ${Math.round(displayTotal).toLocaleString('es-CO')}
+                                        </span>
+                                        <span className="sm:hidden text-[11px] font-medium text-slate-600 block">
+                                          {displayQty} {item.unit}
+                                        </span>
                                       </div>
                                     </div>
                                   );
@@ -1679,7 +1693,7 @@ export default function InventarioConsolidadoPage() {
                 </div>
 
                 {/* PANEL LATERAL DERECHO: "Consolidado del Día" */}
-                <aside className="w-full lg:w-80 shrink-0 space-y-4 lg:sticky lg:top-4">
+                <aside className="w-full lg:w-80 shrink-0 space-y-4 order-first lg:order-none lg:sticky lg:top-4">
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
                     <div>
                       <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">

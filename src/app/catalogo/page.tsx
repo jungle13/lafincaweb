@@ -683,30 +683,54 @@ export default function CatalogoPage() {
         {sortedInsumos.map((item) => {
           const pesoGramos = Math.round((item.peso_estandar_porcion_kg || 0.35) * 1000);
           const rendimiento = item.peso_estandar_porcion_kg > 0 ? (1 / item.peso_estandar_porcion_kg).toFixed(2) : '-';
+          const showPorcionInfo = item.tipo_medida === 'KGS_Y_UNIDADES' || item.es_carne;
 
           return (
-            <div key={item.id} className="p-3 bg-white border border-slate-200 rounded-lg space-y-2 text-xs shadow-2xs">
+            <div key={item.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 text-xs shadow-2xs">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="min-w-0 flex-1">
                   <button
                     type="button"
                     onClick={() => openEditModal(item)}
-                    className="font-semibold text-slate-900 text-left hover:underline text-xs"
+                    className="font-bold text-slate-900 text-left hover:text-orange-600 text-xs block truncate w-full"
                   >
                     {item.nombre}
                   </button>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
                     <span className="font-mono text-[10px] text-slate-400">{item.codigo}</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium border border-slate-200">
                       {CATEGORY_DISPLAY_NAMES[item.categoria] || item.categoria}
                     </span>
                   </div>
                 </div>
+
+                <div className="text-right shrink-0">
+                  <span className="font-mono font-black text-xs text-slate-900 block">
+                    ${formatMoney(item.costo_unitario_kg)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    por {item.unidad_medida || 'Kg'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px]">
+                <div className="flex items-center gap-2 flex-wrap font-mono text-[10px] text-slate-600">
+                  <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                    Min: <strong>{item.stock_minimo_kg} {item.unidad_medida || 'Kg'}</strong>
+                  </span>
+                  {showPorcionInfo && (
+                    <span className="bg-blue-50/70 text-blue-800 px-2 py-0.5 rounded border border-blue-200/70">
+                      {pesoGramos}g (~{rendimiento} porc/Kg)
+                    </span>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => openEditModal(item)}
-                    className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+                    className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80"
                     title="Editar Insumo"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -714,30 +738,11 @@ export default function CatalogoPage() {
                   <button
                     type="button"
                     onClick={() => handleDelete(item)}
-                    className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                    className="p-1.5 rounded-lg bg-rose-50/60 hover:bg-rose-100 text-rose-600 border border-rose-200/60"
                     title="Eliminar Insumo"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-[11px] font-mono">
-                <div>
-                  <span className="text-slate-400 block font-sans">Gramaje porción:</span>
-                  <span className="font-semibold text-slate-800">{pesoGramos} g</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-sans">Rendimiento:</span>
-                  <span className="font-semibold text-slate-800">~{rendimiento} porc/Kg</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-sans">Costo Base / Kg:</span>
-                  <span className="font-semibold text-slate-900">${formatMoney(item.costo_unitario_kg)}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-sans">Stock Mínimo:</span>
-                  <span className="text-slate-700">{item.stock_minimo_kg} {item.unidad_medida}</span>
                 </div>
               </div>
             </div>

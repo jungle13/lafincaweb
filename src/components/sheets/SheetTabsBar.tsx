@@ -56,14 +56,14 @@ export default function SheetTabsBar({
         {/* Pestaña Principal (ej: Vistas de Auditoría / Vistas de Costeo) */}
         <button
           onClick={onSelectMainTab}
-          className={`flex items-center gap-2 px-3 py-2 text-xs rounded-t-md transition-colors border-t-2 ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 text-xs rounded-t-md transition-colors border-t-2 shrink-0 max-w-[160px] sm:max-w-none ${
             activeTabId === null
               ? 'bg-white text-slate-900 border-orange-600 font-semibold shadow-2xs border-x border-slate-200'
               : 'text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-200/60 font-medium'
           }`}
         >
-          <MainIcon className="w-3.5 h-3.5 text-slate-500" />
-          <span>{mainTabLabel}</span>
+          <MainIcon className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+          <span className="truncate">{mainTabLabel}</span>
         </button>
 
         {/* Pestañas de Hojas Abiertas */}

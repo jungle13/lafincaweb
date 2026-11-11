@@ -72,7 +72,7 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
 
   // 4. Vistas estándar del sistema (con padding cómodo)
   return (
-    <main className="flex-1 p-2.5 sm:p-4 md:p-6 pb-24 md:pb-6 w-full max-w-full overflow-x-hidden bg-white min-w-0">
+    <main className="flex-1 p-2.5 sm:p-4 md:p-6 pb-6 w-full max-w-full overflow-x-hidden bg-white min-w-0">
       {children}
     </main>
   );

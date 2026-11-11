@@ -252,27 +252,12 @@ export default function RecetasPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 -mb-20 md:mb-0 bg-white overflow-hidden font-normal text-xs">
+    <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 bg-white overflow-hidden font-normal text-xs">
       
       {/* 🏷️ SECCIÓN SUPERIOR: Encabezado Minimalista Tipo Git */}
       <div className="shrink-0 bg-white border-b border-slate-200 z-20">
         <div className="p-3 px-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Link
-                href="/productos-venta"
-                className="text-[11px] text-slate-600 hover:text-slate-900 flex items-center gap-1 font-medium bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition-colors cursor-pointer border border-slate-200"
-              >
-                <ArrowLeft className="w-3 h-3" />
-                <span>Productos Para la Venta</span>
-              </Link>
-              <Link
-                href="/auditoria-cocina"
-                className="text-[11px] text-slate-600 hover:text-slate-900 flex items-center gap-1 font-medium bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition-colors cursor-pointer border border-slate-200"
-              >
-                <span>Auditoría Cocina</span>
-              </Link>
-            </div>
             <div className="flex items-center gap-2 pt-0.5">
               <h1 className="text-base font-bold text-slate-900 tracking-tight">
                 Módulo de Recetas & Escandallos
@@ -286,16 +271,16 @@ export default function RecetasPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+          <div className="flex items-center gap-2 w-full md:w-auto">
             {/* Buscador de platos / insumos */}
-            <div className="relative">
+            <div className="relative flex-1 min-w-0 md:w-64">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
                 placeholder="Buscar plato, cód. POS o proteína..."
-                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-400 w-56 sm:w-64"
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-400"
               />
             </div>
 
@@ -304,7 +289,7 @@ export default function RecetasPage() {
               type="button"
               onClick={() => loadRecetasData(false)}
               disabled={loading}
-              className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer border border-slate-200"
+              className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer border border-slate-200 shrink-0"
               title="Recargar recetas"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -314,7 +299,7 @@ export default function RecetasPage() {
             <button
               type="button"
               onClick={() => setIsNewPlatoModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-all shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-all shadow-2xs cursor-pointer shrink-0 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Nuevo Plato</span>

@@ -168,7 +168,55 @@ export default function VentasTransaccionesView({
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Vista Móvil de Transacciones (md:hidden) */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {transacciones.length === 0 ? (
+                <div className="py-10 px-4 text-center text-xs text-slate-400">
+                  No se encontraron registros de venta para este filtro.
+                </div>
+              ) : (
+                transacciones.map((t) => (
+                  <div key={t.id} className="p-3 space-y-2 text-xs hover:bg-slate-50/70">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-900 block truncate">
+                          {t.nombre_producto}
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="font-mono text-[10px] text-slate-500">{t.fecha}</span>
+                          <span className="text-slate-300">&bull;</span>
+                          <span className="font-mono text-[10px] text-slate-400">#{t.codigo_producto}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            {t.categoria}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-mono font-black text-sm text-slate-900 block">
+                          ${formatMoney(t.gran_total)}
+                        </span>
+                        <span className="font-mono text-[10px] font-bold text-emerald-700">
+                          {t.cantidad} {t.unidad}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-slate-100 text-[10px] font-mono text-slate-600">
+                      <div>
+                        <span className="font-sans text-slate-400">P. Unitario: </span>
+                        <span className="font-semibold">${formatMoney(t.valor_unitario)}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-sans text-slate-400">Impoconsumo: </span>
+                        <span className="font-semibold text-amber-700">${formatMoney(t.impuesto)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Tabla Escritorio (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase tracking-wider select-none shadow-2xs">

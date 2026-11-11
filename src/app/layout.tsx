@@ -61,7 +61,7 @@ export default function RootLayout({
                       </MainLayoutWrapper>
                     </div>
                   </div>
-                  <MobileBottomBar />
+                  {/* Navegación unificada en Sidebar (sin barra inferior duplicada) */}
                 </NotificationProvider>
               </PeriodoProvider>
             </SidebarProvider>

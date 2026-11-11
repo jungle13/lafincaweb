@@ -236,30 +236,50 @@ export default function PeriodosPage() {
             return (
               <div
                 key={p.id}
-                className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-4 flex items-center justify-between gap-4 transition-all shadow-2xs"
+                className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 transition-all shadow-2xs"
               >
-                {/* Lado Izquierdo: Ícono + Título + Estadísticas en una sola línea */}
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-500 shrink-0">
+                {/* Lado Izquierdo: Ícono + Título + Estadísticas responsivas sin truncar */}
+                <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                  <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-500 shrink-0 mt-0.5 sm:mt-0">
                     <FileText className="w-5 h-5" />
                   </div>
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-bold text-slate-900 truncate">
-                      {p.nombre} - Período Contable
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5 font-normal truncate">
-                      Compras: ${comprasTot.toLocaleString('es-CO')} COP • Ventas: ${ventasTot.toLocaleString('es-CO')} COP • Consolidado: ${consolidadoTot.toLocaleString('es-CO')} COP
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-sm font-bold text-slate-900 truncate">
+                        {p.nombre} - Período Contable
+                      </h2>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        isAbierto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {isAbierto ? 'Abierto' : 'Cerrado'}
+                      </span>
+                    </div>
+                    <div className="mt-2 sm:mt-1 grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3 text-[11px] sm:text-xs text-slate-500">
+                      <div className="bg-slate-50/80 sm:bg-transparent p-1.5 sm:p-0 rounded border border-slate-200/70 sm:border-0">
+                        <span className="block sm:inline text-[10px] sm:text-xs text-slate-400 sm:text-slate-500">Compras: </span>
+                        <strong className="text-slate-800 font-mono block sm:inline">${comprasTot.toLocaleString('es-CO')}</strong>
+                      </div>
+                      <span className="hidden sm:inline text-slate-300">•</span>
+                      <div className="bg-slate-50/80 sm:bg-transparent p-1.5 sm:p-0 rounded border border-slate-200/70 sm:border-0">
+                        <span className="block sm:inline text-[10px] sm:text-xs text-slate-400 sm:text-slate-500">Ventas: </span>
+                        <strong className="text-slate-800 font-mono block sm:inline">${ventasTot.toLocaleString('es-CO')}</strong>
+                      </div>
+                      <span className="hidden sm:inline text-slate-300">•</span>
+                      <div className="bg-slate-50/80 sm:bg-transparent p-1.5 sm:p-0 rounded border border-slate-200/70 sm:border-0">
+                        <span className="block sm:inline text-[10px] sm:text-xs text-slate-400 sm:text-slate-500">Consolidado: </span>
+                        <strong className="text-emerald-700 font-mono block sm:inline">${consolidadoTot.toLocaleString('es-CO')}</strong>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 {/* Lado Derecho: Únicamente el botón Cerrar Mes / Reabrir Mes */}
-                <div className="shrink-0">
+                <div className="shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex justify-end">
                   {isAbierto ? (
                     <button
                       type="button"
                       onClick={() => handleToggleEstado(p, 'CERRADO')}
-                      className="px-4 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                      className="w-full sm:w-auto px-4 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
                     >
                       Cerrar Mes
                     </button>
@@ -267,7 +287,7 @@ export default function PeriodosPage() {
                     <button
                       type="button"
                       onClick={() => handleToggleEstado(p, 'ABIERTO')}
-                      className="px-4 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                      className="w-full sm:w-auto px-4 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
                     >
                       Reabrir Mes
                     </button>

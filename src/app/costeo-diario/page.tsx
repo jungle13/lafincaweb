@@ -1582,6 +1582,7 @@ export default function CosteoDiarioPage() {
   const addQtyInputRef = useRef<HTMLInputElement>(null);
   const generalSearchInputRef = useRef<HTMLInputElement>(null);
   const [generalAddSuccessMsg, setGeneralAddSuccessMsg] = useState<string>('');
+  const [isAddingGeneralInsumo, setIsAddingGeneralInsumo] = useState(false);
   const [isUtilidadesOpen, setIsUtilidadesOpen] = useState(false);
   const utilidadesMenuRef = useRef<HTMLDivElement>(null);
 
@@ -2277,6 +2278,7 @@ export default function CosteoDiarioPage() {
         movimientos: { count: 0, total: 0 },
         devoluciones: { count: 0, total: 0 },
         cierre: { count: 0, total: 0 },
+        consumos: { count: 0, total: 0 },
         bodegaApertura: { count: 0, total: 0 },
         bodegaCierre: { count: 0, total: 0 },
       };
@@ -2288,6 +2290,7 @@ export default function CosteoDiarioPage() {
     let cieCount = 0, cieTotal = 0;
     let bodApCount = 0, bodApTotal = 0;
     let bodCieCount = 0, bodCieTotal = 0;
+    let consumosCount = 0, consumosTotal = 0;
 
     activeSheet.categories.forEach(cat => {
       cat.items.forEach(it => {
@@ -2310,6 +2313,9 @@ export default function CosteoDiarioPage() {
           } else if (r.tipo === 'BODEGA_CIERRE') {
             bodCieCount++;
             bodCieTotal += Number(r.total || 0);
+          } else if (r.tipo === 'CONSUMO') {
+            consumosCount++;
+            consumosTotal += Number(r.total || 0);
           }
         });
       });
@@ -2320,6 +2326,7 @@ export default function CosteoDiarioPage() {
       movimientos: { count: movCount, total: Math.round(movTotal) },
       devoluciones: { count: devCount, total: Math.round(devTotal) },
       cierre: { count: cieCount, total: Math.round(cieTotal) },
+      consumos: { count: consumosCount, total: Math.round(consumosTotal) },
       bodegaApertura: { count: bodApCount, total: Math.round(bodApTotal) },
       bodegaCierre: { count: bodCieCount, total: Math.round(bodCieTotal) },
     };
@@ -3644,16 +3651,17 @@ Trucha 8`;
             <div className="flex-1 w-full min-w-0 space-y-3.5">
 
               {/* -------------------------------------------------------- */}
-              {/* SELECTOR DE VISTAS OPERATIVAS (Exclusivo Dispositivos Móviles) */}
+              {/* SELECTOR DE VISTAS OPERATIVAS (Scroll horizontal estilizado) */}
+              {/* Permite alternar rápidamente entre Cocina, Consumos y Bodega */}
               {/* -------------------------------------------------------- */}
-              <div className="lg:hidden bg-slate-100 p-1 rounded-xl flex items-center gap-1 overflow-x-auto select-none shadow-inner border border-slate-200/80">
+              <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 overflow-x-auto select-none shadow-inner border border-slate-200/80 scrollbar-none">
                 <button
                   type="button"
                   onClick={() => setActiveOperationalView('COCINA_APERTURA')}
-                  className={`flex-1 min-w-[85px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                  className={`shrink-0 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
                     activeOperationalView === 'COCINA_APERTURA'
                       ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                   }`}
                 >
                   <span>Apertura</span>
@@ -3667,10 +3675,10 @@ Trucha 8`;
                 <button
                   type="button"
                   onClick={() => setActiveOperationalView('TRASLADOS')}
-                  className={`flex-1 min-w-[85px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                  className={`shrink-0 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
                     activeOperationalView === 'TRASLADOS'
                       ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                   }`}
                 >
                   <span>Traslados</span>
@@ -3684,10 +3692,10 @@ Trucha 8`;
                 <button
                   type="button"
                   onClick={() => setActiveOperationalView('DEVOLUCIONES')}
-                  className={`flex-1 min-w-[95px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                  className={`shrink-0 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
                     activeOperationalView === 'DEVOLUCIONES'
                       ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                   }`}
                 >
                   <span>Devoluciones</span>
@@ -3701,16 +3709,71 @@ Trucha 8`;
                 <button
                   type="button"
                   onClick={() => setActiveOperationalView('COCINA_CIERRE')}
-                  className={`flex-1 min-w-[80px] py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                  className={`shrink-0 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
                     activeOperationalView === 'COCINA_CIERRE'
                       ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                   }`}
                 >
                   <span>Cierre</span>
                   {clearSheetStats.cierre.count > 0 && (
                     <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
                       {clearSheetStats.cierre.count}
+                    </span>
+                  )}
+                </button>
+
+                <span className="h-4 w-px bg-slate-300 mx-0.5 shrink-0" />
+
+                <button
+                  type="button"
+                  onClick={() => setActiveOperationalView('CONSUMOS')}
+                  className={`shrink-0 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                    activeOperationalView === 'CONSUMOS'
+                      ? 'bg-white text-purple-900 shadow-xs ring-1 ring-purple-200'
+                      : 'text-purple-700 hover:text-purple-900 hover:bg-purple-50/60'
+                  }`}
+                >
+                  <span>Consumos</span>
+                  {clearSheetStats.consumos.count > 0 && (
+                    <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded-full font-mono font-bold">
+                      {clearSheetStats.consumos.count}
+                    </span>
+                  )}
+                </button>
+
+                <span className="h-4 w-px bg-slate-300 mx-0.5 shrink-0" />
+
+                <button
+                  type="button"
+                  onClick={() => setActiveOperationalView('BODEGA_APERTURA')}
+                  className={`shrink-0 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                    activeOperationalView === 'BODEGA_APERTURA'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span>Bodega Apertura</span>
+                  {clearSheetStats.bodegaApertura.count > 0 && (
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
+                      {clearSheetStats.bodegaApertura.count}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveOperationalView('BODEGA_CIERRE')}
+                  className={`shrink-0 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+                    activeOperationalView === 'BODEGA_CIERRE'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span>Bodega Cierre</span>
+                  {clearSheetStats.bodegaCierre.count > 0 && (
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
+                      {clearSheetStats.bodegaCierre.count}
                     </span>
                   )}
                 </button>
@@ -3739,22 +3802,30 @@ Trucha 8`;
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-1.5 pt-1.5 border-t border-slate-800 text-center">
-                  <div className="bg-slate-800/80 rounded p-1">
-                    <span className="text-[9px] text-slate-400 block font-medium">Apertura</span>
-                    <span className="text-[11px] font-bold font-mono text-slate-200">${Math.round(costoApertura / 1000)}k</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800">
+                  <div className="bg-slate-800/80 rounded-lg px-2.5 py-1.5 flex flex-col justify-between">
+                    <span className="text-[10px] text-slate-400 font-medium">Apertura</span>
+                    <span className="text-xs font-bold font-mono text-slate-100 tracking-tight">
+                      ${Math.round(costoApertura).toLocaleString('es-CO')}
+                    </span>
                   </div>
-                  <div className="bg-slate-800/80 rounded p-1">
-                    <span className="text-[9px] text-emerald-400 block font-medium">+Traslados</span>
-                    <span className="text-[11px] font-bold font-mono text-emerald-300">${Math.round(costoTraslados / 1000)}k</span>
+                  <div className="bg-slate-800/80 rounded-lg px-2.5 py-1.5 flex flex-col justify-between">
+                    <span className="text-[10px] text-emerald-400 font-medium">+Traslados</span>
+                    <span className="text-xs font-bold font-mono text-emerald-300 tracking-tight">
+                      +${Math.round(costoTraslados).toLocaleString('es-CO')}
+                    </span>
                   </div>
-                  <div className="bg-slate-800/80 rounded p-1">
-                    <span className="text-[9px] text-amber-400 block font-medium">-Devoluc.</span>
-                    <span className="text-[11px] font-bold font-mono text-amber-300">${Math.round(totalDevoluciones / 1000)}k</span>
+                  <div className="bg-slate-800/80 rounded-lg px-2.5 py-1.5 flex flex-col justify-between">
+                    <span className="text-[10px] text-amber-400 font-medium">-Devoluc.</span>
+                    <span className="text-xs font-bold font-mono text-amber-300 tracking-tight">
+                      -${Math.round(totalDevoluciones).toLocaleString('es-CO')}
+                    </span>
                   </div>
-                  <div className="bg-slate-800/80 rounded p-1">
-                    <span className="text-[9px] text-rose-400 block font-medium">-Cierre</span>
-                    <span className="text-[11px] font-bold font-mono text-rose-300">${Math.round(costoCierre / 1000)}k</span>
+                  <div className="bg-slate-800/80 rounded-lg px-2.5 py-1.5 flex flex-col justify-between">
+                    <span className="text-[10px] text-rose-400 font-medium">-Cierre</span>
+                    <span className="text-xs font-bold font-mono text-rose-300 tracking-tight">
+                      -${Math.round(costoCierre).toLocaleString('es-CO')}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -3833,42 +3904,80 @@ Trucha 8`;
 
 
               {/* ------------------------------------------------------------------ */}
-              {/* BARRA GENERAL UNIFICADA: + AÑADIR INSUMOS, VERDURAS, CARNES       */}
-              {/* Entrada rápida única en la parte superior con auto-categorización  */}
+              {/* BARRA GENERAL UNIFICADA COLAPSABLE: + AÑADIR INSUMO                */}
+              {/* Inicialmente muestra solo el botón + Añadir insumo en toda pestaña */}
               {/* ------------------------------------------------------------------ */}
+              {!isAddingGeneralInsumo ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingGeneralInsumo(true);
+                      setTimeout(() => generalSearchInputRef.current?.focus(), 60);
+                    }}
+                    className="w-full sm:w-auto inline-flex items-center justify-center sm:justify-start gap-2.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Añadir insumo</span>
+                    <span className="text-[10px] font-normal text-slate-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                      {activeOperationalView === 'TRASLADOS' && 'Traslados'}
+                      {activeOperationalView === 'COCINA_APERTURA' && 'Apertura'}
+                      {activeOperationalView === 'DEVOLUCIONES' && 'Devoluciones'}
+                      {activeOperationalView === 'COCINA_CIERRE' && 'Cierre'}
+                      {activeOperationalView === 'CONSUMOS' && 'Consumos'}
+                      {activeOperationalView === 'BODEGA_APERTURA' && 'Bodega Apertura'}
+                      {activeOperationalView === 'BODEGA_CIERRE' && 'Bodega Cierre'}
+                    </span>
+                  </button>
+                  {generalAddSuccessMsg && (
+                    <div className="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-300 text-emerald-900 px-3 py-2 rounded-lg font-medium animate-fade-in shadow-2xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{generalAddSuccessMsg}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
               <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-2xs space-y-3 relative z-30 transition-all">
-                {/* Encabezado estético de la barra */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                {/* Encabezado estético de la barra desplegada */}
+                <div className="flex items-start sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                   <div className="flex items-center gap-2.5">
                     <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-xs shrink-0">
                       <Plus className="w-4 h-4" />
                     </div>
                     <div>
                       <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2 flex-wrap">
-                        <span>Añadir Insumo o Conteo General</span>
+                        <span>Añadir Insumo</span>
                         <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full normal-case">
-                          ✓ Auto-clasifica en Carnes, Verduras, Granos, Bebidas o Desechables
+                          ✓ Auto-clasifica categoría
                         </span>
                       </h3>
                       <p className="text-[11px] text-slate-500">
-                        Escribe o busca cualquier insumo. El sistema lo asignará y ubicará automáticamente en su sección sin tener que adivinar la categoría.
+                        Registrando en:{' '}
+                        <strong className="text-slate-800">
+                          {activeOperationalView === 'TRASLADOS' && 'Traslados Bodega a Cocina'}
+                          {activeOperationalView === 'COCINA_APERTURA' && 'Cocina Apertura'}
+                          {activeOperationalView === 'DEVOLUCIONES' && 'Devoluciones Cocina a Bodega'}
+                          {activeOperationalView === 'COCINA_CIERRE' && 'Cocina Cierre'}
+                          {activeOperationalView === 'CONSUMOS' && 'Consumos'}
+                          {activeOperationalView === 'BODEGA_APERTURA' && 'Bodega Apertura'}
+                          {activeOperationalView === 'BODEGA_CIERRE' && 'Bodega Cierre'}
+                        </strong>
                       </p>
                     </div>
                   </div>
 
-                  {/* Contexto de la vista operativa */}
-                  <div className="flex items-center gap-1.5 text-[11px] self-start sm:self-auto shrink-0 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                    <span className="text-slate-400">Registrando en:</span>
-                    <span className="font-bold text-slate-800">
-                      {activeOperationalView === 'TRASLADOS' && 'Traslados Bodega a Cocina'}
-                      {activeOperationalView === 'COCINA_APERTURA' && 'Cocina Apertura'}
-                      {activeOperationalView === 'DEVOLUCIONES' && 'Devoluciones Cocina a Bodega'}
-                      {activeOperationalView === 'COCINA_CIERRE' && 'Cocina Cierre'}
-                      {activeOperationalView === 'CONSUMOS' && 'Consumos'}
-                      {activeOperationalView === 'BODEGA_APERTURA' && 'Bodega Apertura'}
-                      {activeOperationalView === 'BODEGA_CIERRE' && 'Bodega Cierre'}
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingGeneralInsumo(false);
+                      setIsSearchOpen(false);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+                    title="Ocultar formulario"
+                  >
+                    <X className="w-4 h-4" />
+                    <span className="hidden sm:inline">Cerrar</span>
+                  </button>
                 </div>
 
                 {/* Formulario unificado de entrada en una sola línea responsiva */}
@@ -4169,6 +4278,7 @@ Trucha 8`;
                   </div>
                 )}
               </div>
+              )}
 
               {/* Barra de utilidades: Expandir/Colapsar categorías */}
               <div className="flex items-center justify-between px-1 mb-2">
