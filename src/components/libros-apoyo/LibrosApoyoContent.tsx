@@ -40,7 +40,9 @@ import {
   ArrowLeft,
   Smartphone,
   Download,
-  FileText
+  FileText,
+  ChevronDown,
+  Settings
 } from 'lucide-react';
 import { downloadCajaMenorResumenPdf } from '@/lib/exportCajaMenorPdf';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
@@ -429,6 +431,20 @@ export default function LibrosApoyoContent({
 
   // Modal Importador Excel / IA
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isUtilidadesOpen, setIsUtilidadesOpen] = useState(false);
+  const utilidadesRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (utilidadesRef.current && !utilidadesRef.current.contains(event.target as Node)) {
+        setIsUtilidadesOpen(false);
+      }
+    }
+    if (isUtilidadesOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isUtilidadesOpen]);
   const [importPreviewItems, setImportPreviewItems] = useState<any[]>([]);
   const [importTextRaw, setImportTextRaw] = useState('');
   const [importing, setImporting] = useState(false);
@@ -1105,63 +1121,106 @@ export default function LibrosApoyoContent({
             }}
             hideNewSheet={isCerrado}
             rightAction={
-              !isCerrado ? (
-                <div className="flex items-center gap-2 py-1">
-                  {/* Botón de Abrir Flujo de Caja: SOLO si el período está abierto y no hay flujo */}
-                  {!hayFlujoAbierto && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const today = new Date().toISOString().split('T')[0];
-                        const defaultDate = today.startsWith(selectedMonthId || '') ? today : `${selectedMonthId || '2026-11'}-01`;
-                        setFlujoAperturaFecha(activeTabId || defaultDate);
-                        setFlujoAperturaEfectivoInicial('500.000');
-                        setIsAbrirFlujoModalOpen(true);
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap active:scale-95"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Abrir Flujo de Caja</span>
-                    </button>
-                  )}
+              <div className="flex items-center gap-2 py-1">
+                {/* Botón de Abrir Flujo de Caja: SOLO si el período está abierto y no hay flujo */}
+                {!isCerrado && !hayFlujoAbierto && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date().toISOString().split('T')[0];
+                      const defaultDate = today.startsWith(selectedMonthId || '') ? today : `${selectedMonthId || '2026-11'}-01`;
+                      setFlujoAperturaFecha(activeTabId || defaultDate);
+                      setFlujoAperturaEfectivoInicial('500.000');
+                      setIsAbrirFlujoModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Abrir Flujo de Caja</span>
+                  </button>
+                )}
 
-                  {/* Enlace al Portal Cajero en NUEVA PESTAÑA */}
-                  {currentSessionUser ? (
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md text-xs font-semibold cursor-pointer"
-                      title="Cerrar sesión"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Cerrar Sesión ({currentSessionUser.username})</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => window.open('/libros-apoyo/acceso', '_blank', 'noopener,noreferrer')}
-                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-md text-xs font-semibold cursor-pointer"
-                      title="Abrir Portal Cajero en nueva pestaña"
-                    >
-                      <Lock className="w-3.5 h-3.5 text-slate-600" />
-                      <span className="hidden sm:inline">Portal Cajero</span>
-                      <ArrowUpRight className="w-3 h-3 text-slate-400" />
-                    </button>
-                  )}
+                {/* Botón Desplegable Único de Utilidades (Importar flujo, Portal cajero, Exportar PDF) */}
+                <div className="relative" ref={utilidadesRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsUtilidadesOpen(!isUtilidadesOpen)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shadow-2xs transition-colors"
+                    title="Utilidades (Importar flujo, Portal cajero, Exportar PDF)"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Utilidades</span>
+                    <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-150 ${isUtilidadesOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => setIsImportModalOpen(true)}
-                      className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shadow-2xs transition-colors"
-                      title="Importar uno o múltiples flujos de caja desde archivo .txt escaneado con IA"
-                    >
-                      <UploadCloud className="w-3.5 h-3.5 text-slate-600" />
-                      <span>Importar Flujo de Caja</span>
-                    </button>
+                  {isUtilidadesOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsUtilidadesOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1 divide-y divide-slate-100 animate-fade-in ring-1 ring-slate-900/10">
+                        <div className="py-1">
+                          {isAdmin && !isCerrado && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsUtilidadesOpen(false);
+                                setIsImportModalOpen(true);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                              title="Importar uno o múltiples flujos de caja desde archivo .txt escaneado con IA"
+                            >
+                              <UploadCloud className="w-4 h-4 text-slate-500" />
+                              <span>Importar Flujo de Caja</span>
+                            </button>
+                          )}
+
+                          {currentSessionUser ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsUtilidadesOpen(false);
+                                handleLogout();
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                            >
+                              <LogOut className="w-4 h-4 text-slate-500" />
+                              <span>Cerrar Sesión ({currentSessionUser.username})</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsUtilidadesOpen(false);
+                                window.open('/libros-apoyo/acceso', '_blank', 'noopener,noreferrer');
+                              }}
+                              className="w-full flex items-center justify-between px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                              title="Abrir Portal Cajero en nueva pestaña"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <Lock className="w-4 h-4 text-slate-500" />
+                                <span>Portal Cajero</span>
+                              </div>
+                              <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsUtilidadesOpen(false);
+                              handleExportResumenTotalizadoPdf();
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                            title="Exportar Resumen Totalizado en PDF"
+                          >
+                            <FileText className="w-4 h-4 text-slate-500" />
+                            <span>Exportar PDF</span>
+                          </button>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
-              ) : null
+              </div>
             }
           />
         </div>
@@ -1221,15 +1280,7 @@ export default function LibrosApoyoContent({
                   >
                     Registro de Ítems
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleExportResumenTotalizadoPdf}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-semibold text-xs border border-slate-900 transition-colors cursor-pointer shadow-2xs"
-                    title="Exportar Resumen Totalizado en 1 hoja PDF tamaño Carta"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-slate-300" />
-                    <span>Exportar PDF</span>
-                  </button>
+
                 </div>
               </div>
 

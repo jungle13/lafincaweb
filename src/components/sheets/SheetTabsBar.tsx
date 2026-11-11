@@ -39,8 +39,8 @@ export default function SheetTabsBar({
   hideNewSheet = false,
 }: SheetTabsBarProps) {
   return (
-    <div className="bg-slate-100/90 border-b border-slate-200 px-3 pt-2 flex items-center justify-between overflow-x-auto select-none">
-      <div className="flex items-center gap-1 min-w-0">
+    <div className="bg-slate-100/90 border-b border-slate-200 px-3 pt-2 flex items-center justify-between select-none relative z-20">
+      <div className="flex items-center gap-1 min-w-0 overflow-x-auto py-0.5">
         {/* Botón Volver (Flecha atrás opcional) */}
         {onBackClick && (
           <button
@@ -110,7 +110,7 @@ export default function SheetTabsBar({
       </div>
 
       {rightAction && (
-        <div className="shrink-0 ml-2">
+        <div className="shrink-0 ml-2 relative z-30">
           {rightAction}
         </div>
       )}

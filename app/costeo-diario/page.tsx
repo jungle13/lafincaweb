@@ -38,7 +38,9 @@ import {
   Info,
   Loader2,
   Eraser,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  Settings
 } from 'lucide-react';
 
 interface InsumoRegistro {
@@ -1578,6 +1580,22 @@ export default function CosteoDiarioPage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchCategoryFilter, setSearchCategoryFilter] = useState<string>('TODOS');
   const addQtyInputRef = useRef<HTMLInputElement>(null);
+  const generalSearchInputRef = useRef<HTMLInputElement>(null);
+  const [generalAddSuccessMsg, setGeneralAddSuccessMsg] = useState<string>('');
+  const [isUtilidadesOpen, setIsUtilidadesOpen] = useState(false);
+  const utilidadesMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (utilidadesMenuRef.current && !utilidadesMenuRef.current.contains(event.target as Node)) {
+        setIsUtilidadesOpen(false);
+      }
+    }
+    if (isUtilidadesOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isUtilidadesOpen]);
 
   // Estado del Slide-over para Añadir Conteos Masivos por Texto
   const [isConteosDrawerOpen, setIsConteosDrawerOpen] = useState(false);
@@ -2407,7 +2425,50 @@ export default function CosteoDiarioPage() {
   };
 
   // Add Item to Category con conversión inteligente a Kg según catálogo
-  const handleAddItem = (catId: string) => {
+  // Detección automática y enrutamiento inteligente de categoría para insumos, verduras y carnes
+  const determineTargetCategory = (
+    itemName: string,
+    catalogItem?: any,
+    currentView?: string
+  ): { targetCatId: string; catNameToSave: string } => {
+    if (currentView === 'CONSUMOS') {
+      const isProdVenta = (catalogItem?.categoria || '').includes('Producto') ||
+        productosVentaList.some(p => p.nombre.toLowerCase() === itemName.trim().toLowerCase());
+      if (isProdVenta) {
+        return { targetCatId: 'consumos_productos', catNameToSave: 'Consumido de Productos para la Venta' };
+      }
+      return { targetCatId: 'consumos_insumos', catNameToSave: 'Consumido del Catálogo de Insumos y Carne' };
+    }
+
+    const matchingCatItem = catalogItem || 
+      catalogItems.find(it => (it.nombre || it.insumo || '').toLowerCase() === itemName.trim().toLowerCase());
+    
+    const rawCat = (matchingCatItem?.categoria || '').toLowerCase();
+    const inferred = inferCategoryFromName(itemName);
+    const effectiveCategoryStr = rawCat || inferred.category;
+    const mappedGroupId = mapCategoryToGroupId(effectiveCategoryStr);
+
+    if (mappedGroupId === 'carnes' || inferred.isMeat || isProteinItem(itemName, rawCat)) {
+      return { targetCatId: 'carnes', catNameToSave: 'Carnes y Proteínas' };
+    }
+    if (mappedGroupId === 'verduras') {
+      return { targetCatId: 'verduras', catNameToSave: 'Verduras e Insumos' };
+    }
+    if (mappedGroupId === 'granos' || inferred.category.includes('Granos') || inferred.category.includes('Lácteos')) {
+      return { targetCatId: 'granos', catNameToSave: 'Granos y Abarrotes' };
+    }
+    if (mappedGroupId === 'bebidas' || inferred.category.includes('Bebidas')) {
+      return { targetCatId: 'bebidas', catNameToSave: 'Bebidas' };
+    }
+    if (mappedGroupId === 'desechables' || inferred.category.includes('Desechables')) {
+      return { targetCatId: 'desechables', catNameToSave: 'Desechables y Empaques' };
+    }
+
+    return { targetCatId: 'verduras', catNameToSave: 'Verduras e Insumos' };
+  };
+
+  // Add Item to Category con conversión inteligente y auto-ubicación automática
+  const handleAddItem = (overrideCatId?: string) => {
     if (!newInsumoName.trim() || !activeSheet) return;
 
     const parsedQty = evaluateQtyFormula(newInsumoQtyFormula).value || parseFloat(newInsumoQtyFormula) || 1;
@@ -2462,35 +2523,35 @@ export default function CosteoDiarioPage() {
           : activeOperationalView === 'DEVOLUCIONES' ? 'Devolución registrada a bodega' : 'Ingreso registrado'
     };
 
-    // Enrutamiento inteligente a la categoría adecuada según la naturaleza del insumo
-    let targetCatId = catId;
-    const itemCat = (selectedCatalogItem?.categoria || '').toUpperCase();
-    if (activeOperationalView === 'CONSUMOS') {
-      targetCatId = addingCategory || 'consumos_insumos';
-    } else if (itemCat.includes('VERDURA')) {
-      const found = activeSheet.categories.find(c => c.id === 'verduras' || c.name.toLowerCase().includes('verdura'));
-      if (found) targetCatId = found.id;
-    } else if (itemCat.includes('GRANO') || itemCat.includes('ABARROTE') || itemCat.includes('LACTEO') || itemCat.includes('HUEVO')) {
-      const found = activeSheet.categories.find(c => c.id === 'granos' || c.name.toLowerCase().includes('grano'));
-      if (found) targetCatId = found.id;
-    } else if (itemCat.includes('DESECHABLE') || itemCat.includes('EMPAQUE')) {
-      const found = activeSheet.categories.find(c => c.id === 'desechables' || c.name.toLowerCase().includes('desechable'));
-      if (found) targetCatId = found.id;
-    } else if (itemCat.includes('BEBIDA')) {
-      const found = activeSheet.categories.find(c => c.id === 'bebidas' || c.name.toLowerCase().includes('bebida'));
-      if (found) targetCatId = found.id;
-    } else if (itemCat.includes('CARNE') || itemCat.includes('RES') || itemCat.includes('CERDO') || itemCat.includes('POLLO') || itemCat.includes('PESCADO') || itemCat.includes('EMBUTIDO')) {
-      const found = activeSheet.categories.find(c => c.id === 'carnes' || c.name.toLowerCase().includes('carne'));
-      if (found) targetCatId = found.id;
-    }
+        const insumoToSave = newInsumoName.trim();
+    const detected = determineTargetCategory(insumoToSave, selectedCatalogItem, activeOperationalView);
+    const targetCatId = overrideCatId || detected.targetCatId;
+    const catNameToSave = detected.catNameToSave;
 
-    const targetCategory = activeSheet.categories.find(c => c.id === targetCatId);
-    const existingItem = targetCategory?.items.find(it => it.name.toLowerCase() === newInsumoName.trim().toLowerCase());
+    // Buscar si la categoría ya existe en la hoja activa
+    let targetCategory = activeSheet.categories.find(c => {
+      if (c.id === targetCatId) return true;
+      const cNorm = normalizeStrHelper(c.name);
+      if (targetCatId === 'carnes' && (cNorm.includes('carne') || cNorm.includes('prote'))) return true;
+      if (targetCatId === 'verduras' && (cNorm.includes('verdura') || cNorm.includes('fruver'))) return true;
+      if (targetCatId === 'granos' && (cNorm.includes('grano') || cNorm.includes('abarrote'))) return true;
+      if (targetCatId === 'bebidas' && (cNorm.includes('bebida') || cNorm.includes('licor'))) return true;
+      if (targetCatId === 'desechables' && (cNorm.includes('desechable') || cNorm.includes('empaque'))) return true;
+      if (targetCatId === 'consumos_insumos' && (c.id === 'consumos_insumos' || cNorm.includes('insumos y carne'))) return true;
+      if (targetCatId === 'consumos_productos' && (c.id === 'consumos_productos' || cNorm.includes('productos para la venta'))) return true;
+      return false;
+    });
 
-    const insumoToSave = newInsumoName.trim();
-    const catNameToSave = activeOperationalView === 'CONSUMOS'
-      ? (targetCatId === 'consumos_productos' ? 'Consumido de Productos para la Venta' : 'Consumido del Catálogo de Insumos y Carne')
-      : (targetCatId === 'bebidas' ? 'Bebidas' : (selectedCatalogItem?.categoria || targetCategory?.name || 'Verduras e Insumos'));
+    const finalTargetCatId = targetCategory?.id || targetCatId;
+    const finalCatNameToSave = targetCategory?.name || catNameToSave;
+
+    // Expandir automáticamente la categoría de destino para que el usuario visualice su conteo de inmediato
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [finalTargetCatId]: false
+    }));
+
+    const existingItem = targetCategory?.items.find(it => it.name.toLowerCase() === insumoToSave.toLowerCase());
 
     let updatedCategories: CategoryGroup[] = [];
 
@@ -2508,7 +2569,7 @@ export default function CosteoDiarioPage() {
       };
 
       updatedCategories = activeSheet.categories.map(cat => {
-        if (cat.id !== targetCatId && cat.name !== catNameToSave) return cat;
+        if (cat.id !== finalTargetCatId && cat.name !== finalCatNameToSave) return cat;
         const newItems = cat.items.map(it => it.id === existingItem.id ? updatedExistingItem : it);
         const newSubtotal = newItems.reduce((acc, it) => acc + (it.total || 0), 0);
         return {
@@ -2528,10 +2589,10 @@ export default function CosteoDiarioPage() {
         registros: [newRegistro]
       };
 
-      const categoryExists = activeSheet.categories.some(cat => cat.id === targetCatId || cat.name === catNameToSave);
+      const categoryExists = activeSheet.categories.some(cat => cat.id === finalTargetCatId || cat.name === finalCatNameToSave);
       if (categoryExists) {
         updatedCategories = activeSheet.categories.map(cat => {
-          if (cat.id === targetCatId || cat.name === catNameToSave) {
+          if (cat.id === finalTargetCatId || cat.name === finalCatNameToSave) {
             return { 
               ...cat, 
               items: [...cat.items, newItem],
@@ -2545,8 +2606,8 @@ export default function CosteoDiarioPage() {
         updatedCategories = [
           ...activeSheet.categories,
           {
-            id: targetCatId,
-            name: catNameToSave,
+            id: finalTargetCatId,
+            name: finalCatNameToSave,
             items: [newItem],
             subtotal: finalTotal,
             itemsCount: 1
@@ -2560,11 +2621,22 @@ export default function CosteoDiarioPage() {
 
 
 
+    // Retroalimentación de guardado exitoso
+    setGeneralAddSuccessMsg(`✓ "${insumoToSave}" guardado exitosamente en ${finalCatNameToSave} (${finalQty} ${finalUnit})`);
+    setTimeout(() => {
+      setGeneralAddSuccessMsg('');
+    }, 4000);
+
     setNewInsumoName('');
     setNewInsumoQtyFormula('');
     setSelectedCatalogItem(null);
+    setNewInsumoPrice('');
     setAddingCategory(null);
     setConsumoResponsable('');
+    setIsSearchOpen(false);
+    setTimeout(() => {
+      generalSearchInputRef.current?.focus();
+    }, 50);
 
     // Persistir adición en Supabase vía API
     fetch('/api/costeo-diario', {
@@ -2579,7 +2651,7 @@ export default function CosteoDiarioPage() {
           tipo: operationalType,
           insumo_id: selectedCatalogItem?.id || null,
           nombre_insumo: insumoToSave,
-          categoria: catNameToSave,
+          categoria: finalCatNameToSave,
           cantidad: finalQty,
           unidad: finalUnit,
           costo_unitario: price,
@@ -3197,6 +3269,40 @@ Trucha 8`;
       });
   };
 
+  // Catálogo efectivo y buscador comprensivo unificado para el input general superior
+  const effectiveGeneralCatalog = useMemo(() => {
+    if (activeOperationalView === 'CONSUMOS' && productosVentaList.length > 0) {
+      const prodsFormatted = productosVentaList.map(p => {
+        const price = Number(p.precio_total || p.precio_neto || p.precio_venta || p.costo_estimado || 0);
+        return {
+          id: p.id,
+          nombre: p.nombre,
+          categoria: 'Consumido de Productos para la Venta',
+          costo_unitario_kg: price,
+          precio_total: price,
+          unidad_medida: p.unidad || 'Und'
+        };
+      });
+      return [...prodsFormatted, ...catalogItems];
+    }
+    return catalogItems;
+  }, [activeOperationalView, productosVentaList, catalogItems]);
+
+  const filteredGeneralCatalog = useMemo(() => {
+    return searchCatalogComprehensive(newInsumoName, effectiveGeneralCatalog, searchCategoryFilter);
+  }, [newInsumoName, effectiveGeneralCatalog, searchCategoryFilter]);
+
+  const generalParsedAddQty = evaluateQtyFormula(newInsumoQtyFormula).value || 0;
+  const generalSelectedUnitOpt = availableUnits.find(u => u.value === newInsumoUnit);
+  const generalUnitFactor = generalSelectedUnitOpt ? generalSelectedUnitOpt.toBaseFactor(selectedCatalogItem) : 1;
+  const generalConvertedBaseQty = Number((generalParsedAddQty * generalUnitFactor).toFixed(2));
+  const generalEstimatedCost = Math.round(generalConvertedBaseQty * (Number(newInsumoPrice) || 0));
+
+  const generalPreviewCategory = useMemo(() => {
+    if (!newInsumoName.trim()) return null;
+    return determineTargetCategory(newInsumoName, selectedCatalogItem, activeOperationalView);
+  }, [newInsumoName, selectedCatalogItem, activeOperationalView]);
+
   return (
     <div className="flex flex-col h-[calc(100dvh-53px)] md:h-[calc(100vh-57px)] -m-2.5 sm:-m-4 md:-m-6 -mb-20 md:mb-0 bg-white overflow-hidden">
       
@@ -3294,50 +3400,87 @@ Trucha 8`;
                   {conteosSuccessToast}
                 </div>
               )}
+              {/* Botón Principal: Añadir Conteos (Se mantiene visible) */}
               {!isSheetCerrado && (
-                <>
                 <button
                   type="button"
-                  onClick={() => setIsClearModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 hover:text-rose-900 border border-rose-200 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
-                title="Limpiar hoja y resetear datos de base de datos"
-              >
-                <Eraser className="w-3.5 h-3.5 text-rose-500 group-hover:text-rose-700" />
-                <span>Limpiar hoja</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsImportTxtModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
-                title="Importar conteos estructurados mediante archivo TXT o fotos con IA"
-              >
-                <UploadCloud className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
-                <span>Importar Conteos</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsConteosDrawerOpen(true);
-                  setConteosTargetView(activeOperationalView === 'CONSUMOS' ? 'COCINA_CIERRE' : activeOperationalView);
-                  refreshCatalog(conteosRawText);
-                }}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
-                title="Añadir conteos de texto rápido"
-              >
-                <ClipboardList className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
-                <span>Añadir Conteos</span>
-              </button>
-                </>
+                  onClick={() => {
+                    setIsConteosDrawerOpen(true);
+                    setConteosTargetView(activeOperationalView === 'CONSUMOS' ? 'COCINA_CIERRE' : activeOperationalView);
+                    refreshCatalog(conteosRawText);
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95 whitespace-nowrap"
+                  title="Añadir conteos de texto rápido"
+                >
+                  <ClipboardList className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
+                  <span>Añadir Conteos</span>
+                </button>
               )}
-              <button
-                type="button"
-                onClick={handleExportInformePdf}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-50 hover:text-black border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95"
-                title="Exportar informe de inventarios y cierres en PDF"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-700 group-hover:text-black" />
-                <span>Exportar informe</span>
-              </button>
+
+              {/* Botón Desplegable Único de Utilidades (Exportar informe, Importar conteos, Limpiar hoja) */}
+              <div className="relative" ref={utilidadesMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsUtilidadesOpen(!isUtilidadesOpen)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95 whitespace-nowrap"
+                  title="Utilidades (Exportar informe, importar conteos, limpiar hoja)"
+                >
+                  <Settings className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
+                  <span>Utilidades</span>
+                  <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-150 ${isUtilidadesOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isUtilidadesOpen && (
+                  <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 divide-y divide-slate-100 animate-fade-in ring-1 ring-slate-900/5">
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUtilidadesOpen(false);
+                          handleExportInformePdf();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                        title="Exportar informe de inventarios y cierres en PDF"
+                      >
+                        <Download className="w-4 h-4 text-slate-500" />
+                        <span>Exportar informe</span>
+                      </button>
+
+                      {!isSheetCerrado && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUtilidadesOpen(false);
+                            setIsImportTxtModalOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                          title="Importar conteos estructurados mediante archivo TXT o fotos con IA"
+                        >
+                          <UploadCloud className="w-4 h-4 text-slate-500" />
+                          <span>Importar Conteos</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {!isSheetCerrado && (
+                      <div className="py-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUtilidadesOpen(false);
+                            setIsClearModalOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50 text-left transition-colors cursor-pointer"
+                          title="Limpiar hoja y resetear datos de base de datos"
+                        >
+                          <Eraser className="w-4 h-4 text-rose-500" />
+                          <span>Limpiar hoja</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             
@@ -3689,6 +3832,344 @@ Trucha 8`;
 
 
 
+              {/* ------------------------------------------------------------------ */}
+              {/* BARRA GENERAL UNIFICADA: + AÑADIR INSUMOS, VERDURAS, CARNES       */}
+              {/* Entrada rápida única en la parte superior con auto-categorización  */}
+              {/* ------------------------------------------------------------------ */}
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-2xs space-y-3 relative z-30 transition-all">
+                {/* Encabezado estético de la barra */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <Plus className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2 flex-wrap">
+                        <span>Añadir Insumo o Conteo General</span>
+                        <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full normal-case">
+                          ✓ Auto-clasifica en Carnes, Verduras, Granos, Bebidas o Desechables
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Escribe o busca cualquier insumo. El sistema lo asignará y ubicará automáticamente en su sección sin tener que adivinar la categoría.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Contexto de la vista operativa */}
+                  <div className="flex items-center gap-1.5 text-[11px] self-start sm:self-auto shrink-0 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                    <span className="text-slate-400">Registrando en:</span>
+                    <span className="font-bold text-slate-800">
+                      {activeOperationalView === 'TRASLADOS' && 'Traslados Bodega a Cocina'}
+                      {activeOperationalView === 'COCINA_APERTURA' && 'Cocina Apertura'}
+                      {activeOperationalView === 'DEVOLUCIONES' && 'Devoluciones Cocina a Bodega'}
+                      {activeOperationalView === 'COCINA_CIERRE' && 'Cocina Cierre'}
+                      {activeOperationalView === 'CONSUMOS' && 'Consumos'}
+                      {activeOperationalView === 'BODEGA_APERTURA' && 'Bodega Apertura'}
+                      {activeOperationalView === 'BODEGA_CIERRE' && 'Bodega Cierre'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Formulario unificado de entrada en una sola línea responsiva */}
+                <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2">
+                  {/* 1. Buscador Inteligente en todo el catálogo */}
+                  <div className="relative flex-1 min-w-[260px] z-50">
+                    <div className="relative flex items-center z-10">
+                      <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                      <input
+                        ref={generalSearchInputRef}
+                        type="text"
+                        value={newInsumoName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewInsumoName(val);
+                          setIsSearchOpen(true);
+                          const exact = effectiveGeneralCatalog.find(
+                            it => (it.nombre || it.insumo || '').toLowerCase() === val.trim().toLowerCase()
+                          );
+                          if (exact) {
+                            const price = Number(exact.costo_unitario_kg || exact.precio_total || exact.precio_neto || exact.precio_venta || 0);
+                            if (price > 0) setNewInsumoPrice(price);
+                            setSelectedCatalogItem(exact);
+                            const units = getAllowedUnitsForInsumo(exact);
+                            setAvailableUnits(units);
+                            setNewInsumoUnit(units[0].value);
+                          }
+                        }}
+                        onFocus={() => setIsSearchOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !isSearchOpen) {
+                            e.preventDefault();
+                            addQtyInputRef.current?.focus();
+                          }
+                        }}
+                        placeholder={
+                          activeOperationalView === 'CONSUMOS'
+                            ? "Buscar insumo o producto para venta (ej: Punta de anca, Gatorade, Tomate)..."
+                            : "Buscar cualquier insumo (ej: Punta de anca, Tomate, Arroz, Vasos, Cerveza)..."
+                        }
+                        className="w-full pl-9 pr-8 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all font-medium placeholder:text-slate-400 shadow-2xs"
+                      />
+                      {newInsumoName && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewInsumoName('');
+                            setSelectedCatalogItem(null);
+                          }}
+                          className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                          title="Limpiar"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Backdrop invisible para cerrar dropdown al hacer clic afuera */}
+                    {isSearchOpen && (
+                      <div
+                        className="fixed inset-0 z-40 bg-transparent"
+                        onClick={() => setIsSearchOpen(false)}
+                      />
+                    )}
+
+                    {/* Dropdown de Autocompletado del Catálogo con todas las categorías */}
+                    {isSearchOpen && (
+                      <div className="absolute left-0 top-full mt-1.5 w-full sm:w-[500px] max-h-84 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl z-50 divide-y divide-slate-100 animate-fade-in ring-1 ring-slate-900/10">
+                        {/* Píldoras de filtro rápido por categoría */}
+                        <div className="p-2 bg-slate-50 border-b border-slate-100 flex items-center gap-1 overflow-x-auto no-scrollbar">
+                          {[
+                            { id: 'TODOS', label: 'Todos' },
+                            { id: 'CARNES', label: '🥩 Carnes' },
+                            { id: 'VERDURAS', label: '🥬 Verduras' },
+                            { id: 'GRANOS', label: '🌾 Granos' },
+                            { id: 'DESECHABLES', label: '📦 Desechables' },
+                            { id: 'BEBIDAS', label: '🥤 Bebidas' },
+                            { id: 'HUEVOS', label: '🥚 Lácteos/Huevos' }
+                          ].map(pill => (
+                            <button
+                              key={pill.id}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setSearchCategoryFilter(pill.id);
+                              }}
+                              className={`px-2 py-0.5 rounded-md whitespace-nowrap text-[10px] font-medium transition-colors ${
+                                searchCategoryFilter === pill.id
+                                  ? 'bg-slate-900 text-white font-semibold'
+                                  : 'bg-white hover:bg-slate-200 text-slate-600 border border-slate-200'
+                              }`}
+                            >
+                              {pill.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {filteredGeneralCatalog.length > 0 ? (
+                          filteredGeneralCatalog.slice(0, 20).map((cItem) => {
+                            const stdW = cItem.peso_estandar_porcion_kg || (cItem.peso_porc_gramos ? cItem.peso_porc_gramos / 1000 : 0);
+                            return (
+                              <div
+                                key={cItem.id || cItem.codigo || cItem.nombre || cItem.insumo}
+                                onMouseDown={() => handleSelectCatalogItem(cItem)}
+                                className="p-2.5 px-3.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                              >
+                                <div className="flex-1 min-w-0 pr-2">
+                                  <div className="font-semibold text-slate-900 flex items-center gap-1.5 truncate">
+                                    <span>{cItem.nombre || cItem.insumo}</span>
+                                  </div>
+                                  <div className="mt-0.5">
+                                    <span className={`inline-block text-[9px] px-1.5 py-0.2 rounded border font-medium uppercase tracking-wide ${getCategoryBadgeStyle(cItem.categoria)}`}>
+                                      {cItem.categoria}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="font-mono font-medium text-slate-800 text-xs">
+                                    ${(cItem.costo_unitario_kg || cItem.precio_total || 0).toLocaleString('es-CO')}/{cItem.unidad_medida || 'Kg'}
+                                  </div>
+                                  {stdW > 0 && (
+                                    <span className="text-[9px] bg-amber-50 text-amber-700 px-1 py-0.2 rounded border border-amber-200/80">
+                                      {Math.round(stdW * 1000)}g/porc
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-4 text-center text-xs text-slate-400">
+                            No se encontraron insumos para &ldquo;{newInsumoName}&rdquo; en el catálogo. Puedes agregarlo escribiendo los valores y haciendo clic en Guardar.
+                          </div>
+                        )}
+
+                        {/* Pie informativo */}
+                        <div className="p-2 px-3.5 bg-slate-50 text-[10px] text-slate-500 border-t border-slate-100 flex items-center justify-between">
+                          <span>Catálogo activo: {effectiveGeneralCatalog.length} insumos</span>
+                          <span>{filteredGeneralCatalog.length} coincidencias</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Campo Cantidad con soporte para fórmulas */}
+                  <div className="w-full sm:w-36 shrink-0">
+                    <input
+                      ref={addQtyInputRef}
+                      type="text"
+                      value={newInsumoQtyFormula}
+                      onChange={(e) => setNewInsumoQtyFormula(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddItem();
+                        }
+                      }}
+                      placeholder={newInsumoUnit === 'Porciones' ? 'Porciones (ej: 4)' : 'Cantidad (ej: 5 + 2)'}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-mono shadow-2xs"
+                    />
+                  </div>
+
+                  {/* 3. Selector de Unidad Parametrizado */}
+                  <div className="w-full sm:w-28 shrink-0">
+                    <select
+                      value={newInsumoUnit}
+                      onChange={(e) => setNewInsumoUnit(e.target.value)}
+                      className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:border-slate-800 cursor-pointer shadow-2xs"
+                    >
+                      {availableUnits.map((u) => (
+                        <option key={u.value} value={u.value}>
+                          {u.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 4. Costo Factura / Precio Venta */}
+                  <div className="w-full sm:w-36 shrink-0">
+                    <input
+                      type="number"
+                      value={newInsumoPrice}
+                      onChange={(e) => setNewInsumoPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddItem();
+                        }
+                      }}
+                      placeholder={activeOperationalView === 'CONSUMOS' ? 'Precio Venta ($)' : 'Costo Unit ($)'}
+                      title="Costo o precio unitario"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-mono shadow-2xs"
+                    />
+                  </div>
+
+                  {/* 5. Si es CONSUMOS: Responsable */}
+                  {activeOperationalView === 'CONSUMOS' && (
+                    <div className="w-full sm:w-36 shrink-0">
+                      <input
+                        type="text"
+                        value={consumoResponsable}
+                        onChange={(e) => setConsumoResponsable(e.target.value)}
+                        placeholder="Responsable (ej: Juan)"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-slate-800 font-sans shadow-2xs"
+                      />
+                    </div>
+                  )}
+
+                  {/* 6. Botones de Acción */}
+                  <div className="flex items-center gap-1.5 shrink-0 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleAddItem()}
+                      disabled={!newInsumoName.trim()}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                        newInsumoName.trim()
+                          ? 'bg-slate-900 hover:bg-slate-800 text-white active:scale-98'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Guardar Conteo</span>
+                    </button>
+
+                    {(newInsumoName || newInsumoQtyFormula) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewInsumoName('');
+                          setNewInsumoQtyFormula('');
+                          setSelectedCatalogItem(null);
+                          setNewInsumoPrice('');
+                          setIsSearchOpen(false);
+                        }}
+                        className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 px-2.5 py-2 rounded-lg text-xs transition-colors cursor-pointer"
+                        title="Limpiar campos"
+                      >
+                        <Eraser className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Previsualización en Vivo de Detección de Categoría y Conversión */}
+                {(newInsumoName.trim() || generalParsedAddQty > 0 || Number(newInsumoPrice) > 0) && (
+                  <div className="flex items-center gap-2.5 text-xs bg-slate-50 border border-slate-200/90 px-3 py-2 rounded-lg font-mono flex-wrap animate-fade-in">
+                    {/* Badge de Detección de Categoría Automática */}
+                    {generalPreviewCategory && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-sans font-medium text-slate-500">Se ubicará en:</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border shadow-2xs ${getCategoryBadgeStyle(generalPreviewCategory.catNameToSave)}`}>
+                          {generalPreviewCategory.catNameToSave}
+                        </span>
+                      </div>
+                    )}
+
+                    {generalParsedAddQty > 0 && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-slate-700">
+                          Cantidad: <strong>{generalParsedAddQty} {newInsumoUnit}</strong>
+                          {generalSelectedUnitOpt && generalSelectedUnitOpt.baseUnit !== newInsumoUnit && (
+                            <span className="text-slate-500 text-[11px] ml-1">
+                              (= {generalConvertedBaseQty} {generalSelectedUnitOpt.baseUnit})
+                            </span>
+                          )}
+                        </span>
+                      </>
+                    )}
+
+                    {Number(newInsumoPrice) > 0 && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-slate-700">
+                          {activeOperationalView === 'CONSUMOS' ? 'Precio Unit:' : 'Costo Unit:'}{' '}
+                          <strong>${Number(newInsumoPrice).toLocaleString('es-CO')}</strong>
+                        </span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-emerald-800 font-bold bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 shadow-2xs">
+                          Subtotal: ${generalEstimatedCost.toLocaleString('es-CO')} COP
+                        </span>
+                      </>
+                    )}
+
+                    {newInsumoUnit === 'Porciones' && (
+                      <span className="text-amber-700 text-[10px] font-sans ml-auto">
+                        ({generalParsedAddQty} porciones calculadas según ficha técnica)
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Banner Temporal de Notificación de Guardado Exitoso */}
+                {generalAddSuccessMsg && (
+                  <div className="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-300 text-emerald-900 px-3 py-2 rounded-lg font-medium animate-fade-in shadow-2xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{generalAddSuccessMsg}</span>
+                  </div>
+                )}
+              </div>
+
               {/* Barra de utilidades: Expandir/Colapsar categorías */}
               <div className="flex items-center justify-between px-1 mb-2">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -3739,8 +4220,7 @@ Trucha 8`;
               ).map((cat) => {
                 const isCollapsed = Boolean(collapsedCategories[cat.id]);
                 const catViewTotal = calculateCategoryViewTotal(cat);
-                const isAddingHere = addingCategory === cat.id;
-
+                
                 // Filtrar items según la vista activa
                 const displayItems = cat.items.filter(it => {
                   const m = getItemMetricsForView(it);
@@ -3754,35 +4234,10 @@ Trucha 8`;
                   return m.hasEntries;
                 });
 
-                // Insumos filtrados con buscador comprensivo en TODOS los insumos del sistema
-                const effectiveSearchCatalog = (activeOperationalView === 'CONSUMOS' && cat.id === 'consumos_productos' && productosVentaList.length > 0)
-                  ? productosVentaList.map(p => {
-                      const price = Number(p.precio_total || p.precio_neto || p.precio_venta || p.costo_estimado || 0);
-                      return {
-                        id: p.id,
-                        nombre: p.nombre,
-                        categoria: 'Consumido de Productos para la Venta',
-                        costo_unitario_kg: price,
-                        precio_total: price,
-                        unidad_medida: p.unidad || 'Und'
-                      };
-                    })
-                  : catalogItems;
-                const filteredCatalog = searchCatalogComprehensive(newInsumoName, effectiveSearchCatalog, searchCategoryFilter);
-
-                // Cálculo en tiempo real de equivalencia en Kg para el formulario de ingreso
-                const parsedAddQty = evaluateQtyFormula(newInsumoQtyFormula).value || 0;
-                const selectedUnitOpt = availableUnits.find(u => u.value === newInsumoUnit);
-                const unitFactor = selectedUnitOpt ? selectedUnitOpt.toBaseFactor(selectedCatalogItem) : 1;
-                const convertedBaseQty = Number((parsedAddQty * unitFactor).toFixed(2));
-                const estimatedCost = Math.round(convertedBaseQty * (Number(newInsumoPrice) || 0));
-
                 return (
                   <div
                     key={cat.id}
-                    className={`bg-white border border-slate-200 rounded-lg shadow-2xs transition-all ${
-                      isAddingHere ? 'relative z-50 overflow-visible' : 'relative z-0 overflow-hidden'
-                    }`}
+                    className="bg-white border border-slate-200 rounded-lg shadow-2xs transition-all relative z-0 overflow-hidden"
                   >
                     
                     {/* Encabezado de Categoría Interactivo con Expandir/Contraer */}
@@ -3938,265 +4393,10 @@ Trucha 8`;
                       })}
 
                       {/* Estado Vacío */}
-                      {displayItems.length === 0 && !isAddingHere && (
+                      {displayItems.length === 0 && (
                         <div className="p-3 text-center text-xs text-slate-400 italic">
                           Sin registros activos para esta categoría en la vista seleccionada.
                         </div>
-                      )}
-
-                      {/* Fila interactiva con BUSCADOR INTELIGENTE y selector dinámico de unidades */}
-                      {isAddingHere ? (
-                        <div className="p-3 bg-slate-50/90 border-t border-slate-200 space-y-2 relative z-50 overflow-visible">
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                            {/* Input Inteligente con Búsqueda en Vivo en TODOS los insumos */}
-                            <div className="relative flex-1 min-w-[220px] z-50">
-                              <div className="relative flex items-center z-10">
-                                <Search className="absolute left-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                                <input
-                                  type="text"
-                                  value={newInsumoName}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setNewInsumoName(val);
-                                    setIsSearchOpen(true);
-                                    const exact = effectiveSearchCatalog.find(
-                                      it => (it.nombre || it.insumo || '').toLowerCase() === val.trim().toLowerCase()
-                                    );
-                                    if (exact) {
-                                      const price = Number(exact.costo_unitario_kg || exact.precio_total || exact.precio_neto || exact.precio_venta || 0);
-                                      if (price > 0) {
-                                        setNewInsumoPrice(price);
-                                      }
-                                    }
-                                  }}
-                                  onFocus={() => setIsSearchOpen(true)}
-                                  placeholder={
-                                    cat.id === 'consumos_productos'
-                                      ? "Buscar producto para venta (ej: Gatorade, Cerveza, Postre)..."
-                                      : "Buscar cualquier insumo (ej: Punta de anca, Arroz, Vasos, Huevos, Leche)..."
-                                  }
-                                  className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 shadow-2xs font-medium"
-                                  autoFocus
-                                />
-                                {newInsumoName && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setNewInsumoName('');
-                                      setSelectedCatalogItem(null);
-                                    }}
-                                    className="absolute right-2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
-                                    title="Limpiar texto"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Backdrop invisible para cerrar al hacer clic afuera */}
-                              {isSearchOpen && (
-                                <div
-                                  className="fixed inset-0 z-40 bg-transparent"
-                                  onClick={() => setIsSearchOpen(false)}
-                                />
-                              )}
-
-                              {/* Dropdown de Autocompletado del Catálogo con todas las categorías */}
-                              {isSearchOpen && (
-                                <div className="absolute left-0 top-full mt-1.5 w-full sm:w-[480px] max-h-80 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-2xl z-50 divide-y divide-slate-100 animate-fade-in ring-1 ring-slate-900/5">
-                                  {/* Píldoras de filtro rápido por categoría */}
-                                  <div className="p-2 bg-slate-50 border-b border-slate-100 flex items-center gap-1 overflow-x-auto no-scrollbar">
-                                    {[
-                                      { id: 'TODOS', label: 'Todos' },
-                                      { id: 'CARNES', label: '🥩 Carnes' },
-                                      { id: 'VERDURAS', label: '🥬 Verduras' },
-                                      { id: 'GRANOS', label: '🌾 Granos' },
-                                      { id: 'DESECHABLES', label: '📦 Desechables' },
-                                      { id: 'BEBIDAS', label: '🥤 Bebidas' },
-                                      { id: 'HUEVOS', label: '🥚 Lácteos/Huevos' }
-                                    ].map(pill => (
-                                      <button
-                                        key={pill.id}
-                                        type="button"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault();
-                                          setSearchCategoryFilter(pill.id);
-                                        }}
-                                        className={`px-2 py-0.5 rounded-md whitespace-nowrap text-[10px] font-medium transition-colors ${
-                                          searchCategoryFilter === pill.id
-                                            ? 'bg-slate-900 text-white font-semibold'
-                                            : 'bg-white hover:bg-slate-200 text-slate-600 border border-slate-200'
-                                        }`}
-                                      >
-                                        {pill.label}
-                                      </button>
-                                    ))}
-                                  </div>
-
-                                  {filteredCatalog.length > 0 ? (
-                                    filteredCatalog.slice(0, 18).map((cItem) => {
-                                      const stdW = cItem.peso_estandar_porcion_kg || (cItem.peso_porc_gramos ? cItem.peso_porc_gramos / 1000 : 0);
-                                      return (
-                                        <div
-                                          key={cItem.id || cItem.codigo || cItem.nombre || cItem.insumo}
-                                          onMouseDown={() => handleSelectCatalogItem(cItem)}
-                                          className="p-2 px-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors"
-                                        >
-                                          <div className="flex-1 min-w-0 pr-2">
-                                            <div className="font-semibold text-slate-900 flex items-center gap-1.5 truncate">
-                                              <span>{cItem.nombre || cItem.insumo}</span>
-                                            </div>
-                                            <div className="mt-0.5">
-                                              <span className={`inline-block text-[9px] px-1.5 py-0.2 rounded border font-medium uppercase tracking-wide ${getCategoryBadgeStyle(cItem.categoria)}`}>
-                                                {cItem.categoria}
-                                              </span>
-                                            </div>
-                                          </div>
-                                          <div className="text-right shrink-0">
-                                            <div className="font-mono font-medium text-slate-800 text-xs">
-                                              ${(cItem.costo_unitario_kg || 0).toLocaleString('es-CO')}/{cItem.unidad_medida || 'Kg'}
-                                            </div>
-                                            {stdW > 0 && (
-                                              <span className="text-[9px] bg-amber-50 text-amber-700 px-1 py-0.2 rounded border border-amber-200/80">
-                                                {Math.round(stdW * 1000)}g/porc
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })
-                                  ) : (
-                                    <div className="p-4 text-center text-xs text-slate-400">
-                                      No se encontraron insumos para &ldquo;{newInsumoName}&rdquo; en ninguna categoría.
-                                    </div>
-                                  )}
-
-                                  {/* Pie informativo */}
-                                  <div className="p-1.5 px-3 bg-slate-50 text-[10px] text-slate-500 border-t border-slate-100 flex items-center justify-between">
-                                    <span>Catálogo activo: {catalogItems.length} insumos</span>
-                                    <span>{filteredCatalog.length} coincidencias</span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Campo Cantidad con soporte para fórmulas */}
-                            <input
-                              ref={addQtyInputRef}
-                              type="text"
-                              value={newInsumoQtyFormula}
-                              onChange={(e) => setNewInsumoQtyFormula(e.target.value)}
-                              placeholder={newInsumoUnit === 'Porciones' ? 'Porciones (ej: 3)' : 'Cantidad (ej: 5 + 2)'}
-                              className="w-full sm:w-32 px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 font-mono shadow-2xs"
-                            />
-
-                            {/* Selector de Unidad Parametrizado según el Insumo */}
-                            <select
-                              value={newInsumoUnit}
-                              onChange={(e) => setNewInsumoUnit(e.target.value)}
-                              className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:border-slate-500"
-                            >
-                              {availableUnits.map((u) => (
-                                <option key={u.value} value={u.value}>
-                                  {u.label}
-                                </option>
-                              ))}
-                            </select>
-
-                            {/* Costo Factura / Precio Venta (Autollenado, editable) */}
-                            <input
-                              type="number"
-                              value={newInsumoPrice}
-                              onChange={(e) => setNewInsumoPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                              placeholder={cat.id === 'consumos_productos' ? 'Precio Venta ($)' : 'Costo Unitario ($)'}
-                              title={cat.id === 'consumos_productos' ? 'Precio de Venta Unitario' : 'Costo Factura Unitario'}
-                              className="w-full sm:w-32 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 font-mono"
-                            />
-
-                            {/* Botones de Confirmación */}
-                            <div className="flex items-center gap-1.5 justify-end">
-                              {activeOperationalView === 'CONSUMOS' && (
-                              <input
-                                type="text"
-                                value={consumoResponsable}
-                                onChange={(e) => setConsumoResponsable(e.target.value)}
-                                placeholder="Responsable (ej: Juan)"
-                                className="w-full sm:w-36 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 focus:outline-none focus:border-slate-500 shadow-2xs font-sans"
-                              />
-                            )}
-                            <button
-                                onClick={() => handleAddItem(cat.id)}
-                                className="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                                <span>Guardar</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setAddingCategory(null);
-                                  setNewInsumoName('');
-                                  setSelectedCatalogItem(null);
-                                  setIsSearchOpen(false);
-                                }}
-                                className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Previsualización en Vivo de la Conversión Automática y TOTAL */}
-                          {(parsedAddQty > 0 || Number(newInsumoPrice) > 0) && (
-                            <div className="flex items-center gap-2.5 text-xs bg-amber-50/90 border border-amber-200/90 px-3 py-1.5 rounded-md font-mono flex-wrap">
-                              <span className="text-amber-900 font-semibold">
-                                {cat.id === 'consumos_productos' ? '✓ Consumo Venta:' : '✓ Conversión / Registro:'}
-                              </span>
-                              <span className="text-slate-800">
-                                <strong>{parsedAddQty || 0} {newInsumoUnit}</strong>
-                                {selectedUnitOpt && selectedUnitOpt.baseUnit !== newInsumoUnit && (
-                                  <span className="text-slate-500 text-[11px] ml-1">
-                                    (= {convertedBaseQty} {selectedUnitOpt.baseUnit})
-                                  </span>
-                                )}
-                              </span>
-                              <span className="text-slate-400">•</span>
-                              <span className="text-slate-700">
-                                {cat.id === 'consumos_productos' ? 'Precio Unitario:' : 'Costo Unitario:'}{' '}
-                                <strong>${Number(newInsumoPrice || 0).toLocaleString('es-CO')}</strong>
-                              </span>
-                              <span className="text-slate-400">•</span>
-                              <span className="text-emerald-800 font-bold bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 shadow-2xs">
-                                Total: ${estimatedCost.toLocaleString('es-CO')} COP
-                              </span>
-                              {newInsumoUnit === 'Porciones' && (
-                                <span className="text-amber-700 text-[10px] block w-full mt-0.5 font-sans">
-                                  ({parsedAddQty} porciones calculadas en base a ficha técnica)
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        /* Botón minimalista estilo GitHub */
-                        <button
-                          onClick={() => {
-                            setAddingCategory(cat.id);
-                            setNewInsumoName('');
-                            setNewInsumoQtyFormula('');
-                            setSelectedCatalogItem(null);
-                            const defUnits = getAllowedUnitsForInsumo();
-                            setAvailableUnits(defUnits);
-                            setNewInsumoUnit(defUnits[0].value);
-                          }}
-                          className="w-full p-2.5 px-4 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center gap-1.5 transition-colors border-t border-slate-100 text-left cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5 text-slate-400" />
-                          <span>
-                            {activeOperationalView === 'COCINA_CIERRE'
-                              ? `+ Añadir conteo manual de cierre a ${cat.name}...`
-                              : `Añadir insumo a ${cat.name}...`}
-                          </span>
-                        </button>
                       )}
                     </div>
                       </>
