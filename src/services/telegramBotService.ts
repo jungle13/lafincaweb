@@ -797,18 +797,28 @@ export async function registrarUsuarioTelegram(
   }
 }
 
-export async function enviarMensajeTelegram(chatId: number, texto: string) {
+export async function enviarMensajeTelegram(chatId: number, texto: string, replyMarkup?: any) {
   if (!TELEGRAM_TOKEN) {
     console.error('TELEGRAM_BOT_TOKEN no configurado');
     return;
   }
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
   const cleanText = texto.length > 4000 ? texto.slice(0, 3950) + '\n\n...(información recortada)' : texto;
+
+  const defaultMarkup = replyMarkup || {
+    inline_keyboard: [[{ text: '🏠 Menú Principal', callback_data: 'menu_principal' }]]
+  };
+
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: cleanText, parse_mode: 'Markdown' }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: cleanText,
+        parse_mode: 'Markdown',
+        reply_markup: defaultMarkup
+      }),
     });
 
     const data = await res.json();
@@ -816,7 +826,11 @@ export async function enviarMensajeTelegram(chatId: number, texto: string) {
       await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: cleanText }),
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: cleanText,
+          reply_markup: defaultMarkup
+        }),
       });
     }
   } catch (err: any) {
