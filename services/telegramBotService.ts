@@ -650,17 +650,24 @@ export async function consultarVentas(fecha?: string, producto?: string, fecha_f
 
 export async function consultarCosteoDiario(fecha?: string) {
   try {
+    let limitRows = 10;
     let query = supabase
       .from('costeo_diario')
       .select('fecha, titulo, pos_sales, costo_bruto, devoluciones, costo_neto, food_cost_porcentaje, costo_apertura, costo_cierre, consumo_real, costo_consumos, estado')
-      .order('fecha', { ascending: false })
-      .limit(fecha ? 1 : 5);
+      .order('fecha', { ascending: false });
 
     if (fecha) {
       const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha);
-      if (fechaExacta) query = query.eq('fecha', fechaExacta);
-      else if (fechaInicio && fechaFin) query = query.gte('fecha', fechaInicio).lte('fecha', fechaFin);
+      if (fechaExacta) {
+        limitRows = 1;
+        query = query.eq('fecha', fechaExacta);
+      } else if (fechaInicio && fechaFin) {
+        limitRows = 35;
+        query = query.gte('fecha', fechaInicio).lte('fecha', fechaFin);
+      }
     }
+
+    query = query.limit(limitRows);
 
     const { data, error } = await query;
     if (error) throw error;

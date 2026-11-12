@@ -97,6 +97,15 @@ function formatMesNombre(ym: string): string {
   return `${MESES_NOMBRES[m] || m} ${y}`;
 }
 
+function getRangoMes(ym: string): { inicio: string; fin: string } {
+  const [y, m] = ym.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    inicio: `${ym}-01`,
+    fin: `${ym}-${String(lastDay).padStart(2, '0')}`
+  };
+}
+
 // ============================================================================
 // 2. GENERADORES REUTILIZABLES DE SELECCIÓN MES Y DÍA
 // ============================================================================
@@ -148,12 +157,17 @@ export async function generarSelectorDia(
   tabla: string,
   volverCallback: string
 ): Promise<{ texto: string; markup: InlineKeyboardMarkup }> {
-  const { data } = await supabase
+  const rango = getRangoMes(ym);
+  const { data, error } = await supabase
     .from(tabla)
     .select('fecha')
-    .gte('fecha', `${ym}-01`)
-    .lte('fecha', `${ym}-31`)
+    .gte('fecha', rango.inicio)
+    .lte('fecha', rango.fin)
     .order('fecha', { ascending: true });
+
+  if (error) {
+    console.error(`Error consultando fechas en ${tabla} para ${ym}:`, error);
+  }
 
   const diasSet = new Set<string>();
   (data || []).forEach(r => {
@@ -331,11 +345,12 @@ export async function generarRespuestaVentasUltima(): Promise<{ texto: string; m
 }
 
 export async function generarRespuestaVentasMes(ym: string): Promise<{ texto: string; markup: InlineKeyboardMarkup }> {
+  const rango = getRangoMes(ym);
   const { data: rows, error } = await supabase
     .from('ventas_diarias')
     .select('fecha, dia_semana, total_articulos, venta_neta, impuesto_consumo, gran_total')
-    .gte('fecha', `${ym}-01`)
-    .lte('fecha', `${ym}-31`)
+    .gte('fecha', rango.inicio)
+    .lte('fecha', rango.fin)
     .order('fecha', { ascending: false });
 
   if (error || !rows || rows.length === 0) {
@@ -423,11 +438,12 @@ export async function generarRespuestaVentasDia(fecha: string): Promise<{ texto:
 }
 
 export async function generarRespuestaVentasTop(ym: string): Promise<{ texto: string; markup: InlineKeyboardMarkup }> {
+  const rango = getRangoMes(ym);
   const { data: ranking } = await supabase
     .from('ventas_detalle')
     .select('nombre_producto, cantidad, gran_total')
-    .gte('fecha', `${ym}-01`)
-    .lte('fecha', `${ym}-31`)
+    .gte('fecha', rango.inicio)
+    .lte('fecha', rango.fin)
     .order('cantidad', { ascending: false })
     .limit(300);
 
