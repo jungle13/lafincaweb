@@ -21,6 +21,17 @@ export async function procesarFlujoBorradorTelegram(
     .eq('chat_id', chatId)
     .maybeSingle();
 
+  // Si el borrador pertenece al Asistente de Consumos o Buscador de Precios, no interceptar aquí
+  if (
+    borradorRow &&
+    (borradorRow.estado === 'ASISTENTE_CONSUMO' ||
+      borradorRow.estado === 'BUSCAR_PRECIO_INSUMO' ||
+      !borradorRow.items ||
+      !Array.isArray(borradorRow.items.items))
+  ) {
+    return { interceptado: false };
+  }
+
   // Caso: Cancelar borrador
   if (borradorRow && (tNorm === 'cancelar' || tNorm === 'borrar borrador' || tNorm === 'descartar')) {
     await supabase.from('telegram_borradores_ingesta').delete().eq('chat_id', chatId);

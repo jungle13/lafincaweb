@@ -617,13 +617,17 @@ export async function consultarVentas(fecha?: string, producto?: string, fecha_f
       };
     }
 
+    const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha, fecha_fin);
+    let limitRows = 35;
+    if (fechaExacta) limitRows = 1;
+    else if (fechaInicio && fechaFin) limitRows = 35;
+
     let query = supabase
       .from('ventas_diarias')
       .select('fecha, dia_semana, total_articulos, venta_neta, gran_total, total_platos_distintos, ticket_promedio')
       .order('fecha', { ascending: false })
-      .limit(fecha ? (fecha_fin ? 7 : 1) : 7);
+      .limit(limitRows);
 
-    const { fechaExacta, fechaInicio, fechaFin } = parsearFiltroFecha(fecha, fecha_fin);
     if (fechaExacta) query = query.eq('fecha', fechaExacta);
     else if (fechaInicio && fechaFin) query = query.gte('fecha', fechaInicio).lte('fecha', fechaFin);
 

@@ -1644,11 +1644,13 @@ export default function CosteoDiarioPage() {
       .then(data => {
         if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
           setSheets(data.sheets);
-          const latest = data.sheets[0];
-          const latestMonth = latest.month || latest.dateStr.slice(0, 7);
-          setSelectedMonth(latestMonth);
-          setOpenTabs([latest.id]);
-          setActiveTabId(latest.id);
+          const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+          const fechaParam = params?.get('fecha');
+          const targetSheet = (fechaParam && data.sheets.find((s: any) => s.dateStr === fechaParam)) || data.sheets[0];
+          const targetMonth = targetSheet.month || targetSheet.dateStr.slice(0, 7);
+          setSelectedMonth(targetMonth);
+          setOpenTabs([targetSheet.id]);
+          setActiveTabId(targetSheet.id);
         }
       })
       .catch(err => console.error('Error fetching costeo sheets:', err))

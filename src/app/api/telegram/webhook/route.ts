@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import {
   procesarMensajeTelegram,
   registrarUsuarioTelegram,
-  enviarMensajeTelegram,
   guardarMensajeChat,
 } from '@/services/telegramBotService';
 import {
@@ -12,7 +11,6 @@ import {
 import { procesarFlujoBorradorTelegram } from '@/services/gestorBorradoresTelegram';
 import {
   enviarMensajeConMenu,
-  editarMensajeTelegram,
   responderCallbackQuery,
   getMenuPrincipalKeyboard,
   getSubmenuVentasKeyboard,
@@ -20,24 +18,44 @@ import {
   getSubmenuConsumosKeyboard,
   getSubmenuCajaKeyboard,
   getSubmenuComprasKeyboard,
-  getSubmenuStockKeyboard,
-  generarRespuestaVentas,
-  generarRespuestaCosteo,
+  getSubmenuPreciosKeyboard,
+  generarSelectorMes,
+  generarSelectorDia,
+  generarRespuestaVentasUltima,
+  generarRespuestaVentasMes,
+  generarRespuestaVentasDia,
+  generarRespuestaVentasTop,
+  generarRespuestaLiquidacionDia,
+  generarRespuestaTrasladosDia,
+  generarRespuestaCierresDia,
   generarRespuestaConsumosConsulta,
-  generarRespuestaCaja,
+  generarRespuestaCuadreCaja,
+  generarRespuestaSalidasCajaPorDia,
+  generarRespuestaCajaBloques,
+  generarRespuestaCajaCajeras,
   generarRespuestaCompras,
-  generarRespuestaStock,
+  generarRespuestaPreciosPorCategoria,
+  iniciarBusquedaPrecioInsumo,
+  buscarPrecioInsumoPorTexto,
   iniciarAsistenteConsumo,
   setFechaConsumo,
-  procesarTextoItemConsumo,
-  mostrarPasoResponsable,
+  configurarPlatoEnState,
+  configurarInsumoEnState,
   setResponsableConsumo,
   guardarConsumoDefinitivo,
-  ConsumoDraftState
+  procesarMensajeEnAsistenteConsumo,
+  ConsumoDraftState,
+  InlineKeyboardMarkup
 } from '@/services/telegramMenuService';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+
+// Helper para enviar SIEMPRE como un mensaje nuevo en Telegram (conserva el historial completo del chat)
+async function responderNuevoMensaje(chatId: number, texto: string, markup?: InlineKeyboardMarkup) {
+  await enviarMensajeConMenu(chatId, texto, markup);
+  await guardarMensajeChat(chatId, 'model', texto);
+}
 
 export async function POST(req: Request) {
   try {
@@ -50,10 +68,9 @@ export async function POST(req: Request) {
       const cb = update.callback_query;
       const callbackQueryId = cb.id;
       const chatId = cb.message?.chat?.id;
-      const messageId = cb.message?.message_id;
-      const action = cb.data;
+      const action: string = cb.data || '';
 
-      if (!chatId || !messageId) {
+      if (!chatId) {
         return NextResponse.json({ ok: true, note: 'No callback context' });
       }
 
@@ -61,116 +78,222 @@ export async function POST(req: Request) {
 
       // 1.1. Menú Principal
       if (action === 'menu_principal') {
+        await supabase.from('telegram_borradores_ingesta').delete().eq('chat_id', chatId);
         const welcome = `🥩 *Panel Operativo • Restaurante La Finca*
 
 Selecciona una opción rápida para consultar datos en tiempo real o registrar consumos del día:`;
-        await editarMensajeTelegram(chatId, messageId, welcome, getMenuPrincipalKeyboard());
+        await responderNuevoMensaje(chatId, welcome, getMenuPrincipalKeyboard());
         return NextResponse.json({ ok: true, menu: 'principal' });
       }
 
       // 1.2. Submenús principales
       if (action === 'sub_ventas') {
         const texto = `📊 *Módulo de Ventas y Facturación*\nElige qué información deseas consultar:`;
-        await editarMensajeTelegram(chatId, messageId, texto, getSubmenuVentasKeyboard());
+        await responderNuevoMensaje(chatId, texto, getSubmenuVentasKeyboard());
         return NextResponse.json({ ok: true });
       }
 
       if (action === 'sub_costeo') {
         const texto = `🥩 *Módulo de Costeo Diario y Cocina*\nElige qué información deseas consultar:`;
-        await editarMensajeTelegram(chatId, messageId, texto, getSubmenuCosteoKeyboard());
+        await responderNuevoMensaje(chatId, texto, getSubmenuCosteoKeyboard());
         return NextResponse.json({ ok: true });
       }
 
       if (action === 'sub_consumos') {
-        // Limpiar cualquier estado previo si cancela
         await supabase.from('telegram_borradores_ingesta').delete().eq('chat_id', chatId);
-        const texto = `🍽️ *Módulo de Consumos (Platos e Insumos)*\nElige si deseas consultar existencias consumidas o ingresar un nuevo consumo:`;
-        await editarMensajeTelegram(chatId, messageId, texto, getSubmenuConsumosKeyboard());
+        const texto = `🍽️ *Módulo de Consumos (Platos e Insumos)*\nElige si deseas consultar consumos registrados o ingresar uno nuevo:`;
+        await responderNuevoMensaje(chatId, texto, getSubmenuConsumosKeyboard());
         return NextResponse.json({ ok: true });
       }
 
       if (action === 'sub_caja') {
         const texto = `💼 *Módulo de Libro de Caja Menor*\nElige qué información deseas consultar:`;
-        await editarMensajeTelegram(chatId, messageId, texto, getSubmenuCajaKeyboard());
+        await responderNuevoMensaje(chatId, texto, getSubmenuCajaKeyboard());
         return NextResponse.json({ ok: true });
       }
 
       if (action === 'sub_compras') {
         const texto = `🛒 *Módulo de Compras y Proveedores*\nElige qué información deseas consultar:`;
-        await editarMensajeTelegram(chatId, messageId, texto, getSubmenuComprasKeyboard());
+        await responderNuevoMensaje(chatId, texto, getSubmenuComprasKeyboard());
         return NextResponse.json({ ok: true });
       }
 
-      if (action === 'sub_stock') {
-        const texto = `📦 *Módulo de Stock Físico y Catálogo Maestro*\nElige qué información deseas consultar:`;
-        await editarMensajeTelegram(chatId, messageId, texto, getSubmenuStockKeyboard());
+      if (action === 'sub_precios') {
+        await supabase.from('telegram_borradores_ingesta').delete().eq('chat_id', chatId);
+        const texto = `💲 *Precios Oficiales de Insumos (Catálogo Maestro)*\nSelecciona una categoría o escribe el nombre de un insumo para ver sus precios:`;
+        await responderNuevoMensaje(chatId, texto, getSubmenuPreciosKeyboard());
         return NextResponse.json({ ok: true });
       }
 
+      // -----------------------------------------------------------------------
       // 1.3. Opciones de Ventas
-      if (action === 'vta_ultima' || action === 'vta_mes' || action === 'vta_top') {
-        const tipo = action === 'vta_ultima' ? 'ultima' : action === 'vta_mes' ? 'mes' : 'top';
-        const res = await generarRespuestaVentas(tipo);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+      // -----------------------------------------------------------------------
+      if (action === 'vta_ultima') {
+        const res = await generarRespuestaVentasUltima();
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.4. Opciones de Costeo Diario
-      if (action === 'costeo_ultima' || action === 'costeo_traslados' || action === 'costeo_cierres') {
-        const tipo = action === 'costeo_ultima' ? 'ultima' : action === 'costeo_traslados' ? 'traslados' : 'cierres';
-        const res = await generarRespuestaCosteo(tipo);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+      if (action === 'vta_ask_mes_consolidado') {
+        const res = await generarSelectorMes('vta_mes_sel', 'Consolidado de Ventas por Mes', 'ventas_diarias', 'sub_ventas');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.5. Opciones de Caja Menor
-      if (action === 'caja_cuadre' || action === 'caja_bloques' || action === 'caja_cajeras') {
-        const tipo = action === 'caja_cuadre' ? 'cuadre' : action === 'caja_bloques' ? 'bloques' : 'cajeras';
-        const res = await generarRespuestaCaja(tipo);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+      if (action.startsWith('vta_mes_sel_mes_')) {
+        const ym = action.replace('vta_mes_sel_mes_', '');
+        const res = await generarRespuestaVentasMes(ym);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.6. Opciones de Compras
-      if (action === 'cmp_ultimas' || action === 'cmp_carnes' || action === 'cmp_verduras') {
-        const tipo = action === 'cmp_ultimas' ? 'ultimas' : action === 'cmp_carnes' ? 'carnes' : 'verduras';
-        const res = await generarRespuestaCompras(tipo);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+      if (action === 'vta_ask_mes_dia') {
+        const res = await generarSelectorMes('vta_dia_sel', 'Ventas Diarias', 'ventas_diarias', 'sub_ventas');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.7. Opciones de Stock
-      if (action === 'stk_carnes' || action === 'stk_precios') {
-        const tipo = action === 'stk_carnes' ? 'carnes' : 'precios';
-        const res = await generarRespuestaStock(tipo);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+      if (action.startsWith('vta_dia_sel_mes_') || action.startsWith('vta_dia_mes_')) {
+        const ym = action.replace('vta_dia_sel_mes_', '').replace('vta_dia_mes_', '');
+        const res = await generarSelectorDia('vta', ym, 'Ventas Diarias', 'ventas_diarias', 'vta_ask_mes_dia');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.8. Opciones de Consumos: Consulta
-      if (action === 'csm_consultar') {
+      if (action.startsWith('vta_dia_')) {
+        const fecha = action.replace('vta_dia_', '');
+        const res = await generarRespuestaVentasDia(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'vta_ask_mes_top') {
+        const res = await generarSelectorMes('vta_top_sel', 'Top Platos Más Vendidos', 'ventas_diarias', 'sub_ventas');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('vta_top_sel_mes_')) {
+        const ym = action.replace('vta_top_sel_mes_', '');
+        const res = await generarRespuestaVentasTop(ym);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      // -----------------------------------------------------------------------
+      // 1.4. Opciones de Costeo Diario Cocina
+      // -----------------------------------------------------------------------
+      if (action === 'costeo_ultima') {
+        const { data: latest } = await supabase.from('costeo_diario').select('fecha').order('fecha', { ascending: false }).limit(1).maybeSingle();
+        const fecha = latest?.fecha || new Date().toISOString().split('T')[0];
+        const res = await generarRespuestaLiquidacionDia(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'costeo_ask_mes_liq') {
+        const res = await generarSelectorMes('costeo_liq', 'Liquidación Hoja de Costeo', 'costeo_diario', 'sub_costeo');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('costeo_liq_mes_')) {
+        const ym = action.replace('costeo_liq_mes_', '');
+        const res = await generarSelectorDia('costeo_liq', ym, 'Liquidación Costeo', 'costeo_diario', 'costeo_ask_mes_liq');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('costeo_liq_dia_')) {
+        const fecha = action.replace('costeo_liq_dia_', '');
+        const res = await generarRespuestaLiquidacionDia(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'costeo_ask_mes_tras') {
+        const res = await generarSelectorMes('costeo_tras', 'Traslados Bodega a Cocina', 'costeo_diario', 'sub_costeo');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('costeo_tras_mes_')) {
+        const ym = action.replace('costeo_tras_mes_', '');
+        const res = await generarSelectorDia('costeo_tras', ym, 'Traslados Cocina', 'costeo_diario', 'costeo_ask_mes_tras');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('costeo_tras_dia_')) {
+        const fecha = action.replace('costeo_tras_dia_', '');
+        const res = await generarRespuestaTrasladosDia(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'costeo_ask_mes_cie') {
+        const res = await generarSelectorMes('costeo_cie', 'Cierres de Inventario', 'costeo_diario', 'sub_costeo');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('costeo_cie_mes_')) {
+        const ym = action.replace('costeo_cie_mes_', '');
+        const res = await generarSelectorDia('costeo_cie', ym, 'Cierres Cocina/Bodega', 'costeo_diario', 'costeo_ask_mes_cie');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('costeo_cie_dia_')) {
+        const fecha = action.replace('costeo_cie_dia_', '');
+        const res = await generarRespuestaCierresDia(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      // -----------------------------------------------------------------------
+      // 1.5. Opciones de Consumos
+      // -----------------------------------------------------------------------
+      if (action === 'csm_consultar_hoy') {
         const res = await generarRespuestaConsumosConsulta();
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.9. Asistente de Consumos: Iniciar
+      if (action === 'csm_ask_mes_con') {
+        const res = await generarSelectorMes('csm_con', 'Consultar Consumos', 'costeo_diario', 'sub_consumos');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('csm_con_mes_')) {
+        const ym = action.replace('csm_con_mes_', '');
+        const res = await generarSelectorDia('csm_con', ym, 'Consultar Consumos', 'costeo_diario', 'csm_ask_mes_con');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('csm_con_dia_')) {
+        const fecha = action.replace('csm_con_dia_', '');
+        const res = await generarRespuestaConsumosConsulta(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
       if (action === 'csm_ingresar_plato' || action === 'csm_ingresar_insumo') {
         const tipo = action === 'csm_ingresar_plato' ? 'PLATO_VENTA' : 'INSUMO_CATALOGO';
         const res = await iniciarAsistenteConsumo(chatId, tipo);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.10. Asistente de Consumos: Set Fecha
       if (action.startsWith('csm_set_fecha_')) {
         const fecha = action.replace('csm_set_fecha_', '');
         const res = await setFechaConsumo(chatId, fecha);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.11. Asistente de Consumos: Pick Plato de Venta
       if (action.startsWith('csm_pick_p_')) {
         const parts = action.replace('csm_pick_p_', '').split('_');
         const pId = parts[0];
@@ -180,25 +303,12 @@ Selecciona una opción rápida para consultar datos en tiempo real o registrar c
         if (prod) {
           const { data: row } = await supabase.from('telegram_borradores_ingesta').select('items').eq('chat_id', chatId).maybeSingle();
           const state: ConsumoDraftState = row?.items || { chatId, tipoConsumo: 'PLATO_VENTA', paso: 'RESPONSABLE' };
-
-          state.itemId = prod.id;
-          state.nombreItem = prod.nombre;
-          state.categoria = 'Consumido de Productos para la Venta';
-          state.precioUnitario = Number(prod.precio_total || 0);
-          state.cantidad = cant;
-          state.unidad = prod.unidad || 'ud';
-          state.total = Math.round(cant * state.precioUnitario);
-          state.paso = 'RESPONSABLE';
-
-          await supabase.from('telegram_borradores_ingesta').update({ items: state, updated_at: new Date().toISOString() }).eq('chat_id', chatId);
-
-          const res = mostrarPasoResponsable(state);
-          await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+          const res = await configurarPlatoEnState(chatId, prod, cant, state);
+          await responderNuevoMensaje(chatId, res.texto, res.markup);
           return NextResponse.json({ ok: true });
         }
       }
 
-      // 1.12. Asistente de Consumos: Pick Insumo de Catálogo
       if (action.startsWith('csm_pick_i_')) {
         const parts = action.replace('csm_pick_i_', '').split('_');
         const iId = parts[0];
@@ -208,25 +318,12 @@ Selecciona una opción rápida para consultar datos en tiempo real o registrar c
         if (ins) {
           const { data: row } = await supabase.from('telegram_borradores_ingesta').select('items').eq('chat_id', chatId).maybeSingle();
           const state: ConsumoDraftState = row?.items || { chatId, tipoConsumo: 'INSUMO_CATALOGO', paso: 'RESPONSABLE' };
-
-          state.itemId = ins.id;
-          state.nombreItem = ins.nombre;
-          state.categoria = 'Consumido del Catálogo de Insumos y Carne';
-          state.precioUnitario = Number(ins.costo_unitario_kg || 0);
-          state.cantidad = cant;
-          state.unidad = ins.unidad_medida || 'Kg';
-          state.total = Math.round(cant * state.precioUnitario);
-          state.paso = 'RESPONSABLE';
-
-          await supabase.from('telegram_borradores_ingesta').update({ items: state, updated_at: new Date().toISOString() }).eq('chat_id', chatId);
-
-          const res = mostrarPasoResponsable(state);
-          await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+          const res = await configurarInsumoEnState(chatId, ins, cant, state);
+          await responderNuevoMensaje(chatId, res.texto, res.markup);
           return NextResponse.json({ ok: true });
         }
       }
 
-      // 1.13. Asistente de Consumos: Responsable
       if (action.startsWith('csm_resp_')) {
         const respCode = action.replace('csm_resp_', '');
         const label = respCode === 'Personal/Turno' ? 'Personal / Turno' :
@@ -235,14 +332,114 @@ Selecciona una opción rápida para consultar datos en tiempo real o registrar c
                       respCode === 'MermaCocina' ? 'Merma / Cocina' : respCode;
 
         const res = await setResponsableConsumo(chatId, label);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
-      // 1.14. Asistente de Consumos: Guardar Definitivo
       if (action === 'csm_guardar_definitivo') {
         const res = await guardarConsumoDefinitivo(chatId);
-        await editarMensajeTelegram(chatId, messageId, res.texto, res.markup);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      // -----------------------------------------------------------------------
+      // 1.6. Opciones de Caja Menor
+      // -----------------------------------------------------------------------
+      if (action === 'caja_cuadre_ultimo') {
+        const res = await generarRespuestaCuadreCaja();
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'caja_ask_mes_cuadre') {
+        const res = await generarSelectorMes('caja_cuadre', 'Cuadre Diario de Caja', 'libro_caja_diario', 'sub_caja');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('caja_cuadre_mes_')) {
+        const ym = action.replace('caja_cuadre_mes_', '');
+        const res = await generarSelectorDia('caja_cuadre', ym, 'Cuadre de Caja', 'libro_caja_diario', 'caja_ask_mes_cuadre');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('caja_cuadre_dia_')) {
+        const fecha = action.replace('caja_cuadre_dia_', '');
+        const res = await generarRespuestaCuadreCaja(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'caja_ask_mes_salidas') {
+        const res = await generarSelectorMes('caja_salidas', 'Salidas de Caja por Día', 'libro_caja_registros', 'sub_caja');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('caja_salidas_mes_')) {
+        const ym = action.replace('caja_salidas_mes_', '');
+        const res = await generarSelectorDia('caja_salidas', ym, 'Salidas de Caja', 'libro_caja_registros', 'caja_ask_mes_salidas');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('caja_salidas_dia_')) {
+        const fecha = action.replace('caja_salidas_dia_', '');
+        const res = await generarRespuestaSalidasCajaPorDia(fecha);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'caja_ask_mes_bloques') {
+        const res = await generarSelectorMes('caja_bloques', 'Salidas por 3 Bloques', 'libro_caja_registros', 'sub_caja');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('caja_bloques_mes_')) {
+        const ym = action.replace('caja_bloques_mes_', '');
+        const res = await generarRespuestaCajaBloques(ym);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'caja_ask_mes_cajeras') {
+        const res = await generarSelectorMes('caja_cajeras', 'Salidas por Cajera', 'libro_caja_registros', 'sub_caja');
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action.startsWith('caja_cajeras_mes_')) {
+        const ym = action.replace('caja_cajeras_mes_', '');
+        const res = await generarRespuestaCajaCajeras(ym);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      // -----------------------------------------------------------------------
+      // 1.7. Opciones de Compras
+      // -----------------------------------------------------------------------
+      if (action === 'cmp_ultimas' || action === 'cmp_carnes' || action === 'cmp_verduras') {
+        const tipo = action === 'cmp_ultimas' ? 'ultimas' : action === 'cmp_carnes' ? 'carnes' : 'verduras';
+        const res = await generarRespuestaCompras(tipo);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      // -----------------------------------------------------------------------
+      // 1.8. Opciones de Precios Oficiales (Sin existencias)
+      // -----------------------------------------------------------------------
+      if (action.startsWith('prc_cat_')) {
+        const catCode = action.replace('prc_cat_', '');
+        const res = await generarRespuestaPreciosPorCategoria(catCode);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'prc_buscar_texto') {
+        const res = await iniciarBusquedaPrecioInsumo(chatId);
+        await responderNuevoMensaje(chatId, res.texto, res.markup);
         return NextResponse.json({ ok: true });
       }
 
@@ -262,7 +459,6 @@ Selecciona una opción rápida para consultar datos en tiempo real o registrar c
       return NextResponse.json({ ok: true, note: 'No chat id' });
     }
 
-    // Capturar datos del usuario que envía el mensaje
     const from = message.from || message.chat || {};
     const sender = {
       first_name: from.first_name || message.chat?.first_name || 'Usuario',
@@ -270,9 +466,9 @@ Selecciona una opción rápida para consultar datos en tiempo real o registrar c
       username: from.username || message.chat?.username || '',
     };
 
-    // =========================================================================
-    // CASO 2.1: EL USUARIO ADJUNTA UN DOCUMENTO / ARCHIVO (ej: 28.txt de ventas)
-    // =========================================================================
+    // -------------------------------------------------------------------------
+    // 2.1. Archivo adjunto (.txt de ventas)
+    // -------------------------------------------------------------------------
     if (message.document) {
       const doc = message.document;
       const fileName = doc.file_name || 'documento.txt';
@@ -282,21 +478,20 @@ Selecciona una opción rápida para consultar datos en tiempo real o registrar c
 
       if (!fileName.toLowerCase().endsWith('.txt')) {
         const warning = `⚠️ *Formato no compatible:* Solo se admiten archivos de ventas en formato de texto plano (\`.txt\`). Recibí: \`${fileName}\`.`;
-        await enviarMensajeConMenu(chatId, warning);
-        await guardarMensajeChat(chatId, 'model', warning);
+        await responderNuevoMensaje(chatId, warning);
         return NextResponse.json({ ok: true });
       }
 
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       if (!botToken) {
-        throw new Error('TELEGRAM_BOT_TOKEN no configurado en variables de entorno');
+        throw new Error('TELEGRAM_BOT_TOKEN no configurado');
       }
 
       const fileInfoRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
       const fileInfo = await fileInfoRes.json();
 
       if (!fileInfo.ok || !fileInfo.result?.file_path) {
-        throw new Error(`No se pudo obtener la ruta del archivo de Telegram: ${fileInfo.description || 'Desconocido'}`);
+        throw new Error(`No se pudo obtener la ruta del archivo de Telegram`);
       }
 
       const filePath = fileInfo.result.file_path;
@@ -323,14 +518,13 @@ Selecciona una opción rápida para consultar datos en tiempo real o registrar c
 
 Los datos ya están disponibles en el módulo de Ventas y el panel de Auditoría.`;
 
-      await enviarMensajeConMenu(chatId, receipt);
-      await guardarMensajeChat(chatId, 'model', receipt);
+      await responderNuevoMensaje(chatId, receipt);
       return NextResponse.json({ ok: true, ventas: true, fecha: parsed.fecha });
     }
 
-    // =========================================================================
-    // CASO 2.2: MENSAJE DE TEXTO
-    // =========================================================================
+    // -------------------------------------------------------------------------
+    // 2.2. Mensaje de Texto Normal
+    // -------------------------------------------------------------------------
     const text = (message.text || '').trim();
     if (!text) {
       return NextResponse.json({ ok: true, note: 'Empty text' });
@@ -338,22 +532,20 @@ Los datos ya están disponibles en el módulo de Ventas y el panel de Auditoría
 
     await registrarUsuarioTelegram(chatId, sender, text);
 
-    // Si escribe /start, /menu, menu, menú o hola -> Desplegar Menú Principal Interactivo
+    // Saludo o comando de inicio -> Menú Principal Interactivo
     const normText = text.toLowerCase();
     if (['/start', '/menu', 'menu', 'menú', 'hola', 'buenas', 'inicio'].includes(normText)) {
-      // Limpiar cualquier sesión previa
       await supabase.from('telegram_borradores_ingesta').delete().eq('chat_id', chatId);
 
       const welcome = `🥩 *¡Hola ${sender.first_name}! Bienvenido al Asistente de La Finca.*
 
 Toca una de las siguientes opciones para consultar la información en tiempo real o registrar consumos del día:`;
 
-      await enviarMensajeConMenu(chatId, welcome, getMenuPrincipalKeyboard());
-      await guardarMensajeChat(chatId, 'model', welcome);
+      await responderNuevoMensaje(chatId, welcome, getMenuPrincipalKeyboard());
       return NextResponse.json({ ok: true });
     }
 
-    // 2.3. Interceptar si está activo en el Asistente de Consumos
+    // 2.3. Interceptar si está activo en el Asistente de Consumos (en cualquier paso)
     const { data: borradorRow } = await supabase
       .from('telegram_borradores_ingesta')
       .select('*')
@@ -362,29 +554,26 @@ Toca una de las siguientes opciones para consultar la información en tiempo rea
 
     if (borradorRow && borradorRow.estado === 'ASISTENTE_CONSUMO' && borradorRow.items) {
       const state: ConsumoDraftState = borradorRow.items;
-      if (state.paso === 'ITEM') {
-        const res = await procesarTextoItemConsumo(chatId, text, state);
-        await enviarMensajeConMenu(chatId, res.texto, res.markup);
-        await guardarMensajeChat(chatId, 'model', res.texto);
-        return NextResponse.json({ ok: true, asistente_consumo: true });
-      }
-      if (state.paso === 'RESPONSABLE') {
-        const res = await setResponsableConsumo(chatId, text.trim());
-        await enviarMensajeConMenu(chatId, res.texto, res.markup);
-        await guardarMensajeChat(chatId, 'model', res.texto);
-        return NextResponse.json({ ok: true, asistente_consumo: true });
-      }
+      const res = await procesarMensajeEnAsistenteConsumo(chatId, text, state);
+      await responderNuevoMensaje(chatId, res.texto, res.markup);
+      return NextResponse.json({ ok: true, asistente_consumo: true });
     }
 
-    // 2.4. Interceptar flujo de borrador interactivo de conteos/insumos (0 tokens LLM)
+    // 2.4. Interceptar si está buscando precio de un insumo
+    if (borradorRow && borradorRow.estado === 'BUSCAR_PRECIO_INSUMO') {
+      const res = await buscarPrecioInsumoPorTexto(chatId, text);
+      await responderNuevoMensaje(chatId, res.texto, res.markup);
+      return NextResponse.json({ ok: true, buscar_precio: true });
+    }
+
+    // 2.5. Interceptar flujo de borrador interactivo de conteos/insumos (0 tokens LLM)
     const borradorRes = await procesarFlujoBorradorTelegram(chatId, text, sender.first_name);
     if (borradorRes.interceptado && borradorRes.respuesta) {
-      await enviarMensajeConMenu(chatId, borradorRes.respuesta);
-      await guardarMensajeChat(chatId, 'model', borradorRes.respuesta);
+      await responderNuevoMensaje(chatId, borradorRes.respuesta);
       return NextResponse.json({ ok: true, borrador: true });
     }
 
-    // 2.5. Consulta libre procesada con Groq LLM (adjunta siempre botón de menú principal)
+    // 2.6. Consulta libre procesada con Groq LLM (adjunta siempre botón de menú principal)
     const result = await procesarMensajeTelegram(chatId, text, sender);
 
     return NextResponse.json({ ok: true, result });
