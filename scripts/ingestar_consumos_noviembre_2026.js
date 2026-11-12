@@ -97,9 +97,9 @@ async function run() {
 
   const consumosItems = [];
 
-  for (let i = 24; i <= 43; i++) {
+  for (let i = 24; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || !r[0]) continue;
+    if (!r || typeof r[0] !== 'number') continue;
 
     const num = Number(r[0]);
     const dia = Number(r[1]);

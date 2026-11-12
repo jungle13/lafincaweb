@@ -79,9 +79,9 @@ async function seedLibroCaja() {
       total_gastos_operativos: gastos,
       total_turnos_nomina: turnos,
       total_salidas: totalSalidas,
-      responsables_dia: diaNum <= 9 ? 'Principal (Johanna) + Domicilios (María/Daniela)' : 'Sin Movimientos',
-      estado: diaNum <= 9 ? 'CERRADA' : 'ABIERTA',
-      observaciones: diaNum <= 9 ? 'Consolidado oficial Libro de Caja Noviembre 2026' : 'Día proyectado sin salidas',
+      responsables_dia: totalSalidas > 0 ? 'Principal (Johanna) + Domicilios (María/Daniela)' : 'Sin Movimientos',
+      estado: totalSalidas > 0 ? 'CERRADA' : 'ABIERTA',
+      observaciones: totalSalidas > 0 ? 'Consolidado oficial Libro de Caja Noviembre 2026' : 'Día proyectado sin salidas',
     });
   }
 

@@ -5,6 +5,7 @@ import catalogoOficial from '@/lib/catalogo-oficial.json';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
+import { downloadCosteoDiarioPdf, CosteoPdfSelection } from '@/lib/exportCosteoDiarioPdf';
 import ImportarConteosModal from '@/components/costeo-diario/ImportarConteosModal';
 import VistaPreviaConteosView from '@/components/costeo-diario/VistaPreviaConteosView';
 import { ConteoArchivoParsed, SeccionConteoKey } from '@/lib/conteosParser';
@@ -1542,6 +1543,18 @@ export default function CosteoDiarioPage() {
     bodegaCierre: true,
   });
 
+  // Modal de Configuración de Exportación a PDF
+  const [isExportPdfModalOpen, setIsExportPdfModalOpen] = useState(false);
+  const [exportPdfSelection, setExportPdfSelection] = useState<CosteoPdfSelection>({
+    apertura: false,
+    movimientos: true,
+    incluirAperturaEnMovimientos: true,
+    devoluciones: false,
+    cierre: true,
+    consumos: true,
+    bodegaCierre: true,
+  });
+
   // Estado para colapsar/expandir categorías individualmente
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
@@ -2261,12 +2274,22 @@ export default function CosteoDiarioPage() {
 
   const handleExportInformePdf = () => {
     if (!activeSheet) return;
+    setExportPdfSelection(prev => ({
+      ...prev,
+      incluirAperturaEnMovimientos: incluirCocinaApertura,
+    }));
+    setIsExportPdfModalOpen(true);
+  };
+
+  const handleConfirmExportPdf = () => {
+    if (!activeSheet) return;
     try {
-      downloadInventarioConsolidadoPdf({
+      downloadCosteoDiarioPdf({
         sheet: activeSheet,
-        companyName: 'RESTAURANTE CHOCLOS Y ASADOS LA FINCA',
-        reportTitle: 'INFORME DE INVENTARIO Y CIERRES (BODEGA Y COCINA)'
+        selection: exportPdfSelection,
+        companyName: 'RESTAURANTE CHOCLOS Y ASADOS LA FINCA S.A.S.',
       });
+      setIsExportPdfModalOpen(false);
     } catch (err) {
       console.error('Error exportando PDF:', err);
     }
@@ -5144,6 +5167,341 @@ Trucha 8`;
                     </span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EXPORTACIÓN DE INFORME PDF */}
+      {isExportPdfModalOpen && activeSheet && (
+        <div
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setIsExportPdfModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-slate-900 rounded-lg text-white shrink-0">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Exportar Informe de Costeo Diario
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Fecha: <strong className="text-slate-700">{activeSheet.dateStr}</strong> · Elige las secciones a incluir en el PDF.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportPdfModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Acciones rápidas */}
+            <div className="flex items-center justify-between px-1 text-xs">
+              <span className="text-slate-500 font-medium">Secciones del informe:</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportPdfSelection(prev => ({
+                    ...prev,
+                    apertura: true,
+                    movimientos: true,
+                    devoluciones: true,
+                    cierre: true,
+                    consumos: true,
+                    bodegaCierre: true,
+                  }))}
+                  className="text-[11px] text-slate-800 hover:text-slate-950 font-semibold cursor-pointer hover:underline"
+                >
+                  Seleccionar todo
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setExportPdfSelection(prev => ({
+                    ...prev,
+                    apertura: false,
+                    movimientos: true,
+                    incluirAperturaEnMovimientos: true,
+                    devoluciones: false,
+                    cierre: true,
+                    consumos: true,
+                    bodegaCierre: true,
+                  }))}
+                  className="text-[11px] text-slate-500 hover:text-slate-800 font-medium cursor-pointer hover:underline"
+                >
+                  Estándar recomendado
+                </button>
+              </div>
+            </div>
+
+            {/* Listado de Checkboxes */}
+            <div className="space-y-2 border border-slate-200 rounded-lg p-2.5 bg-slate-50/50">
+              {/* 1. Cocina Apertura */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                exportPdfSelection.apertura
+                  ? 'bg-slate-900/5 border-slate-400 text-slate-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={exportPdfSelection.apertura}
+                    onChange={(e) => setExportPdfSelection(prev => ({ ...prev, apertura: e.target.checked }))}
+                    className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-800 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Cocina Apertura</span>
+                    <span className="text-[10px] text-slate-500">Inventario inicial con el que inicia la cocina</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.apertura.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.apertura.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 2. Cocina Movimientos + Toggle Incluir Apertura */}
+              <div className={`rounded-md border transition-all ${
+                exportPdfSelection.movimientos
+                  ? 'bg-slate-900/5 border-slate-400 text-slate-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <label className="flex items-center justify-between p-2.5 cursor-pointer">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={exportPdfSelection.movimientos}
+                      onChange={(e) => setExportPdfSelection(prev => ({ ...prev, movimientos: e.target.checked }))}
+                      className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-800 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold block">Cocina Movimientos</span>
+                      <span className="text-[10px] text-slate-500">Traslados de bodega a cocina durante el día</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] font-semibold block text-slate-800">
+                      ${(
+                        exportPdfSelection.movimientos && exportPdfSelection.incluirAperturaEnMovimientos
+                          ? clearSheetStats.movimientos.total + clearSheetStats.apertura.total
+                          : clearSheetStats.movimientos.total
+                      ).toLocaleString('es-CO')}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {exportPdfSelection.movimientos && exportPdfSelection.incluirAperturaEnMovimientos
+                        ? clearSheetStats.movimientos.count + clearSheetStats.apertura.count
+                        : clearSheetStats.movimientos.count} registros
+                    </span>
+                  </div>
+                </label>
+
+                {exportPdfSelection.movimientos && (
+                  <div className="px-3 pb-2.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between bg-white/70 rounded-b-md">
+                    <span className="text-[11px] font-medium text-slate-700">
+                      Incluir Cocina Apertura dentro de Movimientos
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={exportPdfSelection.incluirAperturaEnMovimientos}
+                      onClick={() =>
+                        setExportPdfSelection(prev => ({
+                          ...prev,
+                          incluirAperturaEnMovimientos: !prev.incluirAperturaEnMovimientos,
+                        }))
+                      }
+                      className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                        exportPdfSelection.incluirAperturaEnMovimientos ? 'bg-slate-900' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
+                          exportPdfSelection.incluirAperturaEnMovimientos ? 'translate-x-3.5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Devoluciones */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                exportPdfSelection.devoluciones
+                  ? 'bg-slate-900/5 border-slate-400 text-slate-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={exportPdfSelection.devoluciones}
+                    onChange={(e) => setExportPdfSelection(prev => ({ ...prev, devoluciones: e.target.checked }))}
+                    className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-800 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Devoluciones</span>
+                    <span className="text-[10px] text-slate-500">Insumos devueltos de cocina a bodega</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.devoluciones.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.devoluciones.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 4. Cocina Cierre */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                exportPdfSelection.cierre
+                  ? 'bg-slate-900/5 border-slate-400 text-slate-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={exportPdfSelection.cierre}
+                    onChange={(e) => setExportPdfSelection(prev => ({ ...prev, cierre: e.target.checked }))}
+                    className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-800 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Cocina Cierre</span>
+                    <span className="text-[10px] text-slate-500">Inventario final en cocina (se descuenta del costo)</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.cierre.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.cierre.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 5. Consumos */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                exportPdfSelection.consumos
+                  ? 'bg-slate-900/5 border-slate-400 text-slate-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={exportPdfSelection.consumos}
+                    onChange={(e) => setExportPdfSelection(prev => ({ ...prev, consumos: e.target.checked }))}
+                    className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-800 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Consumos</span>
+                    <span className="text-[10px] text-slate-500">Consumos internos (se incluyen y se restan de las ventas)</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.consumos.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.consumos.count} registros
+                  </span>
+                </div>
+              </label>
+
+              {/* 6. Bodega Cierre */}
+              <label className={`flex items-center justify-between p-2.5 rounded-md border transition-all cursor-pointer ${
+                exportPdfSelection.bodegaCierre
+                  ? 'bg-slate-900/5 border-slate-400 text-slate-950 shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/60'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={exportPdfSelection.bodegaCierre}
+                    onChange={(e) => setExportPdfSelection(prev => ({ ...prev, bodegaCierre: e.target.checked }))}
+                    className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-800 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold block">Bodega (Cierre)</span>
+                    <span className="text-[10px] text-slate-500">Inventario físico final únicamente de cierre en bodega</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-semibold block text-slate-800">
+                    ${clearSheetStats.bodegaCierre.total.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {clearSheetStats.bodegaCierre.count} registros
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* Previsualización en vivo de Liquidación */}
+            {(() => {
+              const costoCocinaBase = Math.max(0, costoApertura + costoTraslados - totalDevoluciones - costoCierre);
+              const consumosInc = exportPdfSelection.consumos ? costoConsumos : 0;
+              const costeoTotalPdf = costoCocinaBase + consumosInc;
+              const rendimientoPdf = ventasDia - costeoTotalPdf;
+              return (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Resumen Liquidación en PDF
+                  </div>
+                  <div className="flex justify-between text-slate-700">
+                    <span>Ventas del día:</span>
+                    <span className="font-mono font-semibold">${ventasDia.toLocaleString('es-CO')}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-700">
+                    <span>(-) Costeo Real Cocina:</span>
+                    <span className="font-mono">-${costoCocinaBase.toLocaleString('es-CO')}</span>
+                  </div>
+                  {exportPdfSelection.consumos && (
+                    <div className="flex justify-between text-slate-700">
+                      <span>(-) Consumos Internos:</span>
+                      <span className="font-mono">-${costoConsumos.toLocaleString('es-CO')}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-1.5 border-t border-slate-200 font-bold">
+                    <span className="text-slate-900">(=) Rendimiento proyectado:</span>
+                    <span className={`font-mono ${rendimientoPdf >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {rendimientoPdf >= 0 ? '' : '-'}${Math.abs(rendimientoPdf).toLocaleString('es-CO')} COP
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsExportPdfModalOpen(false)}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExportPdf}
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Generar y Descargar PDF</span>
               </button>
             </div>
           </div>
