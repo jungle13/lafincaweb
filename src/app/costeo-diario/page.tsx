@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import catalogoOficial from '@/lib/catalogo-oficial.json';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { usePeriodo } from '@/context/PeriodoContext';
-import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
 import { downloadCosteoDiarioPdf, CosteoPdfSelection } from '@/lib/exportCosteoDiarioPdf';
 import ImportarConteosModal from '@/components/costeo-diario/ImportarConteosModal';
 import VistaPreviaConteosView from '@/components/costeo-diario/VistaPreviaConteosView';
@@ -1737,9 +1736,6 @@ export default function CosteoDiarioPage() {
   const [newInsumoQtyFormula, setNewInsumoQtyFormula] = useState('');
   const [newInsumoUnit, setNewInsumoUnit] = useState('Kg');
   const [newInsumoPrice, setNewInsumoPrice] = useState<number | ''>(2500);
-
-  // Live PDF preview modal
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Lateral Insumo Manager Drawer State (Despliegue rápido con teclado)
   const [activeDrawerInsumo, setActiveDrawerInsumo] = useState<{
@@ -5940,104 +5936,6 @@ Trucha 8`;
           </div>
         )}
       </aside>
-
-      {/* ============================================================ */}
-      {/* 4. MODAL: PREVISUALIZACIÓN DEL DOCUMENTO                     */}
-      {/* ============================================================ */}
-      {showPreviewModal && activeSheet && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
-          <div 
-            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-0 transition-opacity animate-in fade-in duration-200"
-            onClick={() => setShowPreviewModal(false)}
-          />
-          <div 
-            className="relative z-10 isolate bg-white rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            
-            {/* Cabecera Modal */}
-            <div className="bg-slate-900 text-white p-3 px-4 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-slate-400" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider">
-                  Previsualización del Formato Oficial de Valorización
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="text-slate-400 hover:text-white p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Cuerpo del Documento */}
-            <div className="p-6 overflow-y-auto space-y-4 bg-slate-50">
-              <div className="bg-white p-6 border border-slate-200 rounded-md shadow-2xs space-y-4 font-sans text-xs">
-                
-                <div className="border-b border-slate-200 pb-3 text-center">
-                  <h2 className="text-sm font-bold text-slate-900">
-                    CHOCLOS Y ASADOS LA FINCA S.A.S.
-                  </h2>
-                  <p className="text-xs font-semibold text-slate-700 mt-0.5">
-                    VALORIZACIÓN DIARIA DE INSUMOS DE COCINA
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {activeSheet.title.split(' - ')[0]}
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  {activeSheet.categories.map((cat) => (
-                    <div key={cat.id} className="space-y-1">
-                      <div className="flex justify-between font-bold text-slate-800 border-b border-slate-200 pb-1 text-[11px] uppercase tracking-wide">
-                        <span>{cat.name}</span>
-                        <span>${calculateCategoryTotal(cat).toLocaleString('es-CO')}</span>
-                      </div>
-                      <div className="divide-y divide-slate-100 text-slate-600">
-                        {cat.items.map((it) => (
-                          <div key={it.id} className="flex justify-between py-1">
-                            <span>{it.qty} {it.unit} · {it.name}</span>
-                            <span className="font-mono text-slate-800">${it.total.toLocaleString('es-CO')}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 p-3 bg-slate-100 border border-slate-200 rounded flex justify-between items-center text-xs font-bold text-slate-900">
-                  <span>COSTO TOTAL NETO TRASLADOS:</span>
-                  <span className="text-sm">
-                    ${calculateSheetTotal(activeSheet).toLocaleString('es-CO')} COP
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Pie Modal */}
-            <div className="p-3 px-4 border-t border-slate-200 bg-white flex justify-end gap-2 shrink-0">
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-md font-medium"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => {
-                  alert('¡PDF generado correctamente!');
-                  setShowPreviewModal(false);
-                }}
-                className="bg-slate-900 hover:bg-slate-800 text-white text-xs px-3.5 py-1.5 rounded-md font-medium transition-colors shadow-2xs flex items-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Descargar PDF</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
 
       {/* ============================================================ */}
       {/* 3.3. SLIDE-OVER DRAWER: AÑADIR CONTEOS (Derecha a Izquierda) */}

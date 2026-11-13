@@ -35,7 +35,7 @@ export interface VentasParsedData {
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-export function classifyProduct(nombre: string, codigo?: string): { categoria: string; subcategoria: string; es_receta: boolean } {
+function classifyProduct(nombre: string, codigo?: string): { categoria: string; subcategoria: string; es_receta: boolean } {
   const n = (nombre || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   // 1. BEBIDAS
