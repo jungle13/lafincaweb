@@ -1598,6 +1598,14 @@ export default function CosteoDiarioPage() {
   >('TRASLADOS');
   const [incluirCocinaApertura, setIncluirCocinaApertura] = useState(true);
   const [incluirDevoluciones, setIncluirDevoluciones] = useState(false);
+  const [openInvoiceTooltipId, setOpenInvoiceTooltipId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openInvoiceTooltipId) return;
+    const close = () => setOpenInvoiceTooltipId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [openInvoiceTooltipId]);
 
 
   // Catálogo inteligente y buscador en tiempo real
@@ -4452,23 +4460,47 @@ Trucha 8`;
 
                                   <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1 font-mono">
                                     {item.sourceInvoice ? (
-                                      <div className="relative group/inv inline-block">
-                                        <span className="cursor-help underline decoration-dotted decoration-orange-400 text-slate-700 font-semibold">
+                                      <div className="relative group/inv inline-block" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOpenInvoiceTooltipId((prev) => (prev === `m-${item.id}` ? null : `m-${item.id}`));
+                                          }}
+                                          className="cursor-pointer touch-manipulation underline decoration-dotted decoration-orange-400 text-slate-700 font-semibold active:text-orange-600"
+                                        >
                                           ${item.unitPrice.toLocaleString('es-CO')}/{item.unit}
-                                        </span>
-                                        <div className="hidden group-hover/inv:block absolute left-0 bottom-full pb-1.5 z-50 w-64">
+                                        </button>
+                                        <div
+                                          className={`${
+                                            openInvoiceTooltipId === `m-${item.id}` ? 'block' : 'hidden group-hover/inv:block'
+                                          } absolute left-0 bottom-full pb-1.5 z-50 w-64`}
+                                        >
                                           <div className="bg-slate-900 text-white rounded-lg p-2.5 shadow-xl border border-slate-700 text-[11px] font-sans leading-relaxed">
                                             <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-1 mb-1">
                                               <span className="text-slate-400 font-medium">Factura:</span>
-                                              <a
-                                                href={`/compras?factura=${encodeURIComponent(item.sourceInvoice.numeroFactura)}&fecha=${encodeURIComponent(item.sourceInvoice.fecha)}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="text-orange-400 hover:text-orange-300 font-bold underline"
-                                              >
-                                                {item.sourceInvoice.numeroFactura} ↗
-                                              </a>
+                                              <div className="flex items-center gap-2">
+                                                <a
+                                                  href={`/compras?factura=${encodeURIComponent(item.sourceInvoice.numeroFactura)}&fecha=${encodeURIComponent(item.sourceInvoice.fecha)}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="text-orange-400 hover:text-orange-300 font-bold underline"
+                                                >
+                                                  {item.sourceInvoice.numeroFactura} ↗
+                                                </a>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenInvoiceTooltipId(null);
+                                                  }}
+                                                  className="text-slate-400 hover:text-white px-1 leading-none cursor-pointer"
+                                                  aria-label="Cerrar"
+                                                >
+                                                  ✕
+                                                </button>
+                                              </div>
                                             </div>
                                             <div className="flex justify-between gap-2">
                                               <span className="text-slate-400">Fecha:</span>
@@ -4562,11 +4594,22 @@ Trucha 8`;
                               {/* Costo Factura */}
                               <div className="sm:col-span-2 sm:text-right text-slate-600 font-mono">
                                 {item.sourceInvoice ? (
-                                  <div className="relative group/inv inline-block">
-                                    <span className="cursor-help underline decoration-dotted decoration-orange-400 hover:text-slate-900 transition-colors">
+                                  <div className="relative group/inv inline-block" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenInvoiceTooltipId((prev) => (prev === `d-${item.id}` ? null : `d-${item.id}`));
+                                      }}
+                                      className="cursor-pointer underline decoration-dotted decoration-orange-400 hover:text-slate-900 transition-colors"
+                                    >
                                       ${item.unitPrice.toLocaleString('es-CO')} /{item.unit}
-                                    </span>
-                                    <div className="hidden group-hover/inv:block absolute right-0 bottom-full pb-1.5 z-50 w-64 text-left">
+                                    </button>
+                                    <div
+                                      className={`${
+                                        openInvoiceTooltipId === `d-${item.id}` ? 'block' : 'hidden group-hover/inv:block'
+                                      } absolute right-0 bottom-full pb-1.5 z-50 w-64 text-left`}
+                                    >
                                       <div className="bg-slate-900 text-white rounded-lg p-2.5 shadow-xl border border-slate-700 text-[11px] font-sans leading-relaxed">
                                         <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-1 mb-1">
                                           <span className="text-slate-400 font-medium">Factura:</span>
