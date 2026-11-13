@@ -129,6 +129,69 @@ export async function POST(request: Request) {
       throw errDetalle;
     }
 
+    // 3. Disparador automático: actualizar costo_unitario_kg en catalogo_insumos con la nueva factura
+    try {
+      const { data: catalogRows } = await supabase
+        .from('catalogo_insumos')
+        .select('id, nombre, unidad_medida, costo_unitario_kg');
+
+      const normName = (s: string) =>
+        String(s || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      for (const linea of lineasToInsert) {
+        const rawCost = Number(linea.costo_unitario_kg || linea.costo_unitario || 0);
+        if (rawCost <= 0) continue;
+
+        let catMatch = linea.insumo_id
+          ? (catalogRows || []).find((c: any) => c.id === linea.insumo_id)
+          : null;
+
+        if (!catMatch && linea.nombre_insumo) {
+          const ln = normName(linea.nombre_insumo);
+          catMatch = (catalogRows || []).find((c: any) => normName(c.nombre) === ln) || null;
+        }
+
+        if (!catMatch) continue;
+
+        // Verificar que esta factura sea >= última factura registrada para ese insumo (coherencia cronológica)
+        const { data: newerInv } = await supabase
+          .from('compras_detalle')
+          .select('fecha')
+          .eq('insumo_id', catMatch.id)
+          .gt('fecha', fecha)
+          .limit(1);
+
+        if (newerInv && newerInv.length > 0) continue;
+
+        let normalizedCost = Math.round(rawCost);
+        const invUnit = normName(linea.unidad || '');
+        const catUnit = normName(catMatch.unidad_medida || '');
+        const det = normName(`${linea.nombre_insumo || ''} ${linea.detalle || ''}`);
+
+        if (catUnit === 'und' && (invUnit.includes('caja') || invUnit.includes('paca') || det.includes('24 und') || det.includes('x 24')) && rawCost > 20000) {
+          normalizedCost = Math.round(rawCost / 24);
+        } else if (catUnit === 'kg' && invUnit.includes('bulto') && rawCost > 30000) {
+          normalizedCost = Math.round(rawCost / 50);
+        }
+
+        await supabase
+          .from('catalogo_insumos')
+          .update({
+            costo_unitario_kg: normalizedCost,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', catMatch.id);
+      }
+    } catch (syncCatErr) {
+      console.warn('[POST /api/compras] Advertencia actualizando precios en catálogo:', syncCatErr);
+    }
+
     return NextResponse.json({
       success: true,
       compra: compraCreated,

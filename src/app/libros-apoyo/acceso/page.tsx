@@ -137,10 +137,10 @@ export default function AccesoCajeroPage() {
           </button>
         </form>
 
-        {/* Acceso Rápido Cajeros Oficiales (Demo / Facilidad) */}
+        {/* Acceso Rápido Cajeros Oficiales */}
         <div className="p-4 bg-slate-50 border-t border-slate-200">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center mb-2">
-            Cajeros Autorizados (PIN por defecto: 1234)
+            Cajeros Autorizados
           </p>
           <div className="grid grid-cols-3 gap-1.5">
             {[
@@ -154,7 +154,7 @@ export default function AccesoCajeroPage() {
               <button
                 key={c.user}
                 type="button"
-                onClick={() => quickFillUser(c.user, '1234')}
+                onClick={() => quickFillUser(c.user, '')}
                 className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-orange-50 hover:border-orange-200 text-slate-700 font-medium text-[11px] transition text-center truncate cursor-pointer"
               >
                 {c.label}

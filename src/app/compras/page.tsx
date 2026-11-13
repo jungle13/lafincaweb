@@ -76,6 +76,24 @@ export default function ComprasPage() {
     loadMeses();
   }, [loadMeses]);
 
+  // Leer query params (?factura=...&fecha=...&periodo=...) para abrir directamente una factura desde Costeo Diario
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const facturaParam = params.get('factura');
+    const fechaParam = params.get('fecha');
+    const periodoParam = params.get('periodo') || (fechaParam ? `per-${fechaParam.slice(0, 7)}` : null);
+
+    if (periodoParam) {
+      setSelectedMonthId(periodoParam);
+      setSelectedPeriodoId(periodoParam);
+    }
+    if (facturaParam) {
+      setActiveTab('FACTURAS');
+      setSearchQuery(facturaParam);
+    }
+  }, [setSelectedPeriodoId]);
+
   const cacheKey = `compras_data_${activePeriodoId}`;
   const cached = getCachedData<{
     kpis: ComprasKPIs;

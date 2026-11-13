@@ -11,16 +11,9 @@ interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => boolean;
-  logout: () => void;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
 }
-
-// 3 usuarios autorizados con contraseña y nombre visible en el header
-export const VALID_USERS: Record<string, { password: string; name: string }> = {
-  admin: { password: '123', name: 'Admin' },
-  eliana: { password: '123', name: 'Eliana' },
-  arturo: { password: '123', name: 'Arturo' },
-};
 
 const STORAGE_KEY = 'la_finca_auth_session';
 
@@ -28,8 +21,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  login: () => false,
-  logout: () => {},
+  login: async () => false,
+  logout: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -37,57 +30,82 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const userKey = parsed?.username?.toLowerCase()?.trim();
-        if (userKey && VALID_USERS[userKey]) {
-          setUser({
-            username: userKey,
-            name: VALID_USERS[userKey].name,
-          });
-        } else {
-          localStorage.removeItem(STORAGE_KEY);
-          document.cookie = 'la_finca_session=; path=/; max-age=0; SameSite=Lax';
+    let active = true;
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/auth/me', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (active && data?.authenticated && data?.user) {
+            const authUser: AuthUser = {
+              username: data.user.username,
+              name: data.user.name,
+            };
+            setUser(authUser);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+            return;
+          }
         }
+        if (active) {
+          setUser(null);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch {
+        // Fallback temporal en caso de error de red transitorio
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (active && stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed?.username && parsed?.name) {
+              setUser({ username: parsed.username, name: parsed.name });
+            }
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      } finally {
+        if (active) setIsLoading(false);
       }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-      document.cookie = 'la_finca_session=; path=/; max-age=0; SameSite=Lax';
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    checkSession();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const login = (username: string, password: string): boolean => {
-    const cleanUser = username.trim().toLowerCase();
-    const cleanPass = password.trim();
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
 
-    const record = VALID_USERS[cleanUser];
-    if (record && record.password === cleanPass) {
-      const authUser: AuthUser = {
-        username: cleanUser,
-        name: record.name,
-      };
-      setUser(authUser);
-      try {
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data?.success && data?.user) {
+        const authUser: AuthUser = {
+          username: data.user.username,
+          name: data.user.name,
+        };
+        setUser(authUser);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
-        // Sincronizar cookie de sesión de larga duración (30 días)
-        document.cookie = `la_finca_session=${cleanUser}; path=/; max-age=2592000; SameSite=Lax`;
-      } catch (e) {
-        console.error('Error al guardar sesión:', e);
+        return true;
       }
-      return true;
+      return false;
+    } catch (e) {
+      console.error('Error al iniciar sesión:', e);
+      return false;
     }
-    return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
     setUser(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
       document.cookie = 'la_finca_session=; path=/; max-age=0; SameSite=Lax';
+      await fetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {
       console.error('Error al remover sesión:', e);
     }

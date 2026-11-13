@@ -72,11 +72,220 @@ function getCanonicalName(rawName: string, catalog: any[]): string {
   if (n.includes('sopero') && n.includes('16')) return 'Contenedor térmico sopero 16 oz';
   if (n.includes('arroz')) return 'Arroz blanco institucional';
   if (n.includes('alguacil')) return 'Pescado Alguacil';
+  if (n.includes('asar')) return 'Carne asada / Res para asar';
 
   const direct = catalog.find((c: any) => c.nombre.toLowerCase() === n || cleanName.toLowerCase() === c.nombre.toLowerCase());
   if (direct) return direct.nombre;
 
   return cleanName;
+}
+
+function normPlain(str: string): string {
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function isUnitOnlyInsumo(name: string): boolean {
+  const n = normPlain(name);
+  if (n.includes('chorizo') || n.includes('choricerdo')) return true;
+  if (n.includes('huevo')) return true;
+  if (n.includes('pernil')) return true;
+  if (n.includes('tamal') && !n.includes('hoja') && !n.includes('masa')) return true;
+  return false;
+}
+
+function isLecheInsumo(name: string): boolean {
+  const n = normPlain(name);
+  return n.includes('leche') && !n.includes('crema') && !n.includes('coco') && !n.includes('mazamorra');
+}
+
+function findCatalogForReg(reg: any, canonicalName: string, catalog: any[]): any {
+  if (reg.insumo_id) {
+    const byId = catalog.find((c: any) => c.id === reg.insumo_id);
+    if (byId) return byId;
+  }
+  const cNorm = normPlain(canonicalName);
+  const exact = catalog.find((c: any) => normPlain(c.nombre) === cNorm);
+  if (exact) return exact;
+  return catalog.find((c: any) => cNorm.includes(normPlain(c.nombre)) || normPlain(c.nombre).includes(cNorm)) || null;
+}
+
+function normalizeRegMeasurement(reg: any, canonicalName: string, catItem: any): {
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+  equivNote?: string;
+} {
+  const rawQty = Number(reg.cantidad || 0);
+  const rawUnit = String(reg.unidad || catItem?.unidad_medida || 'Kg').trim();
+  const rawPrice = Number(reg.costo_unitario || catItem?.costo_unitario_kg || 0);
+  const total = Number(reg.valor_total || Math.round(rawQty * rawPrice));
+  const n = normPlain(canonicalName || reg.nombre_insumo);
+  const obsStr = String(reg.observaciones || '');
+  const equivMatch = obsStr.match(/Equiv\.\s*([\d.,]+\s*[A-Za-z]+)/i);
+  let equivNote = equivMatch ? equivMatch[1].trim() : undefined;
+
+  if (isUnitOnlyInsumo(n)) {
+    const uNorm = normPlain(rawUnit);
+    // Si un registro histórico de pernil vino en Kg con precio por Kg, respetarlo para no alterar cantidades
+    if (n.includes('pernil') && uNorm === 'kg') {
+      return { qty: rawQty, unit: 'Kg', unitPrice: Math.round(rawPrice), total, equivNote };
+    }
+    return { qty: rawQty, unit: 'Und', unitPrice: Math.round(rawPrice), total, equivNote };
+  }
+
+  if (isLecheInsumo(n)) {
+    return { qty: rawQty, unit: 'Bolsa', unitPrice: Math.round(rawPrice), total, equivNote };
+  }
+
+  // Carnes/proteínas por peso: garantizar Kg y precio unitario por Kg
+  const isWeightMeat =
+    Boolean(catItem?.es_carne) ||
+    catItem?.unidad_medida === 'Kg' ||
+    n.includes('lomo') ||
+    n.includes('carne') ||
+    n.includes('sobrebarriga') ||
+    n.includes('punta de anca') ||
+    n.includes('baby beef') ||
+    n.includes('churrasco') ||
+    n.includes('costilla') ||
+    n.includes('lengua') ||
+    n.includes('callo') ||
+    n.includes('tocino') ||
+    n.includes('chicharron') ||
+    n.includes('filete') ||
+    n.includes('gallina') ||
+    n.includes('trucha') ||
+    n.includes('tilapia') ||
+    n.includes('salmon') ||
+    n.includes('camaron') ||
+    n.includes('marisco');
+
+  const uNorm = normPlain(rawUnit);
+  const isUnitInput = ['und', 'unidad', 'unidades', 'porc', 'porcion', 'porciones', 'presa', 'presas'].includes(uNorm);
+
+  if (isWeightMeat && isUnitInput && rawQty > 0 && reg.tipo !== 'CONSUMO') {
+    const gramMatch = String(reg.nombre_insumo || '').match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|grs|gramos)\b/i);
+    let pesoPorUnd = gramMatch ? parseFloat(gramMatch[1].replace(',', '.')) / 1000 : 0;
+    if (!pesoPorUnd && Number(catItem?.peso_estandar_porcion_kg) > 0) {
+      pesoPorUnd = Number(catItem.peso_estandar_porcion_kg);
+    }
+    if (!pesoPorUnd) pesoPorUnd = 0.35;
+
+    const qtyKg = Number((rawQty * pesoPorUnd).toFixed(2));
+    const unitPriceKg = qtyKg > 0 && total > 0 ? Math.round(total / qtyKg) : Math.round(Number(catItem?.costo_unitario_kg || rawPrice));
+    if (!equivNote) equivNote = `${rawQty} ${rawUnit}`;
+    return { qty: qtyKg, unit: 'Kg', unitPrice: unitPriceKg, total, equivNote };
+  }
+
+  return { qty: rawQty, unit: rawUnit, unitPrice: Math.round(rawPrice), total, equivNote };
+}
+
+function getInvoiceAliasKeywords(name: string): string[] {
+  const n = normPlain(name);
+  if (n.includes('trucha')) return ['trucha'];
+  if (n.includes('tilapia')) return ['tilapia'];
+  if (n.includes('salmon')) return ['salmon'];
+  if (n.includes('camaron')) return ['camaron'];
+  if (n.includes('marisco')) return ['marisco'];
+  if (n.includes('sobrebarriga')) return ['sobrebarriga'];
+  if (n.includes('punta de anca')) return ['punta de anca'];
+  if (n.includes('baby beef') || n.includes('lomo viche')) return ['baby beef', 'lomo viche'];
+  if (n.includes('caracho') || n.includes('churrasco')) return ['caracho', 'churrasco'];
+  if (n.includes('lomo de cerdo')) return ['lomo de cerdo'];
+  if (n.includes('costilla ahumada')) return ['costilla ahumada'];
+  if (n.includes('san luis')) return ['san luis'];
+  if (n.includes('costilla de res')) return ['costilla de res'];
+  if (n.includes('costilla de cerdo')) return ['costilla de cerdo'];
+  if (n.includes('lengua')) return ['lengua'];
+  if (n.includes('callo')) return ['callo'];
+  if (n.includes('tocino') || n.includes('chicharron')) return ['tocino', 'tocineta', 'chicharron'];
+  if (n.includes('asar')) return ['asar', 'asada'];
+  if (n.includes('filete') && n.includes('pollo')) return ['filete', 'pechuga'];
+  if (n.includes('pernil')) return ['pernil'];
+  if (n.includes('chorizo paisa')) return ['chorizo paisa'];
+  if (n.includes('chorizo grande') || n.includes('choricerdo')) return ['chorizo grande', 'choricerdo'];
+  if (n.includes('chorizo de pollo') || n.includes('chorizo pollo')) return ['chorizo pollo', 'chorizo de pollo'];
+  if (n.includes('rellena') || n.includes('morcilla')) return ['rellena', 'morcilla'];
+  if (n.includes('huevo')) return ['huevo'];
+  if (n.includes('leche') && !n.includes('crema') && !n.includes('coco') && !n.includes('mazamorra')) return ['leche entera', 'leche institucional'];
+  if (n.includes('platano')) return ['platano'];
+  if (n.includes('tomate chonto')) return ['tomate chonto', 'tomate'];
+  if (n.includes('cebolla cabezona')) return ['cabezona'];
+  if (n.includes('cebolla larga') || n.includes('junca')) return ['cebolla larga', 'junca'];
+  if (n.includes('pimenton')) return ['pimenton'];
+  if (n.includes('zanahoria')) return ['zanahoria'];
+  if (n.includes('papa amarilla') || n.includes('criolla')) return ['papa amarilla', 'criolla'];
+  if (n.includes('papa mambera') || n.includes('capira')) return ['mambera', 'capira', 'papa'];
+  if (n.includes('yuca')) return ['yuca'];
+  if (n.includes('batavia') || n.includes('lechuga')) return ['batavia', 'lechuga'];
+  if (n.includes('repollo')) return ['repollo'];
+  if (n.includes('limon') && !n.includes('polvo') && !n.includes('zumo')) return ['limon'];
+  if (n.includes('cilantro')) return ['cilantro'];
+  if (n.includes('cimarron')) return ['cimarron'];
+  if (n.includes('aguacate')) return ['aguacate'];
+  if (n.includes('francesa')) return ['francesa'];
+  if (n.includes('arroz')) return ['arroz'];
+  return [];
+}
+
+function findSourceInvoiceForItem(
+  canonicalName: string,
+  catItem: any,
+  sheetDate: string,
+  targetUnit: string,
+  invoicesDesc: any[]
+) {
+  if (!invoicesDesc || invoicesDesc.length === 0) return null;
+  const rName = normPlain(canonicalName);
+  const candidates = invoicesDesc.filter((inv: any) => inv.fecha <= sheetDate);
+
+  let match: any = null;
+  if (catItem?.id) {
+    match = candidates.find((inv: any) => inv.insumo_id === catItem.id) || null;
+  }
+  if (!match) {
+    match = candidates.find((inv: any) => normPlain(inv.nombre_insumo) === rName) || null;
+  }
+  if (!match) {
+    match = candidates.find((inv: any) => {
+      const inName = normPlain(inv.nombre_insumo);
+      return (inName.length >= 5 && rName.includes(inName)) || (rName.length >= 5 && inName.includes(rName));
+    }) || null;
+  }
+  if (!match) {
+    const aliases = getInvoiceAliasKeywords(canonicalName);
+    if (aliases.length > 0) {
+      match = candidates.find((inv: any) => {
+        const inName = normPlain(`${inv.nombre_insumo || ''} ${inv.detalle || ''}`);
+        return aliases.some((kw) => inName.includes(kw));
+      }) || null;
+    }
+  }
+
+  if (!match) return null;
+
+  let cu = Number(match.costo_unitario_kg || match.costo_unitario || 0);
+  const invUnit = normPlain(match.unidad || '');
+  const tgtUnit = normPlain(targetUnit);
+  const det = normPlain(`${match.nombre_insumo || ''} ${match.detalle || ''}`);
+  if (tgtUnit === 'und' && (invUnit.includes('caja') || invUnit.includes('paca') || det.includes('24 und') || det.includes('x 24')) && cu > 20000) {
+    cu = Math.round(cu / 24);
+  } else if (tgtUnit === 'kg' && invUnit.includes('bulto') && cu > 30000) {
+    cu = Math.round(cu / 50);
+  }
+
+  return {
+    numeroFactura: String(match.numero_factura || 'S/N'),
+    fecha: String(match.fecha || ''),
+    proveedor: String(match.proveedor || 'Proveedor'),
+    costoUnitario: Math.round(cu),
+    unidad: targetUnit || String(match.unidad || 'Kg'),
+  };
 }
 
 function resolveStandardCategory(rawCat: string, rawName: string): string {
@@ -255,9 +464,15 @@ export async function GET(request: Request) {
       headerQuery = headerQuery.eq('fecha', dateParam);
     }
 
-    const [catalog, { data: sheetsHeader, error: headerErr }] = await Promise.all([
+    const [catalog, { data: sheetsHeader, error: headerErr }, { data: invoicesDesc }] = await Promise.all([
       getCachedCatalog(),
-      headerQuery
+      headerQuery,
+      supabase
+        .from('compras_detalle')
+        .select('insumo_id, nombre_insumo, detalle, numero_factura, fecha, proveedor, costo_unitario, costo_unitario_kg, unidad')
+        .gte('fecha', '2026-10-01')
+        .order('fecha', { ascending: false })
+        .limit(2000)
     ]);
     if (headerErr) {
       return NextResponse.json({ error: headerErr.message }, { status: 500 });
@@ -337,10 +552,10 @@ export async function GET(request: Request) {
           resolvedCategory = (reg.categoria || '').includes('Producto')
             ? 'Consumido de Productos para la Venta'
             : 'Consumido del Catálogo de Insumos y Carne';
-          catItem = catalog.find((c: any) => c.nombre.toLowerCase() === canonicalName.toLowerCase());
+          catItem = findCatalogForReg(reg, canonicalName, catalog);
         } else {
           canonicalName = getCanonicalName(reg.nombre_insumo, catalog);
-          catItem = catalog.find((c: any) => c.nombre.toLowerCase() === canonicalName.toLowerCase());
+          catItem = findCatalogForReg(reg, canonicalName, catalog);
           resolvedCategory = resolveStandardCategory(catItem?.categoria || reg.categoria, canonicalName);
         }
 
@@ -351,9 +566,11 @@ export async function GET(request: Request) {
         const itemsInCat = categoryMap.get(resolvedCategory)!;
         let existingItem = itemsInCat.find((it: any) => it.name.toLowerCase() === canonicalName.toLowerCase());
 
-        const rawQty = Number(reg.cantidad || 0);
-        const unitPrice = Number(reg.costo_unitario || catItem?.costo_unitario_kg || 0);
-        const total = Number(reg.valor_total || (rawQty * unitPrice));
+        const normalized = normalizeRegMeasurement(reg, canonicalName, catItem);
+        const rawQty = normalized.qty;
+        const unitPrice = normalized.unitPrice;
+        const total = normalized.total;
+        const resolvedUnit = normalized.unit;
 
         // Map internal tipo to UI view tipo
         let uiTipo: string = 'BODEGA_A_COCINA';
@@ -394,7 +611,7 @@ export async function GET(request: Request) {
           origen: uiOrigen,
           destino: uiDestino,
           cantidad: rawQty,
-          unidad: reg.unidad || 'Kg',
+          unidad: resolvedUnit,
           costoUnitario: unitPrice,
           total: total,
           observaciones: reg.observaciones || undefined
@@ -403,20 +620,29 @@ export async function GET(request: Request) {
         if (existingItem) {
           if (!existingItem.registros) existingItem.registros = [];
           existingItem.registros.push(itemReg);
+          if (normalized.equivNote && !existingItem.equivNote) {
+            existingItem.equivNote = normalized.equivNote;
+          }
           // Accumulate default qty/total if it's a traslado or consumo
           if (reg.tipo === 'TRASLADO' || reg.tipo === 'CONSUMO') {
             existingItem.qty += rawQty;
             existingItem.total += total;
           }
         } else {
+          const sourceInvoice = reg.tipo === 'CONSUMO'
+            ? null
+            : findSourceInvoiceForItem(canonicalName, catItem, dateStr, resolvedUnit, invoicesDesc || []);
+
           itemsInCat.push({
             id: `item-${reg.id}`,
             name: canonicalName,
             qty: (reg.tipo === 'TRASLADO' || reg.tipo === 'CONSUMO') ? rawQty : 0,
-            unit: reg.unidad || 'Kg',
+            unit: resolvedUnit,
             unitPrice: unitPrice,
             total: (reg.tipo === 'TRASLADO' || reg.tipo === 'CONSUMO') ? total : 0,
             isInitialInventory: reg.tipo === 'APERTURA',
+            equivNote: normalized.equivNote,
+            sourceInvoice,
             registros: [itemReg]
           });
         }

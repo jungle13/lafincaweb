@@ -68,6 +68,14 @@ interface InsumoItem {
   unitPrice: number;
   total: number;
   isInitialInventory?: boolean;
+  equivNote?: string;
+  sourceInvoice?: {
+    numeroFactura: string;
+    fecha: string;
+    proveedor: string;
+    costoUnitario: number;
+    unidad: string;
+  } | null;
   registros?: InsumoRegistro[];
 }
 
@@ -150,8 +158,9 @@ function isProteinItem(name: string, category: string): boolean {
 
 function isPortionableMeat(catalogItem?: any, name: string = '', category: string = ''): boolean {
   const n = normalizeStrHelper(name || catalogItem?.nombre || catalogItem?.insumo || '');
-  if (n.includes('tamal')) return false;
+  if (n.includes('tamal') && !n.includes('hoja') && !n.includes('masa')) return false;
   if (n.includes('huevo')) return false;
+  if (n.includes('pernil')) return false;
 
   const tipo = catalogItem?.tipo_medida || '';
   if (tipo === 'UNIDADES') {
@@ -217,16 +226,22 @@ function getAllowedUnitsForInsumo(item?: {
     ];
   }
 
-  // 3. Insumos basados en Unidades (Tamales, Arepas, Aguacates, etc.)
-  if (n.includes('tamal') || ((tipo === 'UNIDADES' || u === 'und') && !isPortionableMeat(item, n, c))) {
+  // 3. Insumos basados en Unidades (Tamales, Perniles, Arepas, Aguacates, etc.)
+  if ((n.includes('tamal') && !n.includes('hoja') && !n.includes('masa')) || n.includes('pernil') || ((tipo === 'UNIDADES' || u === 'und') && !isPortionableMeat(item, n, c))) {
     return [
       { value: 'Und', label: 'Unidades (Und)', baseUnit: 'Und', toBaseFactor: () => 1 },
       { value: 'Paquete', label: 'Paquetes', baseUnit: 'Und', toBaseFactor: () => 1 }
     ];
   }
 
-  // 3. Leche o Líquidos (aceite, vinagre, jugos)
-  if (n.includes('leche') || n.includes('aceite') || n.includes('jugo') || n.includes('líquid') || u === 'litro' || u === 'lt' || u.includes('bidon')) {
+  // 3. Leche (por Bolsa) o Líquidos (aceite, vinagre, jugos)
+  if (n.includes('leche') && !n.includes('crema') && !n.includes('coco')) {
+    return [
+      { value: 'Bolsa', label: 'Bolsas', baseUnit: 'Bolsa', toBaseFactor: () => 1 },
+      { value: 'Litro', label: 'Litros (Lt)', baseUnit: 'Bolsa', toBaseFactor: () => 1 },
+    ];
+  }
+  if (n.includes('aceite') || n.includes('jugo') || n.includes('líquid') || u === 'litro' || u === 'lt' || u.includes('bidon')) {
     return [
       { value: 'Litro', label: 'Litros (Lt)', baseUnit: 'Litro', toBaseFactor: () => 1 },
       { value: 'Bolsa', label: 'Bolsas (1 Lt)', baseUnit: 'Litro', toBaseFactor: () => 1 },
@@ -4436,7 +4451,45 @@ Trucha 8`;
                                   </div>
 
                                   <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1 font-mono">
-                                    <span>${item.unitPrice.toLocaleString('es-CO')}/{item.unit}</span>
+                                    {item.sourceInvoice ? (
+                                      <div className="relative group/inv inline-block">
+                                        <span className="cursor-help underline decoration-dotted decoration-orange-400 text-slate-700 font-semibold">
+                                          ${item.unitPrice.toLocaleString('es-CO')}/{item.unit}
+                                        </span>
+                                        <div className="hidden group-hover/inv:block absolute left-0 bottom-full pb-1.5 z-50 w-64">
+                                          <div className="bg-slate-900 text-white rounded-lg p-2.5 shadow-xl border border-slate-700 text-[11px] font-sans leading-relaxed">
+                                            <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-1 mb-1">
+                                              <span className="text-slate-400 font-medium">Factura:</span>
+                                              <a
+                                                href={`/compras?factura=${encodeURIComponent(item.sourceInvoice.numeroFactura)}&fecha=${encodeURIComponent(item.sourceInvoice.fecha)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-orange-400 hover:text-orange-300 font-bold underline"
+                                              >
+                                                {item.sourceInvoice.numeroFactura} ↗
+                                              </a>
+                                            </div>
+                                            <div className="flex justify-between gap-2">
+                                              <span className="text-slate-400">Fecha:</span>
+                                              <span className="font-mono">{item.sourceInvoice.fecha}</span>
+                                            </div>
+                                            <div className="flex justify-between gap-2">
+                                              <span className="text-slate-400">Proveedor:</span>
+                                              <span className="truncate max-w-[140px]" title={item.sourceInvoice.proveedor}>{item.sourceInvoice.proveedor}</span>
+                                            </div>
+                                            <div className="flex justify-between gap-2 mt-0.5 pt-1 border-t border-slate-800">
+                                              <span className="text-slate-400">Costo Unit.:</span>
+                                              <span className="font-mono font-bold text-emerald-400">
+                                                ${item.sourceInvoice.costoUnitario.toLocaleString('es-CO')} /{item.sourceInvoice.unidad}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span>${item.unitPrice.toLocaleString('es-CO')}/{item.unit}</span>
+                                    )}
                                     <span>•</span>
                                     <span className="text-slate-600 font-medium underline decoration-dotted">
                                       {metrics.filteredRegs.length} {metrics.filteredRegs.length === 1 ? 'reg' : 'regs'}
@@ -4453,6 +4506,9 @@ Trucha 8`;
                                     <div className="text-xs font-black text-slate-900 font-mono bg-slate-100 px-2 py-0.5 rounded-md inline-block">
                                       {metrics.qty} <span className="text-[10px] font-bold text-slate-600">{item.unit}</span>
                                     </div>
+                                    {item.equivNote && item.unit === 'Kg' && (
+                                      <div className="text-[10px] text-slate-400 font-mono">({item.equivNote})</div>
+                                    )}
                                     <div className="text-xs font-bold font-mono text-slate-900 mt-0.5">
                                       ${metrics.total.toLocaleString('es-CO')}
                                     </div>
@@ -4497,12 +4553,53 @@ Trucha 8`;
 
                               {/* Cantidad y Unidad */}
                               <div className="sm:col-span-2 sm:text-right font-medium text-slate-900 font-mono">
-                                {metrics.qty} {item.unit}
+                                <div>{metrics.qty} {item.unit}</div>
+                                {item.equivNote && item.unit === 'Kg' && (
+                                  <div className="text-[10px] text-slate-400 font-normal">({item.equivNote})</div>
+                                )}
                               </div>
 
                               {/* Costo Factura */}
                               <div className="sm:col-span-2 sm:text-right text-slate-600 font-mono">
-                                ${item.unitPrice.toLocaleString('es-CO')} /{item.unit}
+                                {item.sourceInvoice ? (
+                                  <div className="relative group/inv inline-block">
+                                    <span className="cursor-help underline decoration-dotted decoration-orange-400 hover:text-slate-900 transition-colors">
+                                      ${item.unitPrice.toLocaleString('es-CO')} /{item.unit}
+                                    </span>
+                                    <div className="hidden group-hover/inv:block absolute right-0 bottom-full pb-1.5 z-50 w-64 text-left">
+                                      <div className="bg-slate-900 text-white rounded-lg p-2.5 shadow-xl border border-slate-700 text-[11px] font-sans leading-relaxed">
+                                        <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-1 mb-1">
+                                          <span className="text-slate-400 font-medium">Factura:</span>
+                                          <a
+                                            href={`/compras?factura=${encodeURIComponent(item.sourceInvoice.numeroFactura)}&fecha=${encodeURIComponent(item.sourceInvoice.fecha)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="text-orange-400 hover:text-orange-300 font-bold underline"
+                                          >
+                                            {item.sourceInvoice.numeroFactura} ↗
+                                          </a>
+                                        </div>
+                                        <div className="flex justify-between gap-2">
+                                          <span className="text-slate-400">Fecha:</span>
+                                          <span className="font-mono">{item.sourceInvoice.fecha}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-2">
+                                          <span className="text-slate-400">Proveedor:</span>
+                                          <span className="truncate max-w-[140px]" title={item.sourceInvoice.proveedor}>{item.sourceInvoice.proveedor}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-2 mt-0.5 pt-1 border-t border-slate-800">
+                                          <span className="text-slate-400">Costo Unit.:</span>
+                                          <span className="font-mono font-bold text-emerald-400">
+                                            ${item.sourceInvoice.costoUnitario.toLocaleString('es-CO')} /{item.sourceInvoice.unidad}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span>${item.unitPrice.toLocaleString('es-CO')} /{item.unit}</span>
+                                )}
                               </div>
 
                               {/* Subtotal y Eliminar */}

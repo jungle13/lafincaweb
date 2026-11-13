@@ -48,6 +48,7 @@ import {
   InlineKeyboardMarkup
 } from '@/services/telegramMenuService';
 import { supabase } from '@/lib/supabase';
+import { getAuthEnforcementMode, logSecurityAudit } from '@/lib/authServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,28 @@ async function responderNuevoMensaje(chatId: number, texto: string, markup?: Inl
 
 export async function POST(req: Request) {
   try {
+    const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    const incomingSecret = req.headers.get('x-telegram-bot-api-secret-token');
+
+    if (expectedSecret) {
+      if (incomingSecret !== expectedSecret) {
+        logSecurityAudit('/api/telegram/webhook', 'POST', 'INVALID_TELEGRAM_SECRET_TOKEN');
+        if (getAuthEnforcementMode() === 'enforce') {
+          return NextResponse.json(
+            {
+              error: 'No autorizado',
+              code: 'TELEGRAM_SECRET_INVALID',
+              route: '/api/telegram/webhook',
+              hint: 'Header x-telegram-bot-api-secret-token inválido o ausente.',
+            },
+            { status: 401 }
+          );
+        }
+      }
+    } else {
+      logSecurityAudit('/api/telegram/webhook', 'POST', 'TELEGRAM_WEBHOOK_SECRET_NOT_CONFIGURED');
+    }
+
     const update = await req.json();
 
     // =========================================================================
@@ -587,8 +610,6 @@ export async function GET() {
   return NextResponse.json({
     status: 'online',
     servicio: 'La Finca Telegram Bot Webhook & Menu Interactivo',
-    hasTelegramToken: Boolean(process.env.TELEGRAM_BOT_TOKEN),
-    hasGroqKey: Boolean(process.env.GROQ_API_KEY),
     timestamp: new Date().toISOString(),
   });
 }

@@ -5,6 +5,14 @@ import {
   recalcularHojaDiaria,
   extractResponsableFromSoporte,
 } from '@/services/libroCajaService';
+import {
+  AUTH_COOKIE_NAME,
+  CAJERO_COOKIE_NAME,
+  getAuthEnforcementMode,
+  logSecurityAudit,
+  signAuthToken,
+  verifyAuthToken,
+} from '@/lib/authServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +64,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         usuario: {
           id: user.id,
@@ -66,6 +74,40 @@ export async function POST(req: NextRequest) {
           caja_predeterminada: user.caja_predeterminada,
         },
       });
+
+      const cajeroToken = await signAuthToken({
+        username: user.username,
+        name: user.nombre_cajero || user.username,
+        role: 'cajero',
+      });
+
+      response.cookies.set(CAJERO_COOKIE_NAME, cajeroToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30, // 30 días
+      });
+
+      return response;
+    }
+
+    // Validar sesión para todas las demás acciones de libros-apoyo
+    const adminSession = await verifyAuthToken(req.cookies.get(AUTH_COOKIE_NAME)?.value);
+    const cajeroSession = await verifyAuthToken(req.cookies.get(CAJERO_COOKIE_NAME)?.value);
+    if (!adminSession && !cajeroSession) {
+      logSecurityAudit('/api/libros-apoyo', 'POST', `MISSING_SESSION_ACTION_${String(action || 'UNKNOWN')}`);
+      if (getAuthEnforcementMode() === 'enforce') {
+        return NextResponse.json(
+          {
+            error: 'No autorizado',
+            code: 'AUTH_REQUIRED',
+            route: '/api/libros-apoyo',
+            hint: 'Falta sesión válida de cajero o administrador.',
+          },
+          { status: 401 }
+        );
+      }
     }
 
     // 1. Abrir Flujo de Caja o Recibir Turno tras Cierre Parcial (1 solo flujo por día)

@@ -13,7 +13,7 @@ export default function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -24,7 +24,7 @@ export default function LoginForm() {
     }
 
     setLoading(true);
-    const ok = login(cleanUser, password);
+    const ok = await login(cleanUser, password);
     if (!ok) {
       setError('Usuario o contraseña incorrectos.');
       setLoading(false);
