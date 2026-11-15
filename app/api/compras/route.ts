@@ -33,6 +33,62 @@ export async function GET(request: Request) {
   }
 }
 
+const normName = (s: string): string =>
+  String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const resolveCatalogMatch = (rawName: string, catalogRows: any[], insumoId?: string | null) => {
+  if (insumoId) {
+    const byId = catalogRows.find((c: any) => c.id === insumoId);
+    if (byId) return byId;
+  }
+  const target = normName(rawName);
+  if (!target || target.length < 3) return null;
+
+  const exact = catalogRows.find((c: any) => normName(c.nombre) === target);
+  if (exact) return exact;
+
+  const candidates = catalogRows.filter((c: any) => {
+    const cn = normName(c.nombre);
+    return cn.length >= 4 && (cn.includes(target) || target.includes(cn));
+  });
+  if (candidates.length === 0) return null;
+  candidates.sort((a: any, b: any) => normName(a.nombre).length - normName(b.nombre).length);
+  return candidates[0];
+};
+
+const normalizePackagingCost = (
+  rawCost: number,
+  rawName: string,
+  rawDetalle: string,
+  invUnit: string,
+  catUnit: string
+): number => {
+  if (rawCost <= 0) return 0;
+  const det = normName(`${rawName} ${rawDetalle}`);
+  const uInv = normName(invUnit);
+  const uCat = normName(catUnit || 'Kg');
+
+  if ((det.includes('x 24') || det.includes('x24') || det.includes('24 und') || uInv.includes('caja') || uInv.includes('paca')) && rawCost > 20000) {
+    return Math.round(rawCost / 24);
+  }
+  if ((det.includes('x 12') || det.includes('x12') || det.includes('12 und')) && rawCost > 12000) {
+    return Math.round(rawCost / 12);
+  }
+  if ((det.includes('x 30') || det.includes('x30') || det.includes('panal')) && rawCost > 8000) {
+    return Math.round(rawCost / 30);
+  }
+  if ((det.includes('bulto') || uInv.includes('bulto')) && uCat === 'kg' && rawCost > 30000) {
+    return Math.round(rawCost / 50);
+  }
+  return Math.round(rawCost);
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -61,6 +117,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: catalogData } = await supabase
+      .from('catalogo_insumos')
+      .select('id, nombre, unidad_medida, costo_unitario_kg');
+    const catalogRows = catalogData || [];
+
     let valor_total = 0;
     const compraId = crypto.randomUUID();
     const targetPeriodo = periodo_id || 'per-2026-10';
@@ -71,10 +132,19 @@ export async function POST(request: Request) {
       const subtotal = Number(it.valor_compra || (cant * costo));
       valor_total += subtotal;
 
+      const catMatch = resolveCatalogMatch(it.nombre_insumo || it.detalle || '', catalogRows, it.insumo_id);
+      const normalizedCostKg = normalizePackagingCost(
+        costo,
+        it.nombre_insumo || '',
+        it.detalle || '',
+        it.unidad || 'Und',
+        catMatch?.unidad_medida || 'Kg'
+      );
+
       return {
         id: crypto.randomUUID(),
         compra_id: compraId,
-        insumo_id: it.insumo_id || null,
+        insumo_id: catMatch?.id || it.insumo_id || null,
         fecha,
         numero_factura,
         proveedor,
@@ -85,7 +155,7 @@ export async function POST(request: Request) {
         cantidad_kg: it.unidad === 'Kg' ? cant : cant,
         unidad: it.unidad || 'Und',
         costo_unitario: costo,
-        costo_unitario_kg: costo,
+        costo_unitario_kg: normalizedCostKg > 0 ? normalizedCostKg : costo,
         valor_compra: subtotal,
         costo_total: subtotal,
         origen: origen || 'Registro manual',
@@ -131,32 +201,11 @@ export async function POST(request: Request) {
 
     // 3. Disparador automático: actualizar costo_unitario_kg en catalogo_insumos con la nueva factura
     try {
-      const { data: catalogRows } = await supabase
-        .from('catalogo_insumos')
-        .select('id, nombre, unidad_medida, costo_unitario_kg');
-
-      const normName = (s: string) =>
-        String(s || '')
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9\s]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-
       for (const linea of lineasToInsert) {
         const rawCost = Number(linea.costo_unitario_kg || linea.costo_unitario || 0);
         if (rawCost <= 0) continue;
 
-        let catMatch = linea.insumo_id
-          ? (catalogRows || []).find((c: any) => c.id === linea.insumo_id)
-          : null;
-
-        if (!catMatch && linea.nombre_insumo) {
-          const ln = normName(linea.nombre_insumo);
-          catMatch = (catalogRows || []).find((c: any) => normName(c.nombre) === ln) || null;
-        }
-
+        const catMatch = resolveCatalogMatch(linea.nombre_insumo || '', catalogRows, linea.insumo_id);
         if (!catMatch) continue;
 
         // Verificar que esta factura sea >= última factura registrada para ese insumo (coherencia cronológica)
@@ -169,16 +218,13 @@ export async function POST(request: Request) {
 
         if (newerInv && newerInv.length > 0) continue;
 
-        let normalizedCost = Math.round(rawCost);
-        const invUnit = normName(linea.unidad || '');
-        const catUnit = normName(catMatch.unidad_medida || '');
-        const det = normName(`${linea.nombre_insumo || ''} ${linea.detalle || ''}`);
-
-        if (catUnit === 'und' && (invUnit.includes('caja') || invUnit.includes('paca') || det.includes('24 und') || det.includes('x 24')) && rawCost > 20000) {
-          normalizedCost = Math.round(rawCost / 24);
-        } else if (catUnit === 'kg' && invUnit.includes('bulto') && rawCost > 30000) {
-          normalizedCost = Math.round(rawCost / 50);
-        }
+        const normalizedCost = normalizePackagingCost(
+          rawCost,
+          linea.nombre_insumo || '',
+          linea.detalle || '',
+          linea.unidad || '',
+          catMatch.unidad_medida || 'Kg'
+        );
 
         await supabase
           .from('catalogo_insumos')

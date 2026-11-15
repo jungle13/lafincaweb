@@ -94,6 +94,16 @@ interface CosteoSheet {
   title: string;
   posSales: number;
   devoluciones?: number;
+  preciosVigentes?: Record<string, {
+    unitPrice: number;
+    sourceInvoice?: {
+      numeroFactura: string;
+      fecha: string;
+      proveedor: string;
+      costoUnitario: number;
+      unidad: string;
+    } | null;
+  }>;
   categories: CategoryGroup[];
 }
 
@@ -1264,7 +1274,11 @@ function findBestCatalogMatch(query: string, catalogList: any[]): { item: any | 
   return { item: null, score: 0 };
 }
 
-function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteoItem[] {
+function parseBulkConteosText(
+  rawText: string,
+  catalogList: any[],
+  preciosVigentes?: CosteoSheet['preciosVigentes']
+): ParsedConteoItem[] {
   const lines = rawText.split('\n');
   const results: ParsedConteoItem[] = [];
 
@@ -1367,10 +1381,13 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
       ? Number(matchedItem?.peso_estandar_porcion_kg || (portionable ? getPortionWeightKg(finalName) : 0))
       : (portionable ? getPortionWeightKg(finalName) : 0);
 
-    // PRECIO UNITARIO REAL DESDE BASE DE DATOS
-    const unitPrice = isMatched && Number(matchedItem?.costo_unitario_kg) > 0
-      ? Number(matchedItem.costo_unitario_kg)
-      : (portionable ? 25000 : 3500);
+    // PRECIO UNITARIO REAL DESDE BASE DE DATOS (con prioridad cronológica de factura vigente a la fecha de la hoja)
+    const historicalPrice = matchedItem?.id ? Number(preciosVigentes?.[matchedItem.id]?.unitPrice || 0) : 0;
+    const unitPrice = historicalPrice > 0
+      ? historicalPrice
+      : isMatched && Number(matchedItem?.costo_unitario_kg) > 0
+        ? Number(matchedItem.costo_unitario_kg)
+        : (portionable ? 25000 : 3500);
 
     // Sugerencia lógica de unidad inicial si no vino explícita
     let finalUnit = explicitUnit || '';
@@ -1702,7 +1719,7 @@ export default function CosteoDiarioPage() {
       if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
         setCatalogItems(data.data);
         if (typeof reParseText === 'string' && reParseText.trim()) {
-          const parsed = parseBulkConteosText(reParseText, data.data);
+          const parsed = parseBulkConteosText(reParseText, data.data, activeSheet?.preciosVigentes);
           setParsedConteosList(parsed);
         }
       }
@@ -1865,12 +1882,109 @@ export default function CosteoDiarioPage() {
     }, 50);
   };
 
-  // Agregar nuevo registro o guardar cambios de edición (mantiene el panel abierto y re-enfoca)
+  // Agregar nuevo registro, guardar cambios de edición, o actualizar solo el precio unitario
   const handleAddInsumoRegistro = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeDrawerInsumo || !activeSheet) return;
 
+    const operationalType: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' | 'CONSUMO' = 
+      activeOperationalView === 'COCINA_APERTURA' ? 'INVENTARIO_INICIAL_COCINA' :
+      activeOperationalView === 'DEVOLUCIONES' ? 'DEVOLUCION_COCINA' :
+      activeOperationalView === 'COCINA_CIERRE' ? 'COCINA_CIERRE' :
+      activeOperationalView === 'CONSUMOS' ? 'CONSUMO' :
+      activeOperationalView === 'BODEGA_APERTURA' ? 'BODEGA_APERTURA' :
+      activeOperationalView === 'BODEGA_CIERRE' ? 'BODEGA_CIERRE' : 'BODEGA_A_COCINA';
+
     const evalResult = evaluateQtyFormula(drawerQtyFormula);
+    const typedUnitPrice = parseFloat(drawerUnitPrice);
+    const isPriceOnlyUpdate =
+      !editingRegId &&
+      (!drawerQtyFormula.trim() || !evalResult.isValid || evalResult.value <= 0) &&
+      !isNaN(typedUnitPrice) &&
+      typedUnitPrice > 0 &&
+      typedUnitPrice !== activeDrawerInsumo.item.unitPrice;
+
+    if (isPriceOnlyUpdate) {
+      const updatedRegistros = (activeDrawerInsumo.item.registros || []).map(r => {
+        if (r.tipo !== operationalType) return r;
+        const newRegTotal = Math.round(r.cantidad * typedUnitPrice);
+        return {
+          ...r,
+          costoUnitario: typedUnitPrice,
+          total: newRegTotal
+        };
+      });
+
+      const targetRegs = updatedRegistros.filter(r => r.tipo === operationalType);
+      const newTotalQty = Number(updatedRegistros.reduce((acc, r) => acc + (r.tipo === 'DEVOLUCION_COCINA' ? -r.cantidad : r.cantidad), 0).toFixed(2));
+      const newTotalCost = Math.round(Math.max(0, newTotalQty) * typedUnitPrice);
+
+      const updatedItem: InsumoItem = {
+        ...activeDrawerInsumo.item,
+        unitPrice: typedUnitPrice,
+        total: newTotalCost,
+        registros: updatedRegistros
+      };
+
+      setSheets(prevSheets => prevSheets.map(s => {
+        if (s.id !== activeSheet.id) return s;
+        return {
+          ...s,
+          categories: s.categories.map(cat => {
+            if (cat.id !== activeDrawerInsumo.categoryId) return cat;
+            return {
+              ...cat,
+              items: cat.items.map(it => it.id === updatedItem.id ? updatedItem : it)
+            };
+          })
+        };
+      }));
+
+      setActiveDrawerInsumo({
+        ...activeDrawerInsumo,
+        item: updatedItem
+      });
+
+      Promise.all(
+        targetRegs.map(reg =>
+          fetch('/api/costeo-diario', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fecha: activeSheet.dateStr,
+              titulo: activeSheet.title,
+              pos_sales: activeSheet.posSales,
+              targetView: activeOperationalView,
+              movimiento: {
+                id: reg.id.replace(/^(reg-|item-)/, ''),
+                tipo: operationalType,
+                insumo_id: activeDrawerInsumo.item.id?.replace(/^(item-|reg-)/, '') || null,
+                nombre_insumo: activeDrawerInsumo.item.name,
+                categoria: activeDrawerInsumo.categoryName,
+                cantidad: reg.cantidad,
+                unidad: activeDrawerInsumo.item.unit,
+                costo_unitario: typedUnitPrice,
+                total: reg.total,
+                observaciones: reg.observaciones || undefined
+              }
+            })
+          })
+        )
+      )
+        .then(async () => {
+          const r = await fetch('/api/costeo-diario');
+          const d = await r.json();
+          if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
+            setSheets(d.sheets);
+          }
+        })
+        .catch(err => console.error('Error actualizando precio unitario en API:', err));
+
+      setDrawerSuccessMsg(`✓ Precio actualizado a $${typedUnitPrice.toLocaleString('es-CO')}`);
+      setTimeout(() => setDrawerSuccessMsg(''), 2500);
+      return;
+    }
+
     if (!evalResult.isValid || evalResult.value <= 0) {
       qtyInputRef.current?.focus();
       return;
@@ -1899,14 +2013,6 @@ export default function CosteoDiarioPage() {
     const regTotal = Math.round(finalQty * unitPrice);
     const now = new Date();
     const horaAuto = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
-
-    const operationalType: 'BODEGA_A_COCINA' | 'INVENTARIO_INICIAL_COCINA' | 'DEVOLUCION_COCINA' | 'COCINA_CIERRE' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE' | 'CONSUMO' = 
-      activeOperationalView === 'COCINA_APERTURA' ? 'INVENTARIO_INICIAL_COCINA' :
-      activeOperationalView === 'DEVOLUCIONES' ? 'DEVOLUCION_COCINA' :
-      activeOperationalView === 'COCINA_CIERRE' ? 'COCINA_CIERRE' :
-      activeOperationalView === 'CONSUMOS' ? 'CONSUMO' :
-      activeOperationalView === 'BODEGA_APERTURA' ? 'BODEGA_APERTURA' :
-      activeOperationalView === 'BODEGA_CIERRE' ? 'BODEGA_CIERRE' : 'BODEGA_A_COCINA';
 
     const originDest = 
       activeOperationalView === 'DEVOLUCIONES' ? { origen: 'Cocina Principal', destino: 'Bodega General' } :
@@ -2380,7 +2486,9 @@ export default function CosteoDiarioPage() {
   const handleSelectCatalogItem = (item: any) => {
     setSelectedCatalogItem(item);
     setNewInsumoName(item.nombre || item.insumo);
+    const historicalPrice = item?.id ? Number(activeSheet?.preciosVigentes?.[item.id]?.unitPrice || 0) : 0;
     const unitPrice = Number(
+      historicalPrice ||
       item.costo_unitario_kg || 
       item.precio_total || 
       item.precio_neto || 
@@ -3037,7 +3145,7 @@ export default function CosteoDiarioPage() {
 
   // Handlers para el módulo de Añadir Conteos
   const handleParseConteos = (text: string) => {
-    const parsed = parseBulkConteosText(text, catalogItems);
+    const parsed = parseBulkConteosText(text, catalogItems, activeSheet?.preciosVigentes);
     setParsedConteosList(parsed);
   };
 
@@ -5926,7 +6034,9 @@ Trucha 8`;
                       type="submit"
                       className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2 px-3 rounded-md transition-colors shadow-2xs flex items-center justify-center cursor-pointer active:scale-98"
                     >
-                      Registrar
+                      {!drawerQtyFormula.trim() && Number(drawerUnitPrice) > 0 && Number(drawerUnitPrice) !== activeDrawerInsumo?.item.unitPrice
+                        ? 'Actualizar Precio Unitario ($)'
+                        : 'Registrar'}
                     </button>
                   )}
                 </form>
