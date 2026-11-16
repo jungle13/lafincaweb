@@ -19,6 +19,7 @@ import ComprasKPIHeader from '@/components/compras/ComprasKPIHeader';
 import ComprasFacturasView from '@/components/compras/ComprasFacturasView';
 import ComprasInsumosView from '@/components/compras/ComprasInsumosView';
 import ComprasLineasView from '@/components/compras/ComprasLineasView';
+import ComprasPagosView from '@/components/compras/ComprasPagosView';
 import ComprasExportButtons from '@/components/compras/ComprasExportButtons';
 import NuevaCompraView from '@/components/compras/NuevaCompraView';
 import { 
@@ -30,7 +31,7 @@ import {
 } from '@/services/comprasService';
 import { getCachedData, setCachedData } from '@/lib/dataCache';
 
-type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS';
+type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS' | 'PAGOS';
 
 export default function ComprasPage() {
   const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos, isPeriodoCerrado } = usePeriodo();
@@ -599,6 +600,28 @@ export default function ComprasPage() {
             {filteredLineas.length}
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('PAGOS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'PAGOS'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-2xs font-semibold'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5" />
+          <span>Pagos y Comprobantes</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+              activeTab === 'PAGOS'
+                ? 'bg-white/20 text-white'
+                : 'bg-emerald-100 text-emerald-700'
+            }`}
+          >
+            {filteredFacturas.filter((f) => f.estado_pago === 'PAGADO' || f.estado_pago === 'PARCIAL').length}
+          </span>
+        </button>
       </div>
 
       {/* 📄 Vistas según Pestaña Activa */}
@@ -616,9 +639,11 @@ export default function ComprasPage() {
           </div>
         </div>
       ) : activeTab === 'FACTURAS' ? (
-        <ComprasFacturasView facturas={filteredFacturas} />
+        <ComprasFacturasView facturas={filteredFacturas} onPagoUpdated={loadData} />
       ) : activeTab === 'INSUMOS' ? (
         <ComprasInsumosView insumos={filteredInsumos} />
+      ) : activeTab === 'PAGOS' ? (
+        <ComprasPagosView facturas={filteredFacturas} onPagoUpdated={loadData} />
       ) : (
         <ComprasLineasView lineas={filteredLineas} />
       )}

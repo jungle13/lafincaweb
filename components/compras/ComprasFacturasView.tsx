@@ -8,7 +8,10 @@ import {
   Receipt, 
   Calendar, 
   Building2,
-  Package
+  Package,
+  CheckCircle2,
+  CreditCard,
+  Clock
 } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
 import { CompraFacturaGroup } from '@/services/comprasService';
@@ -17,11 +20,18 @@ import { downloadComprasFacturasPdf } from '@/lib/exportComprasFacturasPdf';
 
 interface Props {
   facturas: CompraFacturaGroup[];
+  onPagoUpdated?: () => void;
 }
 
-export default function ComprasFacturasView({ facturas }: Props) {
+export default function ComprasFacturasView({ facturas, onPagoUpdated }: Props) {
   // State de facturas desplegadas
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [pagoPanelId, setPagoPanelId] = useState<string | null>(null);
+  const [pagoEstado, setPagoEstado] = useState<'PAGADO' | 'PARCIAL' | 'PENDIENTE'>('PAGADO');
+  const [pagoValor, setPagoValor] = useState<string>('');
+  const [pagoFecha, setPagoFecha] = useState<string>('');
+  const [pagoCE, setPagoCE] = useState<string>('');
+  const [savingPago, setSavingPago] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -161,6 +171,43 @@ export default function ComprasFacturasView({ facturas }: Props) {
                   {fac.items.length} {fac.items.length === 1 ? 'ítem' : 'ítems'}
                 </span>
 
+                {/* Estado de Pago + Comprobante Egreso */}
+                {fac.estado_pago === 'PAGADO' ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Pagado {fac.comprobante_egreso ? `· ${fac.comprobante_egreso}` : ''}
+                  </span>
+                ) : fac.estado_pago === 'PARCIAL' ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
+                    <CreditCard className="w-3 h-3" />
+                    Parcial (${formatMoney(fac.valor_pagado)})
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full">
+                    <Clock className="w-3 h-3" />
+                    Pendiente
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (pagoPanelId === fac.id) {
+                      setPagoPanelId(null);
+                    } else {
+                      setPagoPanelId(fac.id);
+                      setPagoEstado(fac.estado_pago === 'PARCIAL' ? 'PARCIAL' : 'PAGADO');
+                      setPagoValor(String(fac.valor_pagado || Math.round(fac.valor_total / 2)));
+                      setPagoFecha(fac.fecha_pago || new Date().toISOString().slice(0, 10));
+                      setPagoCE(fac.comprobante_egreso || '');
+                    }
+                  }}
+                  className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 text-[11px] font-semibold text-slate-700 cursor-pointer"
+                >
+                  💳 Pago
+                </button>
+
                 {/* Total Factura */}
                 <div className="text-right">
                   <div className="text-sm md:text-base font-bold text-slate-900 font-mono tracking-tight">
@@ -169,6 +216,106 @@ export default function ComprasFacturasView({ facturas }: Props) {
                 </div>
               </div>
             </div>
+
+            {/* Barra Rápida Inline de Pago de Factura */}
+            {pagoPanelId === fac.id && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="border-t border-slate-200 bg-slate-50 px-4 py-3 flex flex-wrap items-end gap-3 text-xs"
+              >
+                <div className="flex items-center gap-1">
+                  {(['PAGADO', 'PARCIAL', 'PENDIENTE'] as const).map((est) => (
+                    <button
+                      key={est}
+                      type="button"
+                      onClick={() => setPagoEstado(est)}
+                      className={`px-2.5 py-1.5 rounded-md font-semibold border cursor-pointer ${
+                        pagoEstado === est
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      {est === 'PAGADO' ? 'Pago Total' : est === 'PARCIAL' ? 'Pago Parcial' : 'Pendiente'}
+                    </button>
+                  ))}
+                </div>
+
+                {pagoEstado === 'PARCIAL' && (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Valor Pagado ($)</span>
+                    <input
+                      type="number"
+                      value={pagoValor}
+                      onChange={(e) => setPagoValor(e.target.value)}
+                      className="w-32 bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-mono font-bold text-slate-900"
+                    />
+                  </label>
+                )}
+
+                {pagoEstado !== 'PENDIENTE' && (
+                  <>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Fecha de Pago</span>
+                      <input
+                        type="date"
+                        value={pagoFecha}
+                        onChange={(e) => setPagoFecha(e.target.value)}
+                        className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs text-slate-900"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Comprobante Egreso</span>
+                      <input
+                        type="text"
+                        value={pagoCE}
+                        onChange={(e) => setPagoCE(e.target.value)}
+                        placeholder="Auto (CE-XXXX)"
+                        className="w-32 bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-mono text-slate-900"
+                      />
+                    </label>
+                  </>
+                )}
+
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <button
+                    type="button"
+                    disabled={savingPago}
+                    onClick={async () => {
+                      setSavingPago(true);
+                      try {
+                        const res = await fetch('/api/compras', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            compra_id: fac.id,
+                            estado_pago: pagoEstado,
+                            valor_pagado: pagoEstado === 'PARCIAL' ? Number(pagoValor || 0) : pagoEstado === 'PAGADO' ? fac.valor_total : 0,
+                            fecha_pago: pagoEstado === 'PENDIENTE' ? null : pagoFecha,
+                            comprobante_egreso: pagoEstado === 'PENDIENTE' ? null : pagoCE.trim() || null,
+                          }),
+                        });
+                        if (res.ok) {
+                          setPagoPanelId(null);
+                          onPagoUpdated?.();
+                        }
+                      } finally {
+                        setSavingPago(false);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                  >
+                    {savingPago ? 'Guardando...' : 'Guardar Pago'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPagoPanelId(null)}
+                    className="px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-slate-600 font-medium cursor-pointer"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Detalle Desplegable de Ítems */}
             {isExpanded && (

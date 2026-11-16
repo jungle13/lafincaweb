@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { fetchComprasData, fetchMesesComprasResumen } from '@/services/comprasService';
+import { crearNotificacionFacturaCompra } from '@/services/notificacionesService';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -238,6 +239,53 @@ export async function POST(request: Request) {
       console.warn('[POST /api/compras] Advertencia actualizando precios en catálogo:', syncCatErr);
     }
 
+    // 4. Asegurar proveedor en tabla maestra de proveedores con código único
+    try {
+      const cleanProv = String(proveedor || '').trim();
+      if (cleanProv) {
+        const { data: existingProv } = await supabase
+          .from('proveedores')
+          .select('id')
+          .ilike('nombre', cleanProv)
+          .limit(1)
+          .maybeSingle();
+
+        if (!existingProv) {
+          const { data: allProvs } = await supabase
+            .from('proveedores')
+            .select('codigo');
+          let maxNum = 0;
+          for (const p of (allProvs || [])) {
+            const m = String(p.codigo || '').match(/(\d+)$/);
+            if (m) maxNum = Math.max(maxNum, Number(m[1]));
+          }
+          const nextCodigo = `PROV-${String(maxNum + 1).padStart(3, '0')}`;
+          await supabase.from('proveedores').insert({
+            codigo: nextCodigo,
+            nombre: cleanProv,
+            categoria_principal: categoria || lineasToInsert[0]?.categoria || 'Insumos Generales',
+          });
+        }
+      }
+    } catch (provErr) {
+      console.warn('[POST /api/compras] Advertencia sincronizando proveedor:', provErr);
+    }
+
+    // 5. Crear notificación pendiente de aprobación para el Administrador
+    try {
+      const originUrl = new URL(request.url).origin;
+      await crearNotificacionFacturaCompra({
+        compraId,
+        numeroFactura: numero_factura,
+        proveedor,
+        fecha,
+        valorTotal: valor_total,
+        appBaseUrl: process.env.NEXT_PUBLIC_APP_URL || originUrl,
+      });
+    } catch (notifErr) {
+      console.warn('[POST /api/compras] No se pudo registrar notificación pendiente:', notifErr);
+    }
+
     return NextResponse.json({
       success: true,
       compra: compraCreated,
@@ -248,6 +296,113 @@ export async function POST(request: Request) {
     console.error('Error en POST /api/compras:', err);
     return NextResponse.json(
       { success: false, error: err?.message || 'Error al guardar la factura' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const {
+      compra_id,
+      estado_pago,
+      valor_pagado,
+      fecha_pago,
+      comprobante_egreso,
+    } = body;
+
+    if (!compra_id) {
+      return NextResponse.json(
+        { success: false, error: 'El compra_id es obligatorio.' },
+        { status: 400 }
+      );
+    }
+
+    const { data: factura, error: errFind } = await supabase
+      .from('compras')
+      .select('id, valor_total, comprobante_egreso')
+      .eq('id', compra_id)
+      .single();
+
+    if (errFind || !factura) {
+      return NextResponse.json(
+        { success: false, error: 'Factura no encontrada.' },
+        { status: 404 }
+      );
+    }
+
+    const valorTotal = Number(factura.valor_total || 0);
+    const estadoNorm = String(estado_pago || 'PENDIENTE').toUpperCase();
+    if (!['PENDIENTE', 'PARCIAL', 'PAGADO'].includes(estadoNorm)) {
+      return NextResponse.json(
+        { success: false, error: 'Estado de pago inválido.' },
+        { status: 400 }
+      );
+    }
+
+    let finalValorPagado = 0;
+    let finalFechaPago: string | null = null;
+    let finalComprobante: string | null = null;
+
+    if (estadoNorm === 'PAGADO') {
+      finalValorPagado = valorTotal;
+      finalFechaPago = fecha_pago || new Date().toISOString().slice(0, 10);
+      finalComprobante = (comprobante_egreso || factura.comprobante_egreso || '').trim();
+    } else if (estadoNorm === 'PARCIAL') {
+      finalValorPagado = Math.max(0, Math.min(valorTotal, Number(valor_pagado || 0)));
+      if (finalValorPagado <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'Para pago parcial debes ingresar un valor pagado mayor a 0.' },
+          { status: 400 }
+        );
+      }
+      finalFechaPago = fecha_pago || new Date().toISOString().slice(0, 10);
+      finalComprobante = (comprobante_egreso || factura.comprobante_egreso || '').trim();
+    }
+
+    // Autogenerar consecutivo CE-XXXX si está pagado/parcial y no tiene comprobante asignado
+    if (estadoNorm !== 'PENDIENTE' && !finalComprobante) {
+      const { data: existingCE } = await supabase
+        .from('compras')
+        .select('comprobante_egreso')
+        .not('comprobante_egreso', 'is', null);
+
+      let maxCe = 0;
+      for (const row of (existingCE || [])) {
+        const m = String(row.comprobante_egreso || '').match(/(\d+)$/);
+        if (m) maxCe = Math.max(maxCe, Number(m[1]));
+      }
+      finalComprobante = `CE-${String(maxCe + 1).padStart(4, '0')}`;
+    }
+
+    const finalEstado =
+      estadoNorm === 'PARCIAL' && finalValorPagado >= valorTotal && valorTotal > 0
+        ? 'PAGADO'
+        : estadoNorm;
+
+    const { data: updated, error: errUpd } = await supabase
+      .from('compras')
+      .update({
+        estado_pago: finalEstado,
+        valor_pagado: finalValorPagado,
+        fecha_pago: finalFechaPago,
+        comprobante_egreso: finalComprobante,
+      })
+      .eq('id', compra_id)
+      .select('*')
+      .single();
+
+    if (errUpd) throw errUpd;
+
+    return NextResponse.json({
+      success: true,
+      compra: updated,
+    });
+  } catch (err: any) {
+    console.error('Error en PATCH /api/compras:', err);
+    return NextResponse.json(
+      { success: false, error: err?.message || 'Error actualizando pago de factura' },
       { status: 500 }
     );
   }

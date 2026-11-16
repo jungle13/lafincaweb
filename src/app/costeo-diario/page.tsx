@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import catalogoOficial from '@/lib/catalogo-oficial.json';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { usePeriodo } from '@/context/PeriodoContext';
@@ -3561,19 +3562,30 @@ Trucha 8`;
               )}
               {/* Botón Principal: Añadir Conteos (Se mantiene visible) */}
               {!isSheetCerrado && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsConteosDrawerOpen(true);
-                    setConteosTargetView(activeOperationalView === 'CONSUMOS' ? 'COCINA_CIERRE' : activeOperationalView);
-                    refreshCatalog(conteosRawText);
-                  }}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95 whitespace-nowrap"
-                  title="Añadir conteos de texto rápido"
-                >
-                  <ClipboardList className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
-                  <span>Añadir Conteos</span>
-                </button>
+                <>
+                  <Link
+                    href={`/costeo-diario/pos?fecha=${encodeURIComponent(activeSheet.dateStr)}&vista=${encodeURIComponent(activeOperationalView === 'CONSUMOS' ? 'TRASLADOS' : activeOperationalView)}`}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 border border-slate-900 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer touch-manipulation active:scale-95 whitespace-nowrap"
+                    title="Abrir interfaz táctil tipo POS para tablet o móvil"
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Modo POS</span>
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsConteosDrawerOpen(true);
+                      setConteosTargetView(activeOperationalView === 'CONSUMOS' ? 'COCINA_CIERRE' : activeOperationalView);
+                      refreshCatalog(conteosRawText);
+                    }}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:text-slate-900 border border-slate-300 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95 whitespace-nowrap"
+                    title="Añadir conteos de texto rápido"
+                  >
+                    <ClipboardList className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900" />
+                    <span>Añadir Conteos</span>
+                  </button>
+                </>
               )}
 
               {/* Botón Desplegable Único de Utilidades (Exportar informe, Importar conteos, Limpiar hoja) */}

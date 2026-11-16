@@ -17,10 +17,15 @@ import {
   Loader2,
   Wallet,
   Bot,
+  Bell,
+  Briefcase,
+  Building2,
+  Calculator,
   Layers,
   CalendarRange
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface NavSection {
   title: string;
@@ -28,6 +33,7 @@ interface NavSection {
     label: string;
     href: string;
     icon: any;
+    adminOnly?: boolean;
   }[];
 }
 
@@ -48,13 +54,16 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'INVENTARIO & BODEGA',
     items: [
       { label: 'Entradas por Compra', href: '/compras', icon: ShoppingCart },
+      { label: 'Proveedores y Pagos', href: '/proveedores', icon: Building2 },
       { label: 'Salidas por Venta', href: '/ventas', icon: TrendingUp },
+      { label: 'CRM Clientes B2B', href: '/crm', icon: Briefcase },
     ],
   },
   {
     title: 'COSTEO DIARIO E INVENTARIO',
     items: [
       { label: 'Hoja de Costeo Diario', href: '/costeo-diario', icon: FileSpreadsheet },
+      { label: 'Ingreso Rápido POS', href: '/costeo-diario/pos', icon: Calculator },
       { label: 'Inventario Consolidado Diario', href: '/inventario-consolidado', icon: Layers },
     ],
   },
@@ -69,6 +78,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Auditoría Cocina', href: '/auditoria-cocina', icon: ClipboardCheck },
       { label: 'Historial Telegram Bot', href: '/chat-bot', icon: Bot },
+      { label: 'Notificaciones', href: '/notificaciones', icon: Bell, adminOnly: true },
     ],
   },
   {
@@ -84,6 +94,8 @@ const NAV_SECTIONS: NavSection[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen, closeSidebar } = useSidebar();
+  const { user } = useAuth();
+  const isAdmin = user?.username?.toLowerCase() === 'admin';
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
   // Limpiar pendingHref cuando cambia la ruta
@@ -166,7 +178,9 @@ export default function Sidebar() {
                 </div>
               )}
 
-              {section.items.map((item, idx) => {
+              {section.items
+                .filter((item) => !item.adminOnly || isAdmin)
+                .map((item, idx) => {
                 const Icon = item.icon;
                 const isExact = pathname === item.href;
                 const isPending = pendingHref === item.href;

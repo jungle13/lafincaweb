@@ -5,6 +5,7 @@ import {
   recalcularHojaDiaria,
   extractResponsableFromSoporte,
 } from '@/services/libroCajaService';
+import { crearNotificacionCajaMenor } from '@/services/notificacionesService';
 import {
   AUTH_COOKIE_NAME,
   CAJERO_COOKIE_NAME,
@@ -486,6 +487,22 @@ export async function POST(req: NextRequest) {
       if (error) throw error;
 
       await recalcularHojaDiaria(fecha, tipo_libro);
+
+      if (tipo_libro === 'CAJA_MENOR') {
+        try {
+          await crearNotificacionCajaMenor({
+            fecha,
+            concepto: finalConcepto,
+            categoria: finalCategoria,
+            monto: Number(valor_pagado || 0),
+            tipoMovimiento: 'GASTO',
+            responsable: responsable_caja.toUpperCase().trim(),
+            observaciones: descripcion_beneficiario.trim(),
+          });
+        } catch (notifErr) {
+          console.warn('[POST /api/libros-apoyo] No se pudo registrar notificación pendiente:', notifErr);
+        }
+      }
 
       return NextResponse.json({
         success: true,

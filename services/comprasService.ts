@@ -28,6 +28,11 @@ export interface CompraFacturaGroup {
   total_items: number;
   origen: string;
   observaciones: string;
+  estado_pago: 'PENDIENTE' | 'PARCIAL' | 'PAGADO';
+  valor_pagado: number;
+  saldo_pendiente: number;
+  fecha_pago: string | null;
+  comprobante_egreso: string | null;
   items: CompraDetalleItem[];
 }
 
@@ -55,6 +60,10 @@ export interface ComprasKPIs {
   totalFacturas: number;
   totalDinero: number;
   totalItems: number;
+  totalPagado?: number;
+  totalPendiente?: number;
+  facturasPagadas?: number;
+  facturasParciales?: number;
   categorias: CategoriaKPI[];
 }
 
@@ -130,16 +139,31 @@ export async function fetchComprasData(periodoId: string = 'per-2026-10'): Promi
 
     const facturas: CompraFacturaGroup[] = (facturasData || []).map((f) => {
       const items = itemsByCompraId.get(f.id) || [];
+      const valorTotal = Number(f.valor_total || 0);
+      const rawEstado = String(f.estado_pago || 'PENDIENTE').toUpperCase();
+      const estadoPago: 'PENDIENTE' | 'PARCIAL' | 'PAGADO' =
+        rawEstado === 'PAGADO' || rawEstado === 'PARCIAL' ? rawEstado : 'PENDIENTE';
+      const valorPagado =
+        estadoPago === 'PAGADO'
+          ? (Number(f.valor_pagado || 0) > 0 ? Number(f.valor_pagado) : valorTotal)
+          : estadoPago === 'PARCIAL'
+            ? Number(f.valor_pagado || 0)
+            : 0;
       return {
         id: f.id,
         fecha: f.fecha,
         numero_factura: f.numero_factura || 'S/N',
         proveedor: f.proveedor || 'Proveedor General',
         categoria: f.categoria || (items[0]?.categoria ?? 'Varios'),
-        valor_total: Number(f.valor_total || 0),
+        valor_total: valorTotal,
         total_items: items.length || f.total_items || 0,
         origen: f.origen || (items[0]?.origen ?? ''),
         observaciones: f.observaciones || '',
+        estado_pago: estadoPago,
+        valor_pagado: valorPagado,
+        saldo_pendiente: Math.max(0, valorTotal - valorPagado),
+        fecha_pago: f.fecha_pago || null,
+        comprobante_egreso: f.comprobante_egreso || null,
         items,
       };
     });
@@ -245,12 +269,21 @@ export async function fetchComprasData(periodoId: string = 'per-2026-10'): Promi
     const categorias = Array.from(new Set([...orderCat, ...Array.from(catTotalsMap.keys())]));
     const fechas = Array.from(new Set(facturas.map((f) => f.fecha))).sort().reverse();
 
+    const totalPagado = facturas.reduce((acc, f) => acc + f.valor_pagado, 0);
+    const totalPendiente = facturas.reduce((acc, f) => acc + f.saldo_pendiente, 0);
+    const facturasPagadas = facturas.filter((f) => f.estado_pago === 'PAGADO').length;
+    const facturasParciales = facturas.filter((f) => f.estado_pago === 'PARCIAL').length;
+
     return {
       success: true,
       kpis: {
         totalFacturas,
         totalDinero: totalDineroMateriaPrima,
         totalItems,
+        totalPagado,
+        totalPendiente,
+        facturasPagadas,
+        facturasParciales,
         categorias: categoriasKPI,
       },
       facturas,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { parseVentasTxtContent, guardarVentasEnBaseDeDatos } from '@/services/ventasParserService';
+import { crearNotificacionVentasDia } from '@/services/notificacionesService';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,6 +72,18 @@ export async function POST(req: Request) {
 
     // 3. Guardado en firme
     const resultado = await guardarVentasEnBaseDeDatos(parsed);
+
+    try {
+      await crearNotificacionVentasDia({
+        fecha: parsed.fecha,
+        diaSemana: parsed.dia_semana,
+        totalArticulos: parsed.total_articulos,
+        granTotal: parsed.gran_total,
+        platosDistintos: parsed.total_platos_distintos,
+      });
+    } catch (notifErr) {
+      console.warn('[POST /api/ventas/upload] No se pudo registrar notificación pendiente:', notifErr);
+    }
 
     return NextResponse.json({
       ok: true,
