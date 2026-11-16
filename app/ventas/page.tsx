@@ -79,6 +79,26 @@ export default function VentasPage() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = usePersistedState<TabView>('ventas_active_tab', 'DIARIO');
 
+  // Sincronizar URL con el período y pestaña activa en Ventas
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!selectedMonthId) {
+      if (window.location.search) {
+        window.history.replaceState({}, '', '/ventas');
+      }
+      return;
+    }
+    const nextParams = new URLSearchParams();
+    nextParams.set('periodo', selectedMonthId);
+    if (activeTab && activeTab !== 'DIARIO') {
+      nextParams.set('tab', activeTab);
+    }
+    const nextUrl = `/ventas?${nextParams.toString()}`;
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+      window.history.replaceState({}, '', nextUrl);
+    }
+  }, [selectedMonthId, activeTab]);
+
   const [kpis, setKpis] = useState<VentasKPIs>({
     granTotalVentas: 0,
     ventaNeta: 0,

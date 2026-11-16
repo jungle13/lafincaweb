@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
 export interface Periodo {
   id: string;
@@ -41,7 +41,7 @@ export function PeriodoProvider({ children }: { children: ReactNode }) {
   const [selectedPeriodoId, setSelectedPeriodoIdState] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
-  const refreshPeriodos = async () => {
+  const refreshPeriodos = useCallback(async () => {
     try {
       const res = await fetch(`/api/periodos?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
@@ -63,18 +63,18 @@ export function PeriodoProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const setSelectedPeriodoId = (id: string) => {
+  const setSelectedPeriodoId = useCallback((id: string) => {
     setSelectedPeriodoIdState(id);
     if (typeof window !== 'undefined') {
       localStorage.setItem('la_finca_periodo_id', id);
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshPeriodos();
-  }, []);
+  }, [refreshPeriodos]);
 
   const currentPeriodo = periodos.find((p) => p.id === selectedPeriodoId || p.codigo === selectedPeriodoId) || periodos[0] || null;
 

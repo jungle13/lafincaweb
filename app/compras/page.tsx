@@ -78,24 +78,6 @@ export default function ComprasPage() {
     loadMeses();
   }, [loadMeses]);
 
-  // Leer query params (?factura=...&fecha=...&periodo=...) para abrir directamente una factura desde Costeo Diario
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const facturaParam = params.get('factura');
-    const fechaParam = params.get('fecha');
-    const periodoParam = params.get('periodo') || (fechaParam ? `per-${fechaParam.slice(0, 7)}` : null);
-
-    if (periodoParam) {
-      setSelectedMonthId(periodoParam);
-      setSelectedPeriodoId(periodoParam);
-    }
-    if (facturaParam) {
-      setActiveTab('FACTURAS');
-      setSearchQuery(facturaParam);
-    }
-  }, [setSelectedPeriodoId]);
-
   const cacheKey = `compras_data_${activePeriodoId}`;
   const cached = getCachedData<{
     kpis: ComprasKPIs;
@@ -130,6 +112,52 @@ export default function ComprasPage() {
   const [selectedCategoria, setSelectedCategoria] = usePersistedState<string>('compras_selected_cat', '');
   const [selectedProveedor, setSelectedProveedor] = usePersistedState<string>('compras_selected_prov', '');
   const [selectedFecha, setSelectedFecha] = usePersistedState<string>('compras_selected_fecha', '');
+
+  // Leer query params (?factura=...&fecha=...&periodo=...) una sola vez al montar y limpiar la URL
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const facturaParam = params.get('factura');
+    const fechaParam = params.get('fecha');
+    const periodoParam = params.get('periodo') || (fechaParam ? `per-${fechaParam.slice(0, 7)}` : null);
+    const tabParam = params.get('tab')?.toUpperCase() as TabView | null;
+
+    if (periodoParam) {
+      setSelectedMonthId(periodoParam);
+      setSelectedPeriodoId(periodoParam);
+    }
+    if (tabParam && ['FACTURAS', 'INSUMOS', 'LINEAS', 'PAGOS'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+    if (facturaParam) {
+      setActiveTab('FACTURAS');
+      setSearchQuery(facturaParam);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mantener la URL del navegador sincronizada con el período, pestaña y filtro actuales
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!selectedMonthId) {
+      if (window.location.search) {
+        window.history.replaceState({}, '', '/compras');
+      }
+      return;
+    }
+    const nextParams = new URLSearchParams();
+    nextParams.set('periodo', selectedMonthId);
+    if (activeTab && activeTab !== 'FACTURAS') {
+      nextParams.set('tab', activeTab);
+    }
+    if (searchQuery.trim()) {
+      nextParams.set('factura', searchQuery.trim());
+    }
+    const nextUrl = `/compras?${nextParams.toString()}`;
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+      window.history.replaceState({}, '', nextUrl);
+    }
+  }, [selectedMonthId, activeTab, searchQuery]);
 
   const loadData = useCallback(async (silent = false) => {
     if (!selectedMonthId) return;
@@ -274,6 +302,12 @@ export default function ComprasPage() {
   }, [mesesList, searchMonthQuery]);
 
   const handleOpenMonth = (pId: string) => {
+    if (selectedMonthId !== pId) {
+      setSearchQuery('');
+      setSelectedCategoria('');
+      setSelectedProveedor('');
+      setSelectedFecha('');
+    }
     setSelectedMonthId(pId);
     setSelectedPeriodoId(pId);
   };
@@ -406,7 +440,10 @@ export default function ComprasPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setSelectedMonthId(null)}
+            onClick={() => {
+              clearFilters();
+              setSelectedMonthId(null);
+            }}
             className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-md border border-slate-200 transition-colors cursor-pointer"
             title="Volver a la lista de meses"
           >

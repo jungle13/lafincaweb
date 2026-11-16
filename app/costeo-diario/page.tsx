@@ -1679,6 +1679,7 @@ export default function CosteoDiarioPage() {
         setActiveOperationalView(section as any);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [isLoadingSheets, setIsLoadingSheets] = useState(true);
@@ -2237,6 +2238,26 @@ export default function CosteoDiarioPage() {
   // Current Active Sheet
   const activeSheet = sheets.find(s => s.id === activeTabId);
   const isSheetCerrado = isPeriodoCerrado(activeSheet?.month || activeSheet?.dateStr || selectedMonth);
+
+  // Sincronizar URL en tiempo real al cambiar pestaña activa de hoja o vista operativa
+  useEffect(() => {
+    if (typeof window === 'undefined' || isLoadingSheets) return;
+    if (!activeSheet) {
+      if (window.location.search) {
+        window.history.replaceState({}, '', '/costeo-diario');
+      }
+      return;
+    }
+    const nextParams = new URLSearchParams();
+    nextParams.set('fecha', activeSheet.dateStr);
+    if (activeOperationalView && activeOperationalView !== 'TRASLADOS') {
+      nextParams.set('section', activeOperationalView);
+    }
+    const nextUrl = `/costeo-diario?${nextParams.toString()}`;
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+      window.history.replaceState({}, '', nextUrl);
+    }
+  }, [activeSheet, activeOperationalView, isLoadingSheets]);
 
   // Sincronizar automáticamente el insumo abierto en el panel lateral con las actualizaciones del sheet
   useEffect(() => {

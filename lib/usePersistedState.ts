@@ -26,7 +26,7 @@ export function hasPersistedValue(key: string): boolean {
 
 /**
  * Reemplazo seguro para useState que persiste el estado en sessionStorage
- * sin provocar errores de hidratación SSR en Next.js.
+ * sin provocar errores de hidratación SSR ni pisar actualizaciones explícitas de URL.
  */
 export function usePersistedState<T>(
   key: string,
@@ -34,19 +34,21 @@ export function usePersistedState<T>(
 ): [T, Dispatch<SetStateAction<T>>] {
   const [state, setState] = useState<T>(initialValue);
   const hydratedRef = useRef(false);
+  const manuallyUpdatedRef = useRef(false);
 
-  // Restaurar desde sessionStorage al montar en cliente
+  // Restaurar desde sessionStorage al montar en cliente (solo si no fue seteado explícitamente por URL params)
   useEffect(() => {
-    try {
-      const raw = window.sessionStorage.getItem(`${STORAGE_PREFIX}${key}`);
-      if (raw !== null) {
-        setState(JSON.parse(raw) as T);
+    if (!manuallyUpdatedRef.current) {
+      try {
+        const raw = window.sessionStorage.getItem(`${STORAGE_PREFIX}${key}`);
+        if (raw !== null) {
+          setState(JSON.parse(raw) as T);
+        }
+      } catch {
+        // Ignorar errores de parseo
       }
-    } catch {
-      // Ignorar errores de parseo
-    } finally {
-      hydratedRef.current = true;
     }
+    hydratedRef.current = true;
   }, [key]);
 
   // Persistir cambios subsecuentes
@@ -60,6 +62,7 @@ export function usePersistedState<T>(
   }, [key, state]);
 
   const setPersistedState: Dispatch<SetStateAction<T>> = useCallback((value) => {
+    manuallyUpdatedRef.current = true;
     setState((prev) => {
       const next = typeof value === 'function' ? (value as (p: T) => T)(prev) : value;
       try {
