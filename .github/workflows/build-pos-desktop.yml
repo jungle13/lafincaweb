@@ -33,7 +33,7 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Generate Tauri icons from Logo
-        run: npx --yes @tauri-apps/cli@^2 icon public/Logo.png
+        run: npx --yes @tauri-apps/cli@^2 icon public/Logo.png --fit contain
 
       - name: Build Windows Installer (.exe and .msi)
         uses: tauri-apps/tauri-action@v0
