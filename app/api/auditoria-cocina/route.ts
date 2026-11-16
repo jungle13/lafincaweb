@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+let cachedAuditResponse: { sheets: any[]; expiry: number } | null = null;
+
 function cleanStr(s: any): string {
   if (!s) return '';
   return String(s)
@@ -65,7 +67,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get('fecha');
 
-    // 1. Fetch days from costeo_diario
+    if (!dateParam && cachedAuditResponse && Date.now() < cachedAuditResponse.expiry) {
+      return NextResponse.json({ sheets: cachedAuditResponse.sheets });
+    }
+
+    // 1-3. Ejecutar en paralelo días, proteínas y recetas
     let query = supabase
       .from('costeo_diario')
       .select('fecha, titulo, pos_sales')
@@ -75,70 +81,99 @@ export async function GET(request: Request) {
       query = query.eq('fecha', dateParam);
     }
 
-    const { data: days, error: daysErr } = await query;
+    const [
+      { data: days, error: daysErr },
+      { data: proteinCatalog },
+      { data: recipes },
+    ] = await Promise.all([
+      query,
+      supabase
+        .from('catalogo_insumos')
+        .select('id, codigo, nombre, categoria, es_carne, peso_estandar_porcion_kg, costo_unitario_kg, unidad_medida')
+        .or('es_carne.eq.true,categoria.ilike.%carne%,categoria.ilike.%pescado%,categoria.ilike.%pollo%,categoria.ilike.%cerdo%,categoria.ilike.%huevo%,categoria.ilike.%embutido%'),
+      supabase
+        .from('recetas_detalle')
+        .select(`
+          id,
+          plato_id,
+          insumo_id,
+          porciones_por_plato,
+          cantidad_por_porcion_kg,
+          productos_venta (
+            id,
+            codigo,
+            nombre,
+            categoria
+          ),
+          catalogo_insumos (
+            id,
+            codigo,
+            nombre,
+            categoria,
+            unidad_medida,
+            costo_unitario_kg,
+            peso_estandar_porcion_kg
+          )
+        `),
+    ]);
+
     if (daysErr) throw daysErr;
 
     if (!days || days.length === 0) {
       return NextResponse.json({ sheets: [] });
     }
 
-    // 2. Fetch protein catalog items
-    const { data: proteinCatalog } = await supabase
-      .from('catalogo_insumos')
-      .select('id, codigo, nombre, categoria, es_carne, peso_estandar_porcion_kg, costo_unitario_kg, unidad_medida')
-      .or('es_carne.eq.true,categoria.ilike.%carne%,categoria.ilike.%pescado%,categoria.ilike.%pollo%,categoria.ilike.%cerdo%,categoria.ilike.%huevo%,categoria.ilike.%embutido%');
-
-    // 3. Fetch recipe details (recetas_detalle joined with productos_venta and catalogo_insumos)
-    const { data: recipes } = await supabase
-      .from('recetas_detalle')
-      .select(`
-        id,
-        plato_id,
-        insumo_id,
-        porciones_por_plato,
-        cantidad_por_porcion_kg,
-        productos_venta (
-          id,
-          codigo,
-          nombre,
-          categoria
-        ),
-        catalogo_insumos (
-          id,
-          codigo,
-          nombre,
-          categoria,
-          unidad_medida,
-          costo_unitario_kg,
-          peso_estandar_porcion_kg
-        )
-      `);
-
     const dates = days.map((d: any) => d.fecha);
 
-    // 4. Fetch ventas_detalle for these dates
-    const { data: ventasDetalle } = await supabase
-      .from('ventas_detalle')
-      .select('*')
-      .in('fecha', dates)
-      .limit(10000);
-
-    // 5. Fetch all registros_costeo_cocina for these dates
-    const { data: allRegistros, error: regErr } = await supabase
-      .from('registros_costeo_cocina')
-      .select('*')
-      .in('fecha', dates)
-      .limit(20000);
+    // 4-5. Ejecutar ventas_detalle y registros_costeo_cocina en paralelo
+    const [
+      { data: ventasDetalle },
+      { data: allRegistros, error: regErr },
+    ] = await Promise.all([
+      supabase
+        .from('ventas_detalle')
+        .select('id, fecha, codigo_producto, nombre_producto, cantidad')
+        .in('fecha', dates)
+        .limit(10000),
+      supabase
+        .from('registros_costeo_cocina')
+        .select('fecha, tipo, tipo_movimiento, insumo_id, nombre_insumo, cantidad, unidad, observaciones')
+        .in('fecha', dates)
+        .in('tipo', ['APERTURA', 'TRASLADO', 'CIERRE'])
+        .limit(20000),
+    ]);
 
     if (regErr) {
       console.error('Error fetching registros_costeo_cocina for audit:', regErr);
     }
 
+    // Pre-indexar O(1) por fecha y por insumo_id
+    const ventasByDate = new Map<string, any[]>();
+    for (const v of (ventasDetalle || [])) {
+      const list = ventasByDate.get(v.fecha);
+      if (list) list.push(v);
+      else ventasByDate.set(v.fecha, [v]);
+    }
+
+    const regsByDate = new Map<string, any[]>();
+    for (const r of (allRegistros || [])) {
+      const list = regsByDate.get(r.fecha);
+      if (list) list.push(r);
+      else regsByDate.set(r.fecha, [r]);
+    }
+
+    const recipesByInsumoId = new Map<string, any[]>();
+    for (const rec of (recipes || [])) {
+      const list = recipesByInsumoId.get(rec.insumo_id);
+      if (list) list.push(rec);
+      else recipesByInsumoId.set(rec.insumo_id, [rec]);
+    }
+
     // Process each day
     const sheets = days.map((dayInfo: any) => {
       const dateStr = dayInfo.fecha;
-      const dayVentas = (ventasDetalle || []).filter((v: any) => v.fecha === dateStr);
-      const dayRegs = (allRegistros || []).filter((r: any) => r.fecha === dateStr);
+      const dayVentas = ventasByDate.get(dateStr) || [];
+      const dayRegs = regsByDate.get(dateStr) || [];
       
       const dayAperturaDetalles = dayRegs.filter((r: any) => r.tipo === 'APERTURA');
       const dayMovs = dayRegs.filter((r: any) => r.tipo === 'TRASLADO');
@@ -211,7 +246,7 @@ export async function GET(request: Request) {
 
         // Deductions from POS sales according to recipes
         const platosDeducidos: any[] = [];
-        const relatedRecipes = (recipes || []).filter((r: any) => r.insumo_id === prot.id);
+        const relatedRecipes = recipesByInsumoId.get(prot.id) || [];
 
         relatedRecipes.forEach((rec: any) => {
           const prodVenta = rec.productos_venta as any;
@@ -267,7 +302,7 @@ export async function GET(request: Request) {
       // Sort so highest activity items appear first
       items.sort((a, b) => b.totalDisponiblePorciones - a.totalDisponiblePorciones);
 
-      const month = dateStr.startsWith('2026-10') ? '2026-10' : '2026-09';
+      const month = dateStr.slice(0, 7);
 
       return {
         id: `audit-${dateStr}`,
@@ -278,6 +313,10 @@ export async function GET(request: Request) {
         items
       };
     });
+
+    if (!dateParam) {
+      cachedAuditResponse = { sheets, expiry: Date.now() + 20000 };
+    }
 
     return NextResponse.json({ sheets });
   } catch (error: any) {

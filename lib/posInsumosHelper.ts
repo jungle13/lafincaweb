@@ -1,10 +1,10 @@
 export type PosMacroCategory =
-  | 'TODAS'
   | 'CARNES'
   | 'VERDURAS'
   | 'GRANOS'
   | 'BEBIDAS'
-  | 'DESECHABLES';
+  | 'DESECHABLES'
+  | 'PLATOS_VENTA';
 
 export interface PosCatalogItem {
   id: string;
@@ -16,6 +16,7 @@ export interface PosCatalogItem {
   es_carne?: boolean;
   peso_estandar_porcion_kg?: number;
   costo_unitario_kg?: number;
+  esPlatoVenta?: boolean;
 }
 
 export interface PosEquivalenceOption {
@@ -29,7 +30,7 @@ export interface PosEquivalenceOption {
 
 export interface InsumoVisualMeta {
   emoji: string;
-  macroCategory: Exclude<PosMacroCategory, 'TODAS'>;
+  macroCategory: PosMacroCategory;
   accentBg: string;
   accentBorder: string;
   accentText: string;
@@ -43,7 +44,8 @@ function normStr(s: string): string {
     .trim();
 }
 
-export function resolvePosMacroCategory(item: PosCatalogItem): Exclude<PosMacroCategory, 'TODAS'> {
+export function resolvePosMacroCategory(item: PosCatalogItem): PosMacroCategory {
+  if (item.esPlatoVenta) return 'PLATOS_VENTA';
   const cat = normStr(item.categoria || '');
   const name = normStr(item.nombre || '');
 
@@ -110,6 +112,15 @@ export function resolvePosMacroCategory(item: PosCatalogItem): Exclude<PosMacroC
 
 export function getInsumoVisualMeta(item: PosCatalogItem): InsumoVisualMeta {
   const macroCategory = resolvePosMacroCategory(item);
+  if (macroCategory === 'PLATOS_VENTA') {
+    return {
+      emoji: '🍽️',
+      macroCategory,
+      accentBg: 'bg-purple-50/70',
+      accentBorder: 'border-purple-200',
+      accentText: 'text-purple-700',
+    };
+  }
   const n = normStr(item.nombre || '');
 
   let emoji = '📦';
@@ -201,6 +212,11 @@ export function resolveOfficialBaseUnit(item: PosCatalogItem): string {
 }
 
 export function getPosEquivalenceOptions(item: PosCatalogItem): PosEquivalenceOption[] {
+  if (item.esPlatoVenta) {
+    return [
+      { id: 'und', label: 'Platos / Unidades', shortLabel: 'Und', factorToBase: 1, baseUnit: 'Und' },
+    ];
+  }
   const n = normStr(item.nombre || '');
   const baseUnit = resolveOfficialBaseUnit(item);
   const macro = resolvePosMacroCategory(item);

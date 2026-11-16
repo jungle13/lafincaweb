@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { parseVentasTxtContent, guardarVentasEnBaseDeDatos } from '@/services/ventasParserService';
 import { crearNotificacionVentasDia } from '@/services/notificacionesService';
+import { invalidateVentasCache } from '@/app/api/ventas/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +73,7 @@ export async function POST(req: Request) {
 
     // 3. Guardado en firme
     const resultado = await guardarVentasEnBaseDeDatos(parsed);
+    invalidateVentasCache();
 
     try {
       await crearNotificacionVentasDia({

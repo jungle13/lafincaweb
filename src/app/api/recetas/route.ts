@@ -4,12 +4,20 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+let cachedRecetasDefault: { data: any; expiry: number } | null = null;
+
 // 1. GET: Obtener todas las recetas oficiales con sus insumos y el catálogo de insumos
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const subcategoria = searchParams.get('subcategoria');
+
+    if (!search && (!subcategoria || subcategoria === 'ALL') && cachedRecetasDefault && Date.now() < cachedRecetasDefault.expiry) {
+      return NextResponse.json(cachedRecetasDefault.data, {
+        headers: { 'Cache-Control': 'no-store, max-age=0' }
+      });
+    }
 
     // 1. Productos para la venta que tienen receta
     let platosQuery = supabase
@@ -27,38 +35,40 @@ export async function GET(request: Request) {
       platosQuery = platosQuery.or(`nombre.ilike.%${search.trim()}%,codigo.ilike.%${search.trim()}%`);
     }
 
-    const { data: platos, error: platosErr } = await platosQuery;
-    if (platosErr) throw platosErr;
-
-    // 2. Insumos asociados en recetas_detalle
-    const { data: detalles, error: detErr } = await supabase
-      .from('recetas_detalle')
-      .select(`
-        id,
-        plato_id,
-        insumo_id,
-        porciones_por_plato,
-        cantidad_por_porcion_kg,
-        created_at,
-        catalogo_insumos (
+    // 1-3. Ejecutar las 3 consultas en paralelo
+    const [
+      { data: platos, error: platosErr },
+      { data: detalles, error: detErr },
+      { data: insumosCatalog, error: insErr },
+    ] = await Promise.all([
+      platosQuery,
+      supabase
+        .from('recetas_detalle')
+        .select(`
           id,
-          codigo,
-          nombre,
-          categoria,
-          unidad_medida,
-          costo_unitario_kg,
-          peso_estandar_porcion_kg
-        )
-      `);
+          plato_id,
+          insumo_id,
+          porciones_por_plato,
+          cantidad_por_porcion_kg,
+          created_at,
+          catalogo_insumos (
+            id,
+            codigo,
+            nombre,
+            categoria,
+            unidad_medida,
+            costo_unitario_kg,
+            peso_estandar_porcion_kg
+          )
+        `),
+      supabase
+        .from('catalogo_insumos')
+        .select('id, codigo, nombre, categoria, unidad_medida, costo_unitario_kg, peso_estandar_porcion_kg')
+        .order('nombre', { ascending: true }),
+    ]);
 
+    if (platosErr) throw platosErr;
     if (detErr) throw detErr;
-
-    // 3. Catálogo completo de insumos para el buscador del frontend
-    const { data: insumosCatalog, error: insErr } = await supabase
-      .from('catalogo_insumos')
-      .select('id, codigo, nombre, categoria, unidad_medida, costo_unitario_kg, peso_estandar_porcion_kg')
-      .order('nombre', { ascending: true });
-
     if (insErr) throw insErr;
 
     // 4. Agrupar detalles por plato_id
@@ -111,11 +121,17 @@ export async function GET(request: Request) {
       ingredientes: detallesByPlato[p.id] || []
     }));
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       recetas,
       catalogoInsumos: insumosCatalog || []
-    }, {
+    };
+
+    if (!search && (!subcategoria || subcategoria === 'ALL')) {
+      cachedRecetasDefault = { data: payload, expiry: Date.now() + 30000 };
+    }
+
+    return NextResponse.json(payload, {
       headers: { 'Cache-Control': 'no-store, max-age=0' }
     });
   } catch (err: any) {
@@ -126,6 +142,7 @@ export async function GET(request: Request) {
 // 2. POST: Vincular un insumo a un plato en recetas_detalle
 export async function POST(request: Request) {
   try {
+    cachedRecetasDefault = null;
     const body = await request.json();
     const { plato_id, insumo_id, porciones_por_plato, cantidad_por_porcion_kg, cantidad } = body;
 
@@ -177,6 +194,7 @@ export async function POST(request: Request) {
 // 3. PUT: Actualizar cantidad o porciones de un insumo en recetas_detalle
 export async function PUT(request: Request) {
   try {
+    cachedRecetasDefault = null;
     const body = await request.json();
     const { id, cantidad, porciones_por_plato, cantidad_por_porcion_kg } = body;
 
@@ -224,6 +242,7 @@ export async function PUT(request: Request) {
 // 4. DELETE: Eliminar un ingrediente de una receta o desvincular receta del plato
 export async function DELETE(request: Request) {
   try {
+    cachedRecetasDefault = null;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const plato_id = searchParams.get('plato_id');

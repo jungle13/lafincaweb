@@ -6,11 +6,18 @@ import {
   getVentasDetalle, 
   getVentasRentabilidad,
   getComparacionCuadreVentas,
-  fetchMesesVentasResumen
+  fetchMesesVentasResumen,
+  getVentasResumenCompleto
 } from '@/services/ventasService';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+const cachedVentasByPeriodo = new Map<string, { data: any; expiry: number }>();
+
+export function invalidateVentasCache() {
+  cachedVentasByPeriodo.clear();
+}
 
 export async function GET(request: Request) {
   try {
@@ -73,26 +80,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, ...cuadre });
     }
 
-    // Por defecto view === 'ALL': devolver conjunto completo para carga inicial rápida
-    const [kpis, diarias, rankingData, detalleData, rentabilidad, cuadre] = await Promise.all([
-      getVentasKPIs(periodoId),
-      getVentasDiarias(periodoId),
-      getVentasPorProducto(periodoId, categoria, search),
-      getVentasDetalle({ periodoId, fecha, categoria, search, page: 1, pageSize: 50 }),
-      getVentasRentabilidad(periodoId),
-      getComparacionCuadreVentas(periodoId)
-    ]);
+    // Por defecto view === 'ALL': carga consolidada en 2 consultas con caché 20s
+    const cacheKey = `${periodoId}|${categoria}|${search}`;
+    const cached = cachedVentasByPeriodo.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) {
+      return NextResponse.json(cached.data);
+    }
 
-    return NextResponse.json({
+    const resumen = await getVentasResumenCompleto(periodoId);
+    const payload = {
       success: true,
-      kpis,
-      diarias,
-      ranking: rankingData.ranking,
-      categorias: rankingData.categorias,
-      detalle: detalleData,
-      rentabilidad,
-      cuadre
-    });
+      kpis: resumen.kpis,
+      diarias: resumen.diarias,
+      ranking: resumen.ranking,
+      categorias: resumen.categorias,
+      totalVentas: resumen.totalVentas,
+    };
+
+    cachedVentasByPeriodo.set(cacheKey, { data: payload, expiry: Date.now() + 20000 });
+    return NextResponse.json(payload);
   } catch (err: any) {
     console.error('Error en GET /api/ventas:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

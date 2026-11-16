@@ -17,18 +17,28 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+const cachedLibroCaja = new Map<string, { data: any; expiry: number }>();
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const periodoId = searchParams.get('periodo_id') || 'per-2026-10';
     const tipoLibro = searchParams.get('tipo_libro') || 'CAJA_MENOR';
+    const cacheKey = `${periodoId}|${tipoLibro}`;
+
+    const hit = cachedLibroCaja.get(cacheKey);
+    if (hit && Date.now() < hit.expiry) {
+      return NextResponse.json(hit.data);
+    }
 
     const data = await obtenerDatosLibroCaja(periodoId, tipoLibro);
-
-    return NextResponse.json({
+    const payload = {
       success: true,
       ...data,
-    });
+    };
+
+    cachedLibroCaja.set(cacheKey, { data: payload, expiry: Date.now() + 15000 });
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error('[GET /api/libros-apoyo] Error:', error);
     return NextResponse.json(
@@ -40,6 +50,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    cachedLibroCaja.clear();
     const body = await req.json();
     const { action } = body;
 
@@ -811,6 +822,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    cachedLibroCaja.clear();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     const fecha = searchParams.get('fecha');

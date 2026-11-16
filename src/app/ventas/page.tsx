@@ -29,6 +29,7 @@ import {
 } from '@/services/ventasService';
 import { usePeriodo } from '@/context/PeriodoContext';
 import { usePersistedState } from '@/lib/usePersistedState';
+import { getCachedData, setCachedData } from '@/lib/dataCache';
 
 type TabView = 'DIARIO' | 'TRANSACCIONES' | 'PRODUCTOS';
 
@@ -99,7 +100,16 @@ export default function VentasPage() {
     }
   }, [selectedMonthId, activeTab]);
 
-  const [kpis, setKpis] = useState<VentasKPIs>({
+  const ventasCacheKey = `ventas_data_${activePeriodoId}`;
+  const cachedVentas = getCachedData<{
+    kpis: VentasKPIs;
+    diarias: VentaDiaria[];
+    ranking: PlatoRanking[];
+    categorias: string[];
+    totalVentas: number;
+  }>(ventasCacheKey);
+
+  const [kpis, setKpis] = useState<VentasKPIs>(() => cachedVentas?.kpis || {
     granTotalVentas: 0,
     ventaNeta: 0,
     impuesto: 0,
@@ -111,15 +121,17 @@ export default function VentasPage() {
     totalPlatosUnicos: 0
   });
 
-  const [diarias, setDiarias] = useState<VentaDiaria[]>([]);
-  const [ranking, setRanking] = useState<PlatoRanking[]>([]);
-  const [categorias, setCategorias] = useState<string[]>([]);
-  const [totalVentasRanking, setTotalVentasRanking] = useState(0);
+  const [diarias, setDiarias] = useState<VentaDiaria[]>(() => cachedVentas?.diarias || []);
+  const [ranking, setRanking] = useState<PlatoRanking[]>(() => cachedVentas?.ranking || []);
+  const [categorias, setCategorias] = useState<string[]>(() => cachedVentas?.categorias || []);
+  const [totalVentasRanking, setTotalVentasRanking] = useState(() => cachedVentas?.totalVentas || 0);
   const [error, setError] = useState<string | null>(null);
 
   const loadAllData = useCallback(async () => {
     if (!selectedMonthId) return;
-    setLoading(true);
+    if (!getCachedData(ventasCacheKey)) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetch(`/api/ventas?periodo_id=${activePeriodoId}&t=${Date.now()}`, { cache: 'no-store' });
@@ -132,7 +144,14 @@ export default function VentasPage() {
         if (json.diarias) setDiarias(json.diarias);
         if (json.ranking) setRanking(json.ranking);
         if (json.categorias) setCategorias(json.categorias);
-        if (json.totalVentas) setTotalVentasRanking(json.totalVentas);
+        if (json.totalVentas !== undefined) setTotalVentasRanking(json.totalVentas);
+        setCachedData(ventasCacheKey, {
+          kpis: json.kpis,
+          diarias: json.diarias || [],
+          ranking: json.ranking || [],
+          categorias: json.categorias || [],
+          totalVentas: json.totalVentas || 0,
+        });
       } else {
         throw new Error(json.error || 'Respuesta no exitosa al cargar ventas');
       }

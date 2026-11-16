@@ -20,6 +20,7 @@ import AddInsumoModal from '@/components/auditoria/AddInsumoModal';
 import VentasDiaSidebar, { VentaPlatoItem } from '@/components/auditoria/VentasDiaSidebar';
 import ventasSampleData from '@/data/ventas_octubre_sample.json';
 import { usePersistedState, readPersistedValue } from '@/lib/usePersistedState';
+import { getCachedData, setCachedData } from '@/lib/dataCache';
 
 // Modelos de Datos para la Vista de Auditoría
 export interface AuditoriaDiaSheet {
@@ -224,13 +225,14 @@ const INITIAL_AUDITORIA_SHEETS: AuditoriaDiaSheet[] = [
 ];
 
 export default function AuditoriaCocinaPage() {
-  const [sheets, setSheets] = useState<AuditoriaDiaSheet[]>(INITIAL_AUDITORIA_SHEETS);
+  const cachedAudit = getCachedData<AuditoriaDiaSheet[]>('auditoria_cocina_sheets_v1');
+  const [sheets, setSheets] = useState<AuditoriaDiaSheet[]>(() => cachedAudit || INITIAL_AUDITORIA_SHEETS);
   const [activeTabId, setActiveTabId] = usePersistedState<string | null>('audit_active_tab_id', 'audit-2026-10-22');
   const [openTabs, setOpenTabs] = usePersistedState<string[]>('audit_open_tabs', ['audit-2026-10-22']);
   const [selectedMonth, setSelectedMonth] = usePersistedState<string>('audit_selected_month', '2026-10');
   const [searchFilter, setSearchFilter] = usePersistedState<string>('audit_search_filter', '');
   const [rowSearchFilter, setRowSearchFilter] = usePersistedState<string>('audit_row_search_filter', '');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !cachedAudit);
 
   // Sincronizar hojas de auditoría en tiempo real desde Supabase (/api/auditoria-cocina)
   useEffect(() => {
@@ -239,6 +241,7 @@ export default function AuditoriaCocinaPage() {
       .then(data => {
         if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
           setSheets(data.sheets);
+          setCachedData('auditoria_cocina_sheets_v1', data.sheets);
           const savedTabs = readPersistedValue<string[]>('audit_open_tabs', [])
             .filter(id => data.sheets.some((s: any) => s.id === id));
           const savedActive = readPersistedValue<string | null>('audit_active_tab_id', null);

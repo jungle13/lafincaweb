@@ -680,3 +680,133 @@ export async function fetchMesesVentasResumen(): Promise<MesVentasResumen[]> {
     return [];
   }
 }
+
+/**
+ * Carga consolidada en 2 únicas consultas paralelas (ventas_diarias + ventas_detalle)
+ * eliminando las 9 lecturas redundantes de view=ALL.
+ */
+export async function getVentasResumenCompleto(periodoId: string = 'per-2026-10'): Promise<{
+  kpis: VentasKPIs;
+  diarias: VentaDiaria[];
+  ranking: PlatoRanking[];
+  categorias: string[];
+  totalVentas: number;
+}> {
+  const [{ data: diariasRaw }, { data: detalleRaw }] = await Promise.all([
+    supabase
+      .from('ventas_diarias')
+      .select('*')
+      .eq('periodo_id', periodoId)
+      .order('fecha', { ascending: true }),
+    supabase
+      .from('ventas_detalle')
+      .select('codigo_producto, nombre_producto, categoria, unidad, cantidad, gran_total, venta_neta, fecha')
+      .eq('periodo_id', periodoId)
+      .limit(10000),
+  ]);
+
+  const diarias: VentaDiaria[] = (diariasRaw || []).map((d: any) => ({
+    id: d.id,
+    periodo_id: d.periodo_id,
+    fecha: d.fecha,
+    archivo_origen: d.archivo_origen,
+    dia_semana: d.dia_semana,
+    total_articulos: parseFloat(d.total_articulos || 0),
+    venta_bruta: parseFloat(d.venta_bruta || 0),
+    descuento: parseFloat(d.descuento || 0),
+    venta_neta: parseFloat(d.venta_neta || 0),
+    impuesto: parseFloat(d.impuesto || 0),
+    gran_total: parseFloat(d.gran_total || 0),
+    total_platos_distintos: parseInt(d.total_platos_distintos || 0, 10),
+    ticket_promedio: parseFloat(d.ticket_promedio || 0),
+  }));
+
+  let granTotal = 0;
+  let ventaNeta = 0;
+  let impuesto = 0;
+  let descuentos = 0;
+  let totalArticulos = 0;
+  let diaRecord = { fecha: '', diaSemana: '', total: 0 };
+
+  for (const d of diarias) {
+    granTotal += d.gran_total;
+    ventaNeta += d.venta_neta;
+    impuesto += d.impuesto;
+    descuentos += d.descuento;
+    totalArticulos += d.total_articulos;
+    if (d.gran_total > diaRecord.total) {
+      diaRecord = { fecha: d.fecha, diaSemana: d.dia_semana, total: d.gran_total };
+    }
+  }
+
+  const productsMap = new Map<string, {
+    codigo: string;
+    nombre: string;
+    categoria: string;
+    unidad: string;
+    cantidad: number;
+    gran_total: number;
+    venta_neta: number;
+    fechas: Set<string>;
+  }>();
+  const allCategories = new Set<string>();
+  let totalVentas = 0;
+
+  for (const r of (detalleRaw || [])) {
+    allCategories.add(r.categoria);
+    const tot = parseFloat(r.gran_total || 0);
+    totalVentas += tot;
+    let p = productsMap.get(r.codigo_producto);
+    if (!p) {
+      p = {
+        codigo: r.codigo_producto,
+        nombre: r.nombre_producto,
+        categoria: r.categoria,
+        unidad: r.unidad || 'ud',
+        cantidad: 0,
+        gran_total: 0,
+        venta_neta: 0,
+        fechas: new Set(),
+      };
+      productsMap.set(r.codigo_producto, p);
+    }
+    p.cantidad += parseFloat(r.cantidad || 0);
+    p.gran_total += tot;
+    p.venta_neta += parseFloat(r.venta_neta || 0);
+    p.fechas.add(r.fecha);
+  }
+
+  const ranking: PlatoRanking[] = Array.from(productsMap.values())
+    .map((p) => ({
+      codigo_producto: p.codigo,
+      nombre_producto: p.nombre,
+      categoria: p.categoria,
+      unidad: p.unidad,
+      cantidad_total: p.cantidad,
+      gran_total: p.gran_total,
+      venta_neta: p.venta_neta,
+      precio_promedio: p.cantidad > 0 ? Math.round(p.gran_total / p.cantidad) : 0,
+      porcentaje_ventas_total: totalVentas > 0 ? (p.gran_total / totalVentas) * 100 : 0,
+      dias_con_ventas: p.fechas.size,
+    }))
+    .sort((a, b) => b.gran_total - a.gran_total);
+
+  const totalDias = diarias.length;
+  return {
+    kpis: {
+      granTotalVentas: granTotal,
+      ventaNeta,
+      impuesto,
+      descuentos,
+      totalArticulos,
+      totalDias,
+      promedioDiario: totalDias > 0 ? granTotal / totalDias : 0,
+      diaRecord: diaRecord.total > 0 ? diaRecord : null,
+      totalPlatosUnicos: productsMap.size,
+    },
+    diarias,
+    ranking,
+    categorias: Array.from(allCategories).sort(),
+    totalVentas,
+  };
+}

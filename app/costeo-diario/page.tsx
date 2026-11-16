@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import catalogoOficial from '@/lib/catalogo-oficial.json';
 import { usePersistedState, readPersistedValue } from '@/lib/usePersistedState';
+import { getCachedData, setCachedData } from '@/lib/dataCache';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadCosteoDiarioPdf, CosteoPdfSelection } from '@/lib/exportCosteoDiarioPdf';
@@ -1452,7 +1453,8 @@ function parseBulkConteosText(
 }
 
 export default function CosteoDiarioPage() {
-  const [sheets, setSheets] = useState<CosteoSheet[]>([]);
+  const cachedSheets = getCachedData<CosteoSheet[]>('costeo_diario_sheets_v1');
+  const [sheets, setSheets] = useState<CosteoSheet[]>(() => cachedSheets || []);
   const [openTabs, setOpenTabs] = usePersistedState<string[]>('costeo_open_tabs', []);
   const [activeTabId, setActiveTabId] = usePersistedState<string | null>('costeo_active_tab_id', null);
   const [selectedMonth, setSelectedMonth] = usePersistedState<string>('costeo_selected_month', '2026-11');
@@ -1682,7 +1684,7 @@ export default function CosteoDiarioPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [isLoadingSheets, setIsLoadingSheets] = useState(true);
+  const [isLoadingSheets, setIsLoadingSheets] = useState(() => !getCachedData<CosteoSheet[]>('costeo_diario_sheets_v1'));
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
 
   // Cargar hojas reales desde Supabase (/api/costeo-diario)
@@ -1699,6 +1701,7 @@ export default function CosteoDiarioPage() {
       .then(data => {
         if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
           setSheets(data.sheets);
+          setCachedData('costeo_diario_sheets_v1', data.sheets);
           const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
           const fechaParam = params?.get('fecha');
 
@@ -1923,6 +1926,27 @@ export default function CosteoDiarioPage() {
     }, 50);
   };
 
+  // Refrescar únicamente la hoja de la fecha modificada (?fecha=YYYY-MM-DD) sin descargar las 37 hojas
+  const refreshSingleSheet = async (dateStr: string) => {
+    try {
+      const r = await fetch(`/api/costeo-diario?fecha=${encodeURIComponent(dateStr)}&t=${Date.now()}`, { cache: 'no-store' });
+      const d = await r.json();
+      if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
+        const updatedSheet = d.sheets[0];
+        setSheets(prev => {
+          const exists = prev.some(s => s.id === updatedSheet.id || s.dateStr === updatedSheet.dateStr);
+          const next = exists
+            ? prev.map(s => (s.id === updatedSheet.id || s.dateStr === updatedSheet.dateStr ? updatedSheet : s))
+            : [updatedSheet, ...prev];
+          setCachedData('costeo_diario_sheets_v1', next);
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error('Error refrescando hoja individual:', err);
+    }
+  };
+
   // Agregar nuevo registro, guardar cambios de edición, o actualizar solo el precio unitario
   const handleAddInsumoRegistro = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2012,13 +2036,7 @@ export default function CosteoDiarioPage() {
           })
         )
       )
-        .then(async () => {
-          const r = await fetch('/api/costeo-diario');
-          const d = await r.json();
-          if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
-            setSheets(d.sheets);
-          }
-        })
+        .then(() => refreshSingleSheet(activeSheet.dateStr))
         .catch(err => console.error('Error actualizando precio unitario en API:', err));
 
       setDrawerSuccessMsg(`✓ Precio actualizado a $${typedUnitPrice.toLocaleString('es-CO')}`);
@@ -2160,11 +2178,7 @@ export default function CosteoDiarioPage() {
     })
       .then(async res => {
         if (res.ok) {
-          const r = await fetch('/api/costeo-diario');
-          const d = await r.json();
-          if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
-            setSheets(d.sheets);
-          }
+          await refreshSingleSheet(activeSheet.dateStr);
         }
       })
       .catch(err => console.error('Error guardando movimiento en API:', err));
@@ -2225,11 +2239,7 @@ export default function CosteoDiarioPage() {
           registroIds: [regId]
         })
       });
-      const r = await fetch('/api/costeo-diario');
-      const d = await r.json();
-      if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
-        setSheets(d.sheets);
-      }
+      await refreshSingleSheet(activeSheet.dateStr);
     } catch (err) {
       console.error('Error eliminando registro en base de datos:', err);
     }
@@ -2930,11 +2940,7 @@ export default function CosteoDiarioPage() {
         })
       });
 
-      const r = await fetch('/api/costeo-diario');
-      const d = await r.json();
-      if (d?.sheets && Array.isArray(d.sheets)) {
-        setSheets(d.sheets);
-      }
+      await refreshSingleSheet(activeSheet.dateStr);
     } catch (err) {
       console.error('Error al eliminar ítem en base de datos:', err);
     }
@@ -3477,12 +3483,8 @@ Trucha 8`;
           const errJson = await res.json();
           throw new Error(errJson.error || 'Error al persistir');
         }
-        // Re-sincronizar con base de datos para garantizar consistencia total
-        const r = await fetch('/api/costeo-diario');
-        const d = await r.json();
-        if (d?.sheets && Array.isArray(d.sheets) && d.sheets.length > 0) {
-          setSheets(d.sheets);
-        }
+        // Re-sincronizar únicamente la hoja modificada
+        await refreshSingleSheet(activeSheet.dateStr);
       })
       .catch(err => {
         console.error('Error persistiendo conteos masivos en Supabase:', err);
@@ -3624,12 +3626,12 @@ Trucha 8`;
               {!isSheetCerrado && (
                 <>
                   <Link
-                    href={`/costeo-diario/pos?fecha=${encodeURIComponent(activeSheet.dateStr)}&vista=${encodeURIComponent(activeOperationalView === 'CONSUMOS' ? 'TRASLADOS' : activeOperationalView)}`}
+                    href={`/costeo-diario/pos?fecha=${encodeURIComponent(activeSheet.dateStr)}&vista=${encodeURIComponent(activeOperationalView)}`}
                     className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 border border-slate-900 rounded-lg sm:rounded-md transition-all shadow-2xs cursor-pointer touch-manipulation active:scale-95 whitespace-nowrap"
-                    title="Abrir interfaz táctil tipo POS para tablet o móvil"
+                    title="Abrir interfaz táctil de Ingreso Rápido"
                   >
                     <Calculator className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Modo POS</span>
+                    <span>Ingreso Rápido</span>
                   </Link>
 
                   <button

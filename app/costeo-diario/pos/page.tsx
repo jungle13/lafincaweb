@@ -25,6 +25,7 @@ import {
   resolveOfficialBaseUnit,
 } from '@/lib/posInsumosHelper';
 import { usePersistedState, hasPersistedValue } from '@/lib/usePersistedState';
+import { getCachedData, setCachedData } from '@/lib/dataCache';
 
 type OperationalViewKey =
   | 'TRASLADOS'
@@ -32,7 +33,8 @@ type OperationalViewKey =
   | 'COCINA_CIERRE'
   | 'DEVOLUCIONES'
   | 'BODEGA_APERTURA'
-  | 'BODEGA_CIERRE';
+  | 'BODEGA_CIERRE'
+  | 'CONSUMOS';
 
 interface VistaOption {
   key: OperationalViewKey;
@@ -49,10 +51,10 @@ const VISTAS_OPERATIVAS: VistaOption[] = [
   { key: 'BODEGA_APERTURA', label: 'Bodega Apertura', shortLabel: 'Bodega Ap.', dbTipo: 'BODEGA_APERTURA', uiTipo: 'BODEGA_APERTURA' },
   { key: 'BODEGA_CIERRE', label: 'Bodega Cierre', shortLabel: 'Bodega Cie.', dbTipo: 'BODEGA_CIERRE', uiTipo: 'BODEGA_CIERRE' },
   { key: 'DEVOLUCIONES', label: 'Devoluciones', shortLabel: 'Devoluc.', dbTipo: 'DEVOLUCION', uiTipo: 'DEVOLUCION_COCINA' },
+  { key: 'CONSUMOS', label: 'Consumos (Insumos y Platos)', shortLabel: 'Consumos', dbTipo: 'CONSUMO', uiTipo: 'CONSUMO' },
 ];
 
-const CATEGORIAS_POS: Array<{ key: PosMacroCategory; label: string; emoji: string }> = [
-  { key: 'TODAS', label: 'Todos', emoji: '⭐' },
+const CATEGORIAS_BASE: Array<{ key: PosMacroCategory; label: string; emoji: string }> = [
   { key: 'CARNES', label: 'Carnes', emoji: '🥩' },
   { key: 'VERDURAS', label: 'Verduras', emoji: '🥬' },
   { key: 'GRANOS', label: 'Granos', emoji: '🌾' },
@@ -107,15 +109,20 @@ interface SessionEntryLog {
 }
 
 export default function CosteoDiarioPosPage() {
-  const [catalog, setCatalog] = useState<PosCatalogItem[]>([]);
-  const [sheets, setSheets] = useState<SheetSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedCat = getCachedData<PosCatalogItem[]>('catalogo_insumos_list');
+  const cachedSheets = getCachedData<SheetSummary[]>('costeo_diario_sheets_v1');
+  const cachedPlatos = getCachedData<PosCatalogItem[]>('productos_venta_list_v1');
+  const [catalog, setCatalog] = useState<PosCatalogItem[]>(() => cachedCat || []);
+  const [platosVenta, setPlatosVenta] = useState<PosCatalogItem[]>(() => cachedPlatos || []);
+  const [sheets, setSheets] = useState<SheetSummary[]>(() => cachedSheets || []);
+  const [loading, setLoading] = useState(() => !(cachedCat && cachedSheets));
 
   const [selectedDate, setSelectedDate] = usePersistedState<string>('pos_selected_date', new Date().toISOString().slice(0, 10));
   const [activeView, setActiveView] = usePersistedState<OperationalViewKey>('pos_active_view', 'TRASLADOS');
-  const [activeCategory, setActiveCategory] = usePersistedState<PosMacroCategory>('pos_active_category', 'TODAS');
-  const [searchText, setSearchText] = usePersistedState<string>('pos_search_text', '');
-  const [onlyCounted, setOnlyCounted] = usePersistedState<boolean>('pos_only_counted', false);
+  const [activeCategory, setActiveCategory] = useState<PosMacroCategory | null>(null);
+  const [searchText, setSearchText] = useState<string>('');
+  const [onlyCounted, setOnlyCounted] = useState<boolean>(false);
+  const [consumoResponsable, setConsumoResponsable] = useState<string>('');
 
   const [selectedItem, setSelectedItem] = useState<PosCatalogItem | null>(null);
   const [selectedEq, setSelectedEq] = useState<PosEquivalenceOption | null>(null);
@@ -141,21 +148,41 @@ export default function CosteoDiarioPosPage() {
   }, []);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    if (!getCachedData('catalogo_insumos_list') || !getCachedData('costeo_diario_sheets_v1')) {
+      setLoading(true);
+    }
     try {
-      const [catRes, sheetsRes] = await Promise.all([
+      const [catRes, sheetsRes, platosRes] = await Promise.all([
         fetch('/api/catalogo', { cache: 'no-store' }),
         fetch('/api/costeo-diario', { cache: 'no-store' }),
+        fetch('/api/productos-venta', { cache: 'no-store' }),
       ]);
-      const catJson = await catRes.json();
-      const sheetsJson = await sheetsRes.json();
+      const [catJson, sheetsJson, platosJson] = await Promise.all([
+        catRes.json(),
+        sheetsRes.json(),
+        platosRes.json(),
+      ]);
 
       if (Array.isArray(catJson?.data)) {
         setCatalog(catJson.data);
+        setCachedData('catalogo_insumos_list', catJson.data);
+      }
+      if (Array.isArray(platosJson?.data)) {
+        const mappedPlatos: PosCatalogItem[] = platosJson.data.map((p: any) => ({
+          id: `plato-${p.id}`,
+          codigo: p.codigo,
+          nombre: p.nombre,
+          categoria: 'Consumido de Productos para la Venta',
+          unidad_medida: p.unidad || 'Und',
+          costo_unitario_kg: Number(p.precio_total || p.precio_neto || p.precio_venta || p.costo_estimado || 0),
+          esPlatoVenta: true,
+        }));
+        setPlatosVenta(mappedPlatos);
+        setCachedData('productos_venta_list_v1', mappedPlatos);
       }
       if (Array.isArray(sheetsJson?.sheets)) {
         setSheets(sheetsJson.sheets);
-        // Si la fecha actual no está en URL y hay hojas, usar la más reciente si hoy no tiene hoja
+        setCachedData('costeo_diario_sheets_v1', sheetsJson.sheets);
         const sp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         if (!sp?.get('fecha') && !hasPersistedValue('pos_selected_date') && sheetsJson.sheets.length > 0) {
           const today = new Date().toISOString().slice(0, 10);
@@ -166,7 +193,7 @@ export default function CosteoDiarioPosPage() {
         }
       }
     } catch (err) {
-      console.error('Error cargando datos POS:', err);
+      console.error('Error cargando datos de ingreso rápido:', err);
     } finally {
       setLoading(false);
     }
@@ -239,11 +266,39 @@ export default function CosteoDiarioPosPage() {
     setCustomUnitPrice(String(price));
   }, [selectedDate, selectedItem, editingPrice, getEffectivePriceInfo]);
 
+  useEffect(() => {
+    if (activeView !== 'CONSUMOS' && activeCategory === 'PLATOS_VENTA') {
+      setActiveCategory(null);
+    }
+  }, [activeView, activeCategory]);
+
+  const categoriasVisibles = useMemo(() => {
+    if (activeView === 'CONSUMOS') {
+      return [
+        ...CATEGORIAS_BASE,
+        { key: 'PLATOS_VENTA' as PosMacroCategory, label: 'Platos para la Venta', emoji: '🍽️' },
+      ];
+    }
+    return CATEGORIAS_BASE;
+  }, [activeView]);
+
+  const effectiveCatalogPool = useMemo(() => {
+    if (activeView === 'CONSUMOS') {
+      return [...platosVenta, ...catalog];
+    }
+    return catalog;
+  }, [activeView, platosVenta, catalog]);
+
+  const isEmptyInitialState = !activeCategory && !searchText.trim() && !onlyCounted;
+
   const filteredCatalog = useMemo(() => {
     const q = searchText.trim().toLowerCase();
-    return catalog.filter((item) => {
+    if (!activeCategory && !q && !onlyCounted) {
+      return [];
+    }
+    return effectiveCatalogPool.filter((item) => {
       const meta = getInsumoVisualMeta(item);
-      if (activeCategory !== 'TODAS' && meta.macroCategory !== activeCategory) {
+      if (activeCategory && meta.macroCategory !== activeCategory) {
         return false;
       }
       if (onlyCounted) {
@@ -257,7 +312,7 @@ export default function CosteoDiarioPosPage() {
       }
       return true;
     });
-  }, [catalog, activeCategory, onlyCounted, searchText, currentQtyByInsumoName]);
+  }, [effectiveCatalogPool, activeCategory, onlyCounted, searchText, currentQtyByInsumoName]);
 
   const evalResult = useMemo(() => evaluatePosExpression(expr), [expr]);
 
@@ -322,11 +377,23 @@ export default function CosteoDiarioPosPage() {
     const unitPrice = calculatedPreview.unitPrice;
     const total = calculatedPreview.total;
 
-    const obsNote = eqUsed.isPortion
-      ? `${itemToSave.nombre} (${qtyInput} Und · ${Math.round(eqUsed.factorToBase * 1000)}g/und)`
-      : eqUsed.factorToBase !== 1
-        ? `${qtyInput} ${eqUsed.shortLabel} = ${baseQty} ${baseUnit}`
-        : '';
+    const obsParts: string[] = [];
+    if (activeView === 'CONSUMOS' && consumoResponsable.trim()) {
+      obsParts.push(`Resp: ${consumoResponsable.trim()}`);
+    }
+    if (eqUsed.isPortion) {
+      obsParts.push(`${itemToSave.nombre} (${qtyInput} Und · ${Math.round(eqUsed.factorToBase * 1000)}g/und)`);
+    } else if (eqUsed.factorToBase !== 1) {
+      obsParts.push(`${qtyInput} ${eqUsed.shortLabel} = ${baseQty} ${baseUnit}`);
+    }
+    const obsNote = obsParts.join(' · ');
+
+    const targetCategoria =
+      activeView === 'CONSUMOS'
+        ? itemToSave.esPlatoVenta
+          ? 'Consumido de Productos para la Venta'
+          : 'Consumido del Catálogo de Insumos y Carne'
+        : itemToSave.categoria || 'Verduras e Insumos';
 
     try {
       const res = await fetch('/api/costeo-diario', {
@@ -339,9 +406,9 @@ export default function CosteoDiarioPosPage() {
           targetView: activeView,
           movimiento: {
             tipo: activeVistaMeta.uiTipo,
-            insumo_id: itemToSave.id,
+            insumo_id: itemToSave.esPlatoVenta ? null : itemToSave.id,
             nombre_insumo: itemToSave.nombre,
-            categoria: itemToSave.categoria || 'Verduras e Insumos',
+            categoria: targetCategoria,
             cantidad: baseQty,
             unidad: baseUnit,
             costo_unitario: unitPrice,
@@ -392,6 +459,7 @@ export default function CosteoDiarioPosPage() {
     activeSheet,
     activeView,
     activeVistaMeta,
+    consumoResponsable,
   ]);
 
   const handleUndoLog = async (log: SessionEntryLog) => {
@@ -554,13 +622,13 @@ export default function CosteoDiarioPosPage() {
 
           {/* Pestañas Gigantes de Categoría */}
           <div className="flex items-center gap-2 overflow-x-auto shrink-0 pb-1">
-            {CATEGORIAS_POS.map((cat) => {
+            {categoriasVisibles.map((cat) => {
               const active = activeCategory === cat.key;
               return (
                 <button
                   key={cat.key}
                   type="button"
-                  onClick={() => setActiveCategory(cat.key)}
+                  onClick={() => setActiveCategory(active ? null : cat.key)}
                   className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap border transition-all cursor-pointer active:scale-95 ${
                     active
                       ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
@@ -579,12 +647,24 @@ export default function CosteoDiarioPosPage() {
             {loading ? (
               <div className="h-full flex items-center justify-center text-slate-500 text-sm gap-2">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Cargando catálogo POS...
+                Cargando catálogo de insumos...
+              </div>
+            ) : isEmptyInitialState ? (
+              <div className="h-56 flex flex-col items-center justify-center bg-white rounded-2xl border border-dashed border-slate-300 text-slate-500 text-center px-6 gap-2">
+                <Search className="w-7 h-7 text-slate-400" />
+                <span className="text-sm font-bold text-slate-700">
+                  Escoge la categoría o ingresa el nombre del insumo
+                </span>
+                <span className="text-xs text-slate-400 max-w-md">
+                  {activeView === 'CONSUMOS'
+                    ? 'Selecciona una categoría de insumos o "Platos para la Venta", o escribe en el buscador.'
+                    : 'Selecciona una categoría arriba o escribe en el buscador para iniciar el ingreso rápido.'}
+                </span>
               </div>
             ) : filteredCatalog.length === 0 ? (
               <div className="h-48 flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 text-slate-400 text-sm gap-2">
                 <Layers className="w-6 h-6" />
-                <span>No se encontraron insumos en esta categoría.</span>
+                <span>No se encontraron registros con ese filtro.</span>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3">
@@ -680,7 +760,7 @@ export default function CosteoDiarioPosPage() {
                 Toca un insumo de la izquierda
               </div>
               <p className="text-xs text-slate-500 max-w-xs">
-                Selecciona cualquier tarjeta para abrir el teclado táctil POS, elegir porciones o Kg y registrar el conteo en un toque.
+                Selecciona cualquier tarjeta para abrir el teclado táctil, elegir porciones o Kg y registrar el conteo en un toque.
               </p>
 
               {sessionLogs.length > 0 && (
@@ -793,7 +873,17 @@ export default function CosteoDiarioPosPage() {
                 })}
               </div>
 
-              {/* Display Digital POS */}
+              {activeView === 'CONSUMOS' && (
+                <input
+                  type="text"
+                  value={consumoResponsable}
+                  onChange={(e) => setConsumoResponsable(e.target.value)}
+                  placeholder="Responsable del consumo (opcional, ej: Personal / Turno)"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 shrink-0"
+                />
+              )}
+
+              {/* Display Digital */}
               <div className="bg-slate-950 text-white rounded-2xl p-3 sm:p-3.5 space-y-1 shrink-0">
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
                   <span>Ingreso en {selectedEq?.label}</span>

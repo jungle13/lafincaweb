@@ -383,6 +383,7 @@ async function syncCosteoDiarioSummary(targetDate: string, explicitPosSales?: nu
 
 let cachedCatalog: any[] | null = null;
 let cacheCatalogExpiry = 0;
+let cachedSheetsResponse: { sheets: any[]; expiry: number } | null = null;
 
 async function getCachedCatalog() {
   const now = Date.now();
@@ -391,7 +392,7 @@ async function getCachedCatalog() {
   }
   const { data } = await supabase
     .from('catalogo_insumos')
-    .select('id, codigo, nombre, categoria, unidad_medida, costo_unitario_kg');
+    .select('id, codigo, nombre, categoria, unidad_medida, costo_unitario_kg, ultima_factura_numero, ultima_factura_fecha, ultima_factura_proveedor');
   cachedCatalog = data || [];
   cacheCatalogExpiry = now + 60000; // Cache 60 segundos
   return cachedCatalog;
@@ -458,7 +459,12 @@ export async function GET(request: Request) {
       });
     }
 
-    // 1. Fetch catalog in parallel with headers
+    // Caché en memoria de corta duración para apertura instantánea (invalidado en cada POST)
+    if (!dateParam && !checkPrevFor && cachedSheetsResponse && Date.now() < cachedSheetsResponse.expiry) {
+      return NextResponse.json({ sheets: cachedSheetsResponse.sheets });
+    }
+
+    // 1. Fetch catalog, headers y primera página de registros en paralelo (CERO escaneo a compras_detalle)
     let headerQuery = supabase
       .from('costeo_diario')
       .select('*')
@@ -468,76 +474,69 @@ export async function GET(request: Request) {
       headerQuery = headerQuery.eq('fecha', dateParam);
     }
 
-    const [catalog, { data: sheetsHeader, error: headerErr }] = await Promise.all([
+    let firstPageQuery = supabase
+      .from('registros_costeo_cocina')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: true })
+      .range(0, 999);
+
+    if (dateParam) {
+      firstPageQuery = firstPageQuery.eq('fecha', dateParam);
+    }
+
+    const [catalog, { data: sheetsHeader, error: headerErr }, { data: firstPageRows, count: totalRegsCount, error: firstRegErr }] = await Promise.all([
       getCachedCatalog(),
-      headerQuery
+      headerQuery,
+      firstPageQuery
     ]);
+
     if (headerErr) {
       return NextResponse.json({ error: headerErr.message }, { status: 500 });
+    }
+    if (firstRegErr) {
+      return NextResponse.json({ error: firstRegErr.message }, { status: 500 });
     }
 
     if (!sheetsHeader || sheetsHeader.length === 0) {
       return NextResponse.json({ sheets: [] });
     }
 
-    const sheetDates = (sheetsHeader || [])
-      .map((s: any) => String(s.fecha || '').slice(0, 10))
-      .filter(Boolean)
-      .sort();
-    const minSheetDateStr = sheetDates[0] || '2026-10-01';
-    const maxSheetDateStr = sheetDates[sheetDates.length - 1] || new Date().toISOString().slice(0, 10);
-    const minLookbackDate = new Date(`${minSheetDateStr}T00:00:00Z`);
-    minLookbackDate.setUTCDate(minLookbackDate.getUTCDate() - 60);
-    const minInvoiceDateStr = minLookbackDate.toISOString().slice(0, 10);
-
-    const { data: invoicesDesc } = await supabase
-      .from('compras_detalle')
-      .select('insumo_id, nombre_insumo, detalle, numero_factura, fecha, proveedor, costo_unitario, costo_unitario_kg, unidad')
-      .gte('fecha', minInvoiceDateStr)
-      .lte('fecha', maxSheetDateStr)
-      .gt('costo_unitario_kg', 0)
-      .order('fecha', { ascending: false })
-      .limit(5000);
-
-    const dates = sheetsHeader.map((h: any) => h.fecha);
-
-    // 3. Fetch all registros_costeo_cocina with pagination to ensure NO date is cut off by Supabase 1000-row cap
-    let allRegistros: any[] = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      let regQuery = supabase
-        .from('registros_costeo_cocina')
-        .select('*');
-
-      if (dateParam) {
-        regQuery = regQuery.eq('fecha', dateParam);
-      } else {
-        regQuery = regQuery.in('fecha', dates);
-      }
-
-      const { data: pageRows, error: regErr } = await regQuery
-        .order('created_at', { ascending: true })
-        .range(from, from + pageSize - 1);
-
-      if (regErr) {
-        console.error('Error fetching registros_costeo_cocina:', regErr);
-        return NextResponse.json({ error: regErr.message }, { status: 500 });
-      }
-
-      if (pageRows && pageRows.length > 0) {
-        allRegistros = allRegistros.concat(pageRows);
-        if (pageRows.length < pageSize) {
-          hasMore = false;
-        } else {
-          from += pageSize;
+    // 2. Descargar páginas restantes en paralelo con Promise.all si hay > 1000 registros
+    let allRegistros: any[] = firstPageRows || [];
+    const totalCount = Number(totalRegsCount || allRegistros.length);
+    if (totalCount > 1000) {
+      const pagePromises: PromiseLike<any>[] = [];
+      for (let offset = 1000; offset < totalCount; offset += 1000) {
+        let pq = supabase
+          .from('registros_costeo_cocina')
+          .select('*')
+          .order('created_at', { ascending: true })
+          .range(offset, offset + 999);
+        if (dateParam) {
+          pq = pq.eq('fecha', dateParam);
         }
-      } else {
-        hasMore = false;
+        pagePromises.push(pq);
+      }
+      const extraPages = await Promise.all(pagePromises);
+      for (const pg of extraPages) {
+        if (pg.error) {
+          return NextResponse.json({ error: pg.error.message }, { status: 500 });
+        }
+        if (pg.data && pg.data.length > 0) {
+          allRegistros = allRegistros.concat(pg.data);
+        }
       }
     }
+
+    // 3. Pre-indexación O(1) por fecha y caché de nombres canónicos
+    const regsByDate = new Map<string, any[]>();
+    for (const r of allRegistros) {
+      const list = regsByDate.get(r.fecha);
+      if (list) list.push(r);
+      else regsByDate.set(r.fecha, [r]);
+    }
+
+    const canonicalCache = new Map<string, { canonicalName: string; catItem: any; resolvedCategory: string }>();
 
     const standardCategories = [
       { id: 'verduras', name: 'Verduras e Insumos' },
@@ -549,19 +548,17 @@ export async function GET(request: Request) {
       { id: 'consumos_productos', name: 'Consumido de Productos para la Venta' }
     ];
 
-    // 4. Build sheets
+    // 4. Build sheets (O(N) directo sin iterar sobre compras_detalle)
     const sheets = sheetsHeader.map((header: any) => {
       const dateStr = header.fecha;
-      const dayRegs = (allRegistros || []).filter((r: any) => r.fecha === dateStr);
+      const dayRegs = regsByDate.get(dateStr) || [];
 
       const categoryMap = new Map<string, any[]>();
       standardCategories.forEach(std => categoryMap.set(std.name, []));
 
-      // Process all registrations of the day
       dayRegs.forEach((reg: any) => {
         let canonicalName = '';
         let resolvedCategory = '';
-
         let catItem: any = null;
 
         if (reg.tipo === 'CONSUMO') {
@@ -571,9 +568,19 @@ export async function GET(request: Request) {
             : 'Consumido del Catálogo de Insumos y Carne';
           catItem = findCatalogForReg(reg, canonicalName, catalog);
         } else {
-          canonicalName = getCanonicalName(reg.nombre_insumo, catalog);
-          catItem = findCatalogForReg(reg, canonicalName, catalog);
-          resolvedCategory = resolveStandardCategory(catItem?.categoria || reg.categoria, canonicalName);
+          const cacheKey = `${reg.insumo_id || ''}|${reg.nombre_insumo || ''}|${reg.categoria || ''}`;
+          let cachedResolved = canonicalCache.get(cacheKey);
+          if (!cachedResolved) {
+            canonicalName = getCanonicalName(reg.nombre_insumo, catalog);
+            catItem = findCatalogForReg(reg, canonicalName, catalog);
+            resolvedCategory = resolveStandardCategory(catItem?.categoria || reg.categoria, canonicalName);
+            cachedResolved = { canonicalName, catItem, resolvedCategory };
+            canonicalCache.set(cacheKey, cachedResolved);
+          } else {
+            canonicalName = cachedResolved.canonicalName;
+            catItem = cachedResolved.catItem;
+            resolvedCategory = cachedResolved.resolvedCategory;
+          }
         }
 
         if (!categoryMap.has(resolvedCategory)) {
@@ -640,15 +647,21 @@ export async function GET(request: Request) {
           if (normalized.equivNote && !existingItem.equivNote) {
             existingItem.equivNote = normalized.equivNote;
           }
-          // Accumulate default qty/total if it's a traslado or consumo
           if (reg.tipo === 'TRASLADO' || reg.tipo === 'CONSUMO') {
             existingItem.qty += rawQty;
             existingItem.total += total;
           }
         } else {
-          const sourceInvoice = reg.tipo === 'CONSUMO'
+          const numFac = reg.factura_origen_numero || catItem?.ultima_factura_numero;
+          const sourceInvoice = (reg.tipo === 'CONSUMO' || !numFac)
             ? null
-            : findSourceInvoiceForItem(canonicalName, catItem, dateStr, resolvedUnit, invoicesDesc || []);
+            : {
+                numeroFactura: String(numFac),
+                fecha: String(reg.factura_origen_fecha || catItem?.ultima_factura_fecha || dateStr),
+                proveedor: String(reg.factura_origen_proveedor || catItem?.ultima_factura_proveedor || 'Proveedor'),
+                costoUnitario: unitPrice,
+                unidad: resolvedUnit,
+              };
 
           itemsInCat.push({
             id: `item-${reg.id}`,
@@ -698,17 +711,6 @@ export async function GET(request: Request) {
 
       const month = dateStr.slice(0, 7);
 
-      const preciosVigentes: Record<string, { unitPrice: number; sourceInvoice: any }> = {};
-      for (const cat of (catalog || [])) {
-        const inv = findSourceInvoiceForItem(cat.nombre, cat, dateStr, cat.unidad_medida || 'Kg', invoicesDesc || []);
-        if (inv && inv.costoUnitario > 0) {
-          preciosVigentes[cat.id] = {
-            unitPrice: inv.costoUnitario,
-            sourceInvoice: inv,
-          };
-        }
-      }
-
       return {
         id: `sheet-${dateStr}`,
         month,
@@ -722,10 +724,13 @@ export async function GET(request: Request) {
         costoConsumos: Number(header.costo_consumos || 0),
         consumoReal: Number(header.consumo_real || 0),
         foodCostPorcentaje: Number(header.food_cost_porcentaje || 0),
-        preciosVigentes,
         categories
       };
     });
+
+    if (!dateParam) {
+      cachedSheetsResponse = { sheets, expiry: Date.now() + 20000 };
+    }
 
     return NextResponse.json({ sheets });
   } catch (error: any) {
@@ -736,6 +741,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    cachedSheetsResponse = null;
     const body = await request.json();
     const {
       fecha,
@@ -762,7 +768,7 @@ export async function POST(request: Request) {
     // Catalog for insumo linking
     const { data: catInsumos } = await supabase
       .from('catalogo_insumos')
-      .select('id, nombre, categoria, unidad_medida, costo_unitario_kg');
+      .select('id, nombre, categoria, unidad_medida, costo_unitario_kg, ultima_factura_numero, ultima_factura_fecha, ultima_factura_proveedor');
     const catalog = catInsumos || [];
 
     // 0. Manejo de Creación de Hoja de Costeo e Importación Condicional de Existencias (Cocina y Bodega)
@@ -1127,19 +1133,6 @@ export async function POST(request: Request) {
         targetTipo = 'CONSUMO';
       }
 
-      const needsInvoiceLookup = itemsList.some((it: any) => Number(it.costo_unitario || it.unitPrice || 0) <= 0);
-      let invoicesForDate: any[] = [];
-      if (needsInvoiceLookup && targetTipo !== 'CONSUMO') {
-        const { data: invRows } = await supabase
-          .from('compras_detalle')
-          .select('insumo_id, nombre_insumo, detalle, numero_factura, fecha, proveedor, costo_unitario, costo_unitario_kg, unidad')
-          .lte('fecha', targetDate)
-          .gt('costo_unitario_kg', 0)
-          .order('fecha', { ascending: false })
-          .limit(2000);
-        invoicesForDate = invRows || [];
-      }
-
       const rowsToInsert = itemsList.map((it: any) => {
         const rawName = it.nombre_insumo || it.name || it.itemName || '';
         const canonicalName = getCanonicalName(rawName, catalog);
@@ -1149,11 +1142,7 @@ export async function POST(request: Request) {
         const categoria = catItem?.categoria || it.categoria || it.category || 'Verduras e Insumos';
         const qty = Number(it.cantidad || it.weightKg || it.qty || 0);
         const explicitPrice = Number(it.costo_unitario || it.unitPrice || 0);
-        const targetUnit = it.unidad || it.baseUnit || it.unit || catItem?.unidad_medida || 'Kg';
-        const invPrice = explicitPrice <= 0 && targetTipo !== 'CONSUMO'
-          ? findSourceInvoiceForItem(canonicalName, catItem, targetDate, targetUnit, invoicesForDate)?.costoUnitario || 0
-          : 0;
-        const unitPrice = explicitPrice > 0 ? explicitPrice : (invPrice > 0 ? invPrice : Number(catItem?.costo_unitario_kg || 0));
+        const unitPrice = explicitPrice > 0 ? explicitPrice : Number(catItem?.costo_unitario_kg || 0);
         const total = Number(it.total || it.estimatedTotal || (qty * unitPrice));
 
         return {
@@ -1166,7 +1155,14 @@ export async function POST(request: Request) {
           unidad: it.unidad || it.baseUnit || it.unit || 'Kg',
           costo_unitario: unitPrice,
           valor_total: total,
-          observaciones: it.observaciones || (actualActionMode === 'REEMPLAZAR' ? 'Carga manual conteo (=)' : 'Carga manual conteo (+)')
+          observaciones: it.observaciones || (actualActionMode === 'REEMPLAZAR' ? 'Carga manual conteo (=)' : 'Carga manual conteo (+)'),
+          ...(targetTipo !== 'CONSUMO' && catItem?.ultima_factura_numero
+            ? {
+                factura_origen_numero: catItem.ultima_factura_numero,
+                factura_origen_fecha: catItem.ultima_factura_fecha || null,
+                factura_origen_proveedor: catItem.ultima_factura_proveedor || null,
+              }
+            : {}),
         };
       });
 
@@ -1228,24 +1224,7 @@ export async function POST(request: Request) {
 
       const qty = Number(movimiento.cantidad || 0);
       const explicitUnitPrice = Number(movimiento.costo_unitario || 0);
-      let invUnitPrice = 0;
-      if (explicitUnitPrice <= 0 && targetTipo !== 'CONSUMO') {
-        const { data: invRows } = await supabase
-          .from('compras_detalle')
-          .select('insumo_id, nombre_insumo, detalle, numero_factura, fecha, proveedor, costo_unitario, costo_unitario_kg, unidad')
-          .lte('fecha', targetDate)
-          .gt('costo_unitario_kg', 0)
-          .order('fecha', { ascending: false })
-          .limit(2000);
-        invUnitPrice = findSourceInvoiceForItem(
-          canonicalName,
-          catItem,
-          targetDate,
-          movimiento.unidad || catItem?.unidad_medida || 'Kg',
-          invRows || []
-        )?.costoUnitario || 0;
-      }
-      const unitPrice = explicitUnitPrice > 0 ? explicitUnitPrice : (invUnitPrice > 0 ? invUnitPrice : Number(catItem?.costo_unitario_kg || 0));
+      const unitPrice = explicitUnitPrice > 0 ? explicitUnitPrice : Number(catItem?.costo_unitario_kg || 0);
       const total = Number(movimiento.total || (qty * unitPrice));
 
       let rowResult = null;
@@ -1279,7 +1258,14 @@ export async function POST(request: Request) {
             unidad: movimiento.unidad || 'Kg',
             costo_unitario: unitPrice,
             valor_total: total,
-            observaciones: movimiento.observaciones || ''
+            observaciones: movimiento.observaciones || '',
+            ...(targetTipo !== 'CONSUMO' && catItem?.ultima_factura_numero
+              ? {
+                  factura_origen_numero: catItem.ultima_factura_numero,
+                  factura_origen_fecha: catItem.ultima_factura_fecha || null,
+                  factura_origen_proveedor: catItem.ultima_factura_proveedor || null,
+                }
+              : {}),
           })
           .select()
           .single();

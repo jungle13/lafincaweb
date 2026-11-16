@@ -1,0 +1,16 @@
+[package]
+name = "la-finca-pos"
+version = "1.0.0"
+description = "Punto de Venta Restaurante La Finca (Offline-First + Periféricos ESC/POS y Serial)"
+authors = ["La Finca Choclos y Asados"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serialport = "4"

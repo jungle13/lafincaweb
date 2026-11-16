@@ -231,6 +231,9 @@ export async function POST(request: Request) {
           .from('catalogo_insumos')
           .update({
             costo_unitario_kg: normalizedCost,
+            ultima_factura_numero: numero_factura,
+            ultima_factura_fecha: fecha,
+            ultima_factura_proveedor: proveedor,
             updated_at: new Date().toISOString(),
           })
           .eq('id', catMatch.id);

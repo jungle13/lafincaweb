@@ -28,6 +28,7 @@ import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@
 import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
 import { usePersistedState, hasPersistedValue } from '@/lib/usePersistedState';
+import { getCachedData, setCachedData } from '@/lib/dataCache';
 
 interface RegistroItem {
   id: string;
@@ -355,9 +356,11 @@ function parseBulkConteosText(rawText: string, catalogList: any[]): ParsedConteo
 // COMPONENTE PRINCIPAL
 // ==========================================
 export default function InventarioConsolidadoPage() {
-  const [sheets, setSheets] = useState<CosteoSheet[]>([]);
-  const [catalogItems, setCatalogItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedSheets = getCachedData<CosteoSheet[]>('costeo_diario_sheets_v1');
+  const cachedCatalog = getCachedData<any[]>('catalogo_insumos_list');
+  const [sheets, setSheets] = useState<CosteoSheet[]>(() => cachedSheets || []);
+  const [catalogItems, setCatalogItems] = useState<any[]>(() => cachedCatalog || []);
+  const [loading, setLoading] = useState(() => !cachedSheets);
   const [selectedMonth, setSelectedMonth] = usePersistedState<string>('consolidado_selected_month', '2026-11');
   const [searchQuery, setSearchQuery] = usePersistedState<string>('consolidado_search_query', '');
   const [openTabs, setOpenTabs] = usePersistedState<string[]>('consolidado_open_tabs', []);
@@ -391,11 +394,12 @@ export default function InventarioConsolidadoPage() {
   // Cargar hojas desde /api/costeo-diario y catálogo desde /api/catalogo
   const fetchSheets = async () => {
     try {
-      setLoading(true);
+      if (!getCachedData('costeo_diario_sheets_v1')) setLoading(true);
       const res = await fetch(`/api/costeo-diario?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
         setSheets(data.sheets);
+        setCachedData('costeo_diario_sheets_v1', data.sheets);
         const latestMonth = data.sheets[0].month || data.sheets[0].dateStr.slice(0, 7);
         if (!hasPersistedValue('consolidado_selected_month')) {
           setSelectedMonth(prev => {

@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permisos por defecto para La Finca POS",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

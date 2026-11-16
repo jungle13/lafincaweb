@@ -21,6 +21,7 @@ import {
   Briefcase,
   Building2,
   Calculator,
+  Store,
   Layers,
   CalendarRange
 } from 'lucide-react';
@@ -53,6 +54,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'INVENTARIO & BODEGA',
     items: [
+      { label: 'Punto de Venta (POS)', href: '/pos', icon: Store },
       { label: 'Entradas por Compra', href: '/compras', icon: ShoppingCart },
       { label: 'Proveedores y Pagos', href: '/proveedores', icon: Building2 },
       { label: 'Salidas por Venta', href: '/ventas', icon: TrendingUp },
@@ -63,7 +65,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'COSTEO DIARIO E INVENTARIO',
     items: [
       { label: 'Hoja de Costeo Diario', href: '/costeo-diario', icon: FileSpreadsheet },
-      { label: 'Ingreso Rápido POS', href: '/costeo-diario/pos', icon: Calculator },
+      { label: 'Ingreso Rápido', href: '/costeo-diario/pos', icon: Calculator },
       { label: 'Inventario Consolidado Diario', href: '/inventario-consolidado', icon: Layers },
     ],
   },

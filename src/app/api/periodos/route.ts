@@ -21,17 +21,31 @@ function formatMonthName(codigo: string): string {
   return codigo;
 }
 
+let cachedPeriodosResp: { data: any; expiry: number } | null = null;
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const periodoId = searchParams.get('periodo_id') || searchParams.get('codigo');
 
-    // 1. Obtener todos los períodos oficiales desde la tabla 'periodos'
-    let { data: periodosData, error: pError } = await supabase
-      .from('periodos')
-      .select('*')
-      .order('codigo', { ascending: false });
+    if (!periodoId && cachedPeriodosResp && Date.now() < cachedPeriodosResp.expiry) {
+      return NextResponse.json(cachedPeriodosResp.data);
+    }
 
+    // 1-4. Ejecutar las 4 consultas en paralelo con Promise.all
+    const [
+      { data: rawPeriodos, error: pError },
+      { data: comprasRows },
+      { data: ventasRows },
+      { data: cierresRows },
+    ] = await Promise.all([
+      supabase.from('periodos').select('*').order('codigo', { ascending: false }),
+      supabase.from('compras').select('periodo_id, fecha, valor_total'),
+      supabase.from('ventas_diarias').select('periodo_id, fecha, gran_total'),
+      supabase.from('registros_costeo_cocina').select('fecha, tipo, valor_total').in('tipo', ['CIERRE', 'BODEGA_CIERRE']),
+    ]);
+
+    let periodosData = rawPeriodos;
     if (pError || !periodosData || periodosData.length === 0) {
       periodosData = [
         {
@@ -57,11 +71,6 @@ export async function GET(req: Request) {
       ];
     }
 
-    // 2. Extraer estadísticas de Compras
-    const { data: comprasRows } = await supabase
-      .from('compras')
-      .select('periodo_id, fecha, valor_total');
-
     const comprasStats: Record<string, { count: number; total: number }> = {};
     (comprasRows || []).forEach((c: any) => {
       let pId = c.periodo_id;
@@ -73,11 +82,6 @@ export async function GET(req: Request) {
       }
     });
 
-    // 3. Extraer estadísticas de Ventas
-    const { data: ventasRows } = await supabase
-      .from('ventas_diarias')
-      .select('periodo_id, fecha, gran_total');
-
     const ventasStats: Record<string, { count: number; total: number }> = {};
     (ventasRows || []).forEach((v: any) => {
       let pId = v.periodo_id;
@@ -88,12 +92,6 @@ export async function GET(req: Request) {
         ventasStats[pId].total += Number(v.gran_total || 0);
       }
     });
-
-    // 4. Extraer estadísticas de Consolidado de Inventario (Cierre Bodega + Cierre Cocina)
-    const { data: cierresRows } = await supabase
-      .from('registros_costeo_cocina')
-      .select('fecha, tipo, valor_total')
-      .in('tipo', ['CIERRE', 'BODEGA_CIERRE']);
 
     // Agrupar por mes -> fecha -> suma de cierres
     const cierresPorMes: Record<string, Record<string, number>> = {};
@@ -137,13 +135,19 @@ export async function GET(req: Request) {
       ? periodosEnriquecidos.find((p: any) => p.id === periodoId || p.codigo === periodoId) || activo
       : activo;
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       periodos: periodosEnriquecidos,
       activo,
       selectedPeriodo,
       fecha_corte: 'ACTUAL',
-    }, {
+    };
+
+    if (!periodoId) {
+      cachedPeriodosResp = { data: payload, expiry: Date.now() + 15000 };
+    }
+
+    return NextResponse.json(payload, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },
@@ -156,6 +160,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    cachedPeriodosResp = null;
     const body = await req.json();
     const { codigo, nombre, estado = 'ABIERTO', observaciones } = body;
 
