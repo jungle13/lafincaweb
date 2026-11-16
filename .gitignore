@@ -4,6 +4,7 @@ node_modules/
 out/
 build/
 dist/
+!src-tauri/dist/
 
 # Environment Variables
 .env*.local
