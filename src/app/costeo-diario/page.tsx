@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import catalogoOficial from '@/lib/catalogo-oficial.json';
+import { usePersistedState, readPersistedValue } from '@/lib/usePersistedState';
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadCosteoDiarioPdf, CosteoPdfSelection } from '@/lib/exportCosteoDiarioPdf';
@@ -1452,9 +1453,9 @@ function parseBulkConteosText(
 
 export default function CosteoDiarioPage() {
   const [sheets, setSheets] = useState<CosteoSheet[]>([]);
-  const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
+  const [openTabs, setOpenTabs] = usePersistedState<string[]>('costeo_open_tabs', []);
+  const [activeTabId, setActiveTabId] = usePersistedState<string | null>('costeo_active_tab_id', null);
+  const [selectedMonth, setSelectedMonth] = usePersistedState<string>('costeo_selected_month', '2026-11');
 
   // Meses disponibles calculados dinámicamente según las hojas cargadas
   const { periodos, isPeriodoCerrado } = usePeriodo();
@@ -1463,7 +1464,7 @@ export default function CosteoDiarioPage() {
     const extra = (periodos || []).map(p => p.codigo);
     return buildDynamicMonths(sheets, selectedMonth, extra);
   }, [sheets, selectedMonth, periodos]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('costeo_search_query', '');
   
   // Modal State (+ Nueva Hoja de Costeo)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1611,11 +1612,11 @@ export default function CosteoDiarioPage() {
   // Modos operativos y switches de inclusión
   const [productosVentaList, setProductosVentaList] = useState<any[]>([]);
   const [consumoResponsable, setConsumoResponsable] = useState<string>('');
-  const [activeOperationalView, setActiveOperationalView] = useState<
+  const [activeOperationalView, setActiveOperationalView] = usePersistedState<
     'TRASLADOS' | 'COCINA_APERTURA' | 'DEVOLUCIONES' | 'COCINA_CIERRE' | 'CONSUMOS' | 'BODEGA_APERTURA' | 'BODEGA_CIERRE'
-  >('TRASLADOS');
-  const [incluirCocinaApertura, setIncluirCocinaApertura] = useState(true);
-  const [incluirDevoluciones, setIncluirDevoluciones] = useState(false);
+  >('costeo_operational_view', 'TRASLADOS');
+  const [incluirCocinaApertura, setIncluirCocinaApertura] = usePersistedState<boolean>('costeo_incluir_apertura', true);
+  const [incluirDevoluciones, setIncluirDevoluciones] = usePersistedState<boolean>('costeo_incluir_devoluciones', false);
   const [openInvoiceTooltipId, setOpenInvoiceTooltipId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1631,7 +1632,7 @@ export default function CosteoDiarioPage() {
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<any | null>(null);
   const [availableUnits, setAvailableUnits] = useState<AllowedUnitOption[]>(getAllowedUnitsForInsumo());
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchCategoryFilter, setSearchCategoryFilter] = useState<string>('TODOS');
+  const [searchCategoryFilter, setSearchCategoryFilter] = usePersistedState<string>('costeo_search_cat_filter', 'TODOS');
   const addQtyInputRef = useRef<HTMLInputElement>(null);
   const generalSearchInputRef = useRef<HTMLInputElement>(null);
   const [generalAddSuccessMsg, setGeneralAddSuccessMsg] = useState<string>('');
@@ -1699,7 +1700,45 @@ export default function CosteoDiarioPage() {
           setSheets(data.sheets);
           const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
           const fechaParam = params?.get('fecha');
-          const targetSheet = (fechaParam && data.sheets.find((s: any) => s.dateStr === fechaParam)) || data.sheets[0];
+
+          if (fechaParam) {
+            const paramSheet = data.sheets.find((s: any) => s.dateStr === fechaParam);
+            if (paramSheet) {
+              const targetMonth = paramSheet.month || paramSheet.dateStr.slice(0, 7);
+              setSelectedMonth(targetMonth);
+              setOpenTabs(prev => (prev.includes(paramSheet.id) ? prev : [...prev, paramSheet.id]));
+              setActiveTabId(paramSheet.id);
+              return;
+            }
+          }
+
+          // Restaurar pestañas de sesión si siguen existiendo en BD
+          const savedTabs = readPersistedValue<string[]>('costeo_open_tabs', [])
+            .filter(id => data.sheets.some((s: any) => s.id === id));
+          const savedActive = readPersistedValue<string | null>('costeo_active_tab_id', null);
+
+          if (savedTabs.length > 0 || (savedActive && data.sheets.some((s: any) => s.id === savedActive))) {
+            const validActive = (savedActive && data.sheets.some((s: any) => s.id === savedActive))
+              ? savedActive
+              : savedTabs[0];
+            if (savedTabs.length === 0 && validActive) {
+              setOpenTabs([validActive]);
+            } else if (savedTabs.length > 0) {
+              setOpenTabs(savedTabs);
+            }
+            setActiveTabId(validActive);
+            const activeS = data.sheets.find((s: any) => s.id === validActive);
+            if (activeS) {
+              const savedMonth = readPersistedValue<string | null>('costeo_selected_month', null);
+              if (!savedMonth) {
+                setSelectedMonth(activeS.month || activeS.dateStr.slice(0, 7));
+              }
+            }
+            return;
+          }
+
+          // Inicialización por defecto (primera vez en la sesión)
+          const targetSheet = data.sheets[0];
           const targetMonth = targetSheet.month || targetSheet.dateStr.slice(0, 7);
           setSelectedMonth(targetMonth);
           setOpenTabs([targetSheet.id]);

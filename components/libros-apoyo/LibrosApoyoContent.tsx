@@ -59,6 +59,7 @@ import {
   LibroCajaUsuario,
 } from '@/services/libroCajaService';
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/dataCache';
+import { usePersistedState } from '@/lib/usePersistedState';
 
 const CACHE_KEY = 'libro_caja_menor_oct_2026';
 
@@ -177,15 +178,14 @@ export default function LibrosApoyoContent({
 
   // Estado para la vista de selección de mes a pantalla completa
   const initialDateParam = searchParams.get('fecha');
-  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(() => {
-    if (modoCajeroHermetico) return '2026-11';
-    if (initialDateParam && initialDateParam.length >= 7) return initialDateParam.slice(0, 7);
-    return null;
-  });
-  const [searchMonthQuery, setSearchMonthQuery] = useState('');
+  const [selectedMonthId, setSelectedMonthId] = usePersistedState<string | null>(
+    'caja_selected_month_id',
+    modoCajeroHermetico ? '2026-11' : (initialDateParam && initialDateParam.length >= 7 ? initialDateParam.slice(0, 7) : null)
+  );
+  const [searchMonthQuery, setSearchMonthQuery] = usePersistedState<string>('caja_search_month', '');
 
   // Mes seleccionado para el detalle (dinámico según la base de datos y períodos)
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-10');
+  const [selectedMonth, setSelectedMonth] = usePersistedState<string>('caja_selected_month', '2026-10');
 
   // Período cerrado si corresponde al mes seleccionado
   const isCerrado = isPeriodoCerrado(selectedMonthId || selectedMonth || '');
@@ -376,18 +376,18 @@ export default function LibrosApoyoContent({
   const [isSidebarOpen, setIsSidebarOpen] = useState(!modoCajeroHermetico);
 
   // Sistema de Pestañas
-  const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null); // null = Vista Previa Consolidado
+  const [openTabs, setOpenTabs] = usePersistedState<string[]>('caja_open_tabs', []);
+  const [activeTabId, setActiveTabId] = usePersistedState<string | null>('caja_active_tab_id', null); // null = Vista Previa Consolidado
 
   // Sub-vista dentro del Consolidado Mensual
-  const [consolidadoSubTab, setConsolidadoSubTab] = useState<'DIARIO' | 'CRONOLOGICO'>('DIARIO');
+  const [consolidadoSubTab, setConsolidadoSubTab] = usePersistedState<'DIARIO' | 'CRONOLOGICO'>('caja_consolidado_subtab', 'DIARIO');
 
   // Filtros en la vista Cronológica Global
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedClasificacion, setSelectedClasificacion] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState('');
-  const [selectedResponsable, setSelectedResponsable] = useState('');
-  const [selectedFechaFilter, setSelectedFechaFilter] = useState('');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('caja_search_query', '');
+  const [selectedClasificacion, setSelectedClasificacion] = usePersistedState<string>('caja_selected_clasif', '');
+  const [selectedCategoria, setSelectedCategoria] = usePersistedState<string>('caja_selected_cat', '');
+  const [selectedResponsable, setSelectedResponsable] = usePersistedState<string>('caja_selected_resp', '');
+  const [selectedFechaFilter, setSelectedFechaFilter] = usePersistedState<string>('caja_selected_fecha', '');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 35;
 

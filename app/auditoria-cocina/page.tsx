@@ -19,6 +19,7 @@ import AuditoriaInsumoRow, { InsumoAuditItem } from '@/components/auditoria/Audi
 import AddInsumoModal from '@/components/auditoria/AddInsumoModal';
 import VentasDiaSidebar, { VentaPlatoItem } from '@/components/auditoria/VentasDiaSidebar';
 import ventasSampleData from '@/data/ventas_octubre_sample.json';
+import { usePersistedState, readPersistedValue } from '@/lib/usePersistedState';
 
 // Modelos de Datos para la Vista de Auditoría
 export interface AuditoriaDiaSheet {
@@ -224,11 +225,11 @@ const INITIAL_AUDITORIA_SHEETS: AuditoriaDiaSheet[] = [
 
 export default function AuditoriaCocinaPage() {
   const [sheets, setSheets] = useState<AuditoriaDiaSheet[]>(INITIAL_AUDITORIA_SHEETS);
-  const [activeTabId, setActiveTabId] = useState<string | null>('audit-2026-10-22');
-  const [openTabs, setOpenTabs] = useState<string[]>(['audit-2026-10-22']);
-  const [selectedMonth, setSelectedMonth] = useState('2026-10');
-  const [searchFilter, setSearchFilter] = useState('');
-  const [rowSearchFilter, setRowSearchFilter] = useState('');
+  const [activeTabId, setActiveTabId] = usePersistedState<string | null>('audit_active_tab_id', 'audit-2026-10-22');
+  const [openTabs, setOpenTabs] = usePersistedState<string[]>('audit_open_tabs', ['audit-2026-10-22']);
+  const [selectedMonth, setSelectedMonth] = usePersistedState<string>('audit_selected_month', '2026-10');
+  const [searchFilter, setSearchFilter] = usePersistedState<string>('audit_search_filter', '');
+  const [rowSearchFilter, setRowSearchFilter] = usePersistedState<string>('audit_row_search_filter', '');
   const [isLoading, setIsLoading] = useState(true);
 
   // Sincronizar hojas de auditoría en tiempo real desde Supabase (/api/auditoria-cocina)
@@ -238,6 +239,14 @@ export default function AuditoriaCocinaPage() {
       .then(data => {
         if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
           setSheets(data.sheets);
+          const savedTabs = readPersistedValue<string[]>('audit_open_tabs', [])
+            .filter(id => data.sheets.some((s: any) => s.id === id));
+          const savedActive = readPersistedValue<string | null>('audit_active_tab_id', null);
+          if (savedTabs.length > 0 || (savedActive && data.sheets.some((s: any) => s.id === savedActive))) {
+            if (savedTabs.length > 0) setOpenTabs(savedTabs);
+            if (savedActive && data.sheets.some((s: any) => s.id === savedActive)) setActiveTabId(savedActive);
+            return;
+          }
           const first = data.sheets[0];
           setOpenTabs([first.id]);
           setActiveTabId(first.id);

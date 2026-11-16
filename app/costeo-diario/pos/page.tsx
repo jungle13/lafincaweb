@@ -24,6 +24,7 @@ import {
   getPosEquivalenceOptions,
   resolveOfficialBaseUnit,
 } from '@/lib/posInsumosHelper';
+import { usePersistedState, hasPersistedValue } from '@/lib/usePersistedState';
 
 type OperationalViewKey =
   | 'TRASLADOS'
@@ -110,11 +111,11 @@ export default function CosteoDiarioPosPage() {
   const [sheets, setSheets] = useState<SheetSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [activeView, setActiveView] = useState<OperationalViewKey>('TRASLADOS');
-  const [activeCategory, setActiveCategory] = useState<PosMacroCategory>('TODAS');
-  const [searchText, setSearchText] = useState('');
-  const [onlyCounted, setOnlyCounted] = useState(false);
+  const [selectedDate, setSelectedDate] = usePersistedState<string>('pos_selected_date', new Date().toISOString().slice(0, 10));
+  const [activeView, setActiveView] = usePersistedState<OperationalViewKey>('pos_active_view', 'TRASLADOS');
+  const [activeCategory, setActiveCategory] = usePersistedState<PosMacroCategory>('pos_active_category', 'TODAS');
+  const [searchText, setSearchText] = usePersistedState<string>('pos_search_text', '');
+  const [onlyCounted, setOnlyCounted] = usePersistedState<boolean>('pos_only_counted', false);
 
   const [selectedItem, setSelectedItem] = useState<PosCatalogItem | null>(null);
   const [selectedEq, setSelectedEq] = useState<PosEquivalenceOption | null>(null);
@@ -156,7 +157,7 @@ export default function CosteoDiarioPosPage() {
         setSheets(sheetsJson.sheets);
         // Si la fecha actual no está en URL y hay hojas, usar la más reciente si hoy no tiene hoja
         const sp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        if (!sp?.get('fecha') && sheetsJson.sheets.length > 0) {
+        if (!sp?.get('fecha') && !hasPersistedValue('pos_selected_date') && sheetsJson.sheets.length > 0) {
           const today = new Date().toISOString().slice(0, 10);
           const hasToday = sheetsJson.sheets.some((s: SheetSummary) => s.dateStr === today);
           if (!hasToday) {

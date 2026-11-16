@@ -27,6 +27,7 @@ import {
 import MonthSidebar, { MonthItem, formatMonthLabel, buildDynamicMonths } from '@/components/sheets/MonthSidebar';
 import { usePeriodo } from '@/context/PeriodoContext';
 import { downloadInventarioConsolidadoPdf } from '@/lib/exportInventarioConsolidadoPdf';
+import { usePersistedState, hasPersistedValue } from '@/lib/usePersistedState';
 
 interface RegistroItem {
   id: string;
@@ -357,13 +358,13 @@ export default function InventarioConsolidadoPage() {
   const [sheets, setSheets] = useState<CosteoSheet[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = usePersistedState<string>('consolidado_selected_month', '2026-11');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('consolidado_search_query', '');
+  const [openTabs, setOpenTabs] = usePersistedState<string[]>('consolidado_open_tabs', []);
+  const [activeTabId, setActiveTabId] = usePersistedState<string | null>('consolidado_active_tab', null);
 
   // Modo de visualización: 'CONSOLIDADO' | 'COCINA_CIERRE' | 'BODEGA_CIERRE' | 'PARALELO'
-  const [viewMode, setViewMode] = useState<'CONSOLIDADO' | 'COCINA_CIERRE' | 'BODEGA_CIERRE' | 'PARALELO'>('CONSOLIDADO');
+  const [viewMode, setViewMode] = usePersistedState<'CONSOLIDADO' | 'COCINA_CIERRE' | 'BODEGA_CIERRE' | 'PARALELO'>('consolidado_view_mode', 'CONSOLIDADO');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
   // Slide-over Drawer: Añadir Conteos Masivos por Texto
@@ -396,10 +397,12 @@ export default function InventarioConsolidadoPage() {
       if (data?.sheets && Array.isArray(data.sheets) && data.sheets.length > 0) {
         setSheets(data.sheets);
         const latestMonth = data.sheets[0].month || data.sheets[0].dateStr.slice(0, 7);
-        setSelectedMonth(prev => {
-          const hasInPrev = data.sheets.some((s: any) => s.dateStr.startsWith(prev));
-          return hasInPrev ? prev : latestMonth;
-        });
+        if (!hasPersistedValue('consolidado_selected_month')) {
+          setSelectedMonth(prev => {
+            const hasInPrev = data.sheets.some((s: any) => s.dateStr.startsWith(prev));
+            return hasInPrev ? prev : latestMonth;
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching sheets for consolidado:', err);

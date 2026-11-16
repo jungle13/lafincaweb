@@ -30,17 +30,18 @@ import {
   MesComprasResumen
 } from '@/services/comprasService';
 import { getCachedData, setCachedData } from '@/lib/dataCache';
+import { usePersistedState } from '@/lib/usePersistedState';
 
 type TabView = 'FACTURAS' | 'INSUMOS' | 'LINEAS' | 'PAGOS';
 
 export default function ComprasPage() {
   const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos, isPeriodoCerrado } = usePeriodo();
 
-  // Estado para la vista de selección de mes a pantalla completa
-  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
+  // Estado para la vista de selección de mes a pantalla completa (persistido en sesión)
+  const [selectedMonthId, setSelectedMonthId] = usePersistedState<string | null>('compras_selected_month_id', null);
   const [mesesList, setMesesList] = useState<MesComprasResumen[]>([]);
   const [loadingMeses, setLoadingMeses] = useState(true);
-  const [searchMonthQuery, setSearchMonthQuery] = useState('');
+  const [searchMonthQuery, setSearchMonthQuery] = usePersistedState<string>('compras_search_month', '');
   const [isAddingCompra, setIsAddingCompra] = useState(false);
 
   // Período activo cuando se entra al detalle
@@ -107,7 +108,7 @@ export default function ComprasPage() {
   }>(cacheKey);
 
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabView>('FACTURAS');
+  const [activeTab, setActiveTab] = usePersistedState<TabView>('compras_active_tab', 'FACTURAS');
 
   // Datos del backend para el mes seleccionado
   const [kpis, setKpis] = useState<ComprasKPIs>(() => cached?.kpis || {
@@ -125,10 +126,10 @@ export default function ComprasPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Filtros activos en vista detalle
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState('');
-  const [selectedProveedor, setSelectedProveedor] = useState('');
-  const [selectedFecha, setSelectedFecha] = useState('');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('compras_search_query', '');
+  const [selectedCategoria, setSelectedCategoria] = usePersistedState<string>('compras_selected_cat', '');
+  const [selectedProveedor, setSelectedProveedor] = usePersistedState<string>('compras_selected_prov', '');
+  const [selectedFecha, setSelectedFecha] = usePersistedState<string>('compras_selected_fecha', '');
 
   const loadData = useCallback(async (silent = false) => {
     if (!selectedMonthId) return;

@@ -28,17 +28,18 @@ import {
   MesVentasResumen
 } from '@/services/ventasService';
 import { usePeriodo } from '@/context/PeriodoContext';
+import { usePersistedState } from '@/lib/usePersistedState';
 
 type TabView = 'DIARIO' | 'TRANSACCIONES' | 'PRODUCTOS';
 
 export default function VentasPage() {
   const { currentPeriodo, selectedPeriodoId, setSelectedPeriodoId, periodos, isPeriodoCerrado } = usePeriodo();
 
-  // Estado para la vista de selección de mes a pantalla completa
-  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
+  // Estado para la vista de selección de mes a pantalla completa (persistido en sesión)
+  const [selectedMonthId, setSelectedMonthId] = usePersistedState<string | null>('ventas_selected_month_id', null);
   const [mesesList, setMesesList] = useState<MesVentasResumen[]>([]);
   const [loadingMeses, setLoadingMeses] = useState(true);
-  const [searchMonthQuery, setSearchMonthQuery] = useState('');
+  const [searchMonthQuery, setSearchMonthQuery] = usePersistedState<string>('ventas_search_month', '');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   // Período activo cuando se entra al detalle
@@ -76,7 +77,7 @@ export default function VentasPage() {
   }, [loadMeses]);
 
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabView>('DIARIO');
+  const [activeTab, setActiveTab] = usePersistedState<TabView>('ventas_active_tab', 'DIARIO');
 
   const [kpis, setKpis] = useState<VentasKPIs>({
     granTotalVentas: 0,

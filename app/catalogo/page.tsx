@@ -20,6 +20,7 @@ import Modal from '@/components/ui/Modal';
 import ExportCatalogoPdfModal from '@/components/catalogo/ExportCatalogoPdfModal';
 import { formatMoney, normalizeStr } from '@/lib/formatters';
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/dataCache';
+import { usePersistedState } from '@/lib/usePersistedState';
 
 const CACHE_KEY = 'catalogo_insumos_list';
 
@@ -89,12 +90,12 @@ export default function CatalogoPage() {
   const cached = getCachedData<CatalogoInsumo[]>(CACHE_KEY);
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>(() => cached || []);
   const [loading, setLoading] = useState(!cached);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCat, setSelectedCat] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('catalogo_search_query', '');
+  const [selectedCat, setSelectedCat] = usePersistedState<string>('catalogo_selected_cat', 'ALL');
 
   // Sorting
-  const [sortField, setSortField] = useState<SortField>('nombre');
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sortField, setSortField] = usePersistedState<SortField>('catalogo_sort_field', 'nombre');
+  const [sortAsc, setSortAsc] = usePersistedState<boolean>('catalogo_sort_asc', true);
 
   // Modals & Form
   const [modalMode, setModalMode] = useState<'CREATE' | 'EDIT' | null>(null);
