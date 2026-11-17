@@ -6,7 +6,6 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Bike,
-  CheckCircle2,
   ChefHat,
   CreditCard,
   Delete,
@@ -1200,35 +1199,45 @@ export default function PosDesktopPage() {
     }
   };
 
+  const noSpinnerClass =
+    '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-slate-100 text-slate-900 flex flex-col overflow-hidden select-none">
-      {/* Toast flotante */}
+    <div className="fixed inset-0 w-screen h-screen bg-zinc-100 text-zinc-900 flex flex-col overflow-hidden select-none font-sans">
+      {/* Toast flotante sólido */}
       {toast && (
         <div
-          className={`fixed top-14 right-4 z-50 px-4 py-2.5 rounded-lg shadow-xl border text-xs font-bold flex items-center gap-2 ${
+          className={`fixed top-14 right-4 z-50 px-4 py-2.5 rounded-lg shadow-lg border text-xs font-semibold flex items-center gap-2 ${
             toast.type === 'ok'
-              ? 'bg-emerald-950 text-emerald-100 border-emerald-700'
-              : 'bg-red-950 text-red-100 border-red-700'
+              ? 'bg-white text-zinc-900 border-zinc-300'
+              : 'bg-red-50 text-red-900 border-red-300'
           }`}
         >
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              toast.type === 'ok' ? 'bg-emerald-600' : 'bg-red-600'
+            }`}
+          />
           {toast.text}
         </div>
       )}
 
-      {/* 1. BARRA SUPERIOR ESTILO ELEVENTA (MÓDULOS + ESTADO DE CAJA) */}
-      <header className="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between gap-2 shrink-0 border-b border-slate-800">
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* 1. BARRA SUPERIOR ESTILO WINDOWS 11 ENTERPRISE (SÓLIDA Y CLARA) */}
+      <header className="bg-white text-zinc-900 px-3 py-2 flex items-center justify-between gap-2 shrink-0 border-b border-zinc-200">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <Link
             href="/"
             title="Volver al Panel Administrativo"
-            className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+            className="p-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 transition"
           >
             <Home className="w-4 h-4" />
           </Link>
-          <div className="flex items-center gap-1.5 pr-2 border-r border-slate-700">
-            <Store className="w-4 h-4 text-orange-400" />
-            <span className="font-extrabold text-sm tracking-tight">La Finca POS</span>
+
+          <div className="flex items-center gap-2 pr-3 border-r border-zinc-200">
+            <span className="w-6 h-6 rounded-md bg-zinc-900 text-white font-bold text-xs flex items-center justify-center">
+              E
+            </span>
+            <span className="font-bold text-sm tracking-tight text-zinc-950">Eliana POS</span>
           </div>
 
           {/* Botones de módulos F1 - F4 */}
@@ -1255,14 +1264,20 @@ export default function PosDesktopPage() {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
                     active
-                      ? 'bg-orange-500 text-white shadow'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      ? 'bg-zinc-900 text-white border-zinc-900'
+                      : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 hover:text-zinc-950'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
-                  <span className="px-1 py-0.2 rounded bg-black/25 text-[10px] font-mono">{tab.fKey}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                      active ? 'bg-zinc-700 text-zinc-100' : 'bg-white text-zinc-600 border border-zinc-200'
+                    }`}
+                  >
+                    {tab.fKey}
+                  </span>
                   <span>{tab.label}</span>
                 </button>
               );
@@ -1270,33 +1285,30 @@ export default function PosDesktopPage() {
           </nav>
         </div>
 
-        {/* Derecha: Caja, Red, Modo Táctil, Periféricos */}
+        {/* Derecha: Controles unificados monocromáticos */}
         <div className="flex items-center gap-1.5 text-xs">
           <select
             value={cajaNombre}
             onChange={(e) => setCajaNombre(e.target.value as 'Caja 1' | 'Caja 2')}
-            className="bg-slate-800 border border-slate-700 text-white rounded px-2 py-1 font-bold text-xs outline-none"
+            className="bg-white border border-zinc-300 text-zinc-900 rounded-md px-2.5 py-1.5 font-semibold text-xs outline-none focus:border-blue-600"
           >
             <option value="Caja 1">Caja 1</option>
             <option value="Caja 2">Caja 2</option>
           </select>
 
-          <span
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded font-bold text-[11px] ${
-              isOnline ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-amber-950 text-amber-300 border border-amber-800'
-            }`}
-          >
-            {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-semibold text-xs bg-zinc-100 text-zinc-700 border border-zinc-200">
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-600' : 'bg-amber-500'}`} />
+            {isOnline ? <Wifi className="w-3.5 h-3.5 text-zinc-500" /> : <WifiOff className="w-3.5 h-3.5 text-zinc-500" />}
             {isOnline ? 'En Línea' : `Offline (${offlineQueue.length})`}
           </span>
 
           <button
             onClick={() => setTouchMode((v) => !v)}
             title="Alternar entre Modo Híbrido Táctil y Modo Clásico Tabla"
-            className={`px-2.5 py-1 rounded font-bold flex items-center gap-1 border cursor-pointer transition ${
+            className={`px-2.5 py-1.5 rounded-md font-semibold flex items-center gap-1.5 border cursor-pointer transition ${
               touchMode
-                ? 'bg-sky-900/70 border-sky-700 text-sky-200'
-                : 'bg-slate-800 border-slate-700 text-slate-300'
+                ? 'bg-zinc-900 border-zinc-900 text-white'
+                : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-100'
             }`}
           >
             {touchMode ? <MonitorSmartphone className="w-3.5 h-3.5" /> : <Keyboard className="w-3.5 h-3.5" />}
@@ -1305,9 +1317,9 @@ export default function PosDesktopPage() {
 
           <button
             onClick={handlePesarGramera}
-            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer transition"
           >
-            <Scale className="w-3.5 h-3.5 text-sky-400" />
+            <Scale className="w-3.5 h-3.5 text-zinc-600" />
             <span className="hidden lg:inline">Gramera</span>
           </button>
 
@@ -1317,48 +1329,51 @@ export default function PosDesktopPage() {
               await executePosAction('REGISTRAR_APERTURA_CAJON_SIN_VENTA', {});
               notify('ok', 'Cajón monedero abierto.');
             }}
-            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer transition"
           >
-            <Unlock className="w-3.5 h-3.5 text-amber-400" />
+            <Unlock className="w-3.5 h-3.5 text-zinc-600" />
             <span className="hidden lg:inline">Cajón</span>
           </button>
 
           <button
             onClick={fetchPosState}
             title="Sincronizar"
-            className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 cursor-pointer"
+            className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </header>
 
-      {/* Banner turno cerrado */}
+      {/* Banner discreto de turno cerrado */}
       {!sesionActiva && (
-        <div className="bg-amber-100 border-b border-amber-300 px-3 py-1 flex items-center justify-between text-xs shrink-0">
-          <span className="font-bold text-amber-900">
-            No hay turno abierto en {cajaNombre} ({cajeroNombre}). Abre el turno para registrar base inicial.
-          </span>
+        <div className="bg-zinc-100 border-b border-zinc-200 px-3 py-1.5 flex items-center justify-between text-xs shrink-0">
+          <div className="flex items-center gap-2 text-zinc-700 font-medium">
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span>
+              Turno cerrado en <b>{cajaNombre}</b> ({cajeroNombre}). Abre el turno para registrar la base inicial.
+            </span>
+          </div>
           <button
             onClick={() => setShowAbrirCajaModal(true)}
-            className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
+            className="px-3 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold cursor-pointer transition"
           >
             Abrir Turno
           </button>
         </div>
       )}
 
-      {/* ==================== MÓDULO F1: VENTAS (ESTILO ELEVENTA + HÍBRIDO TÁCTIL) ==================== */}
+      {/* ==================== MÓDULO F1: VENTAS ==================== */}
       {activeTab === 'VENTAS' && (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* 2. BARRA DE CAPTURA + ACCIONES RÁPIDAS */}
-          <div className="bg-white border-b border-slate-300 px-3 py-2 flex flex-col gap-1.5 shrink-0">
+          {/* 2. BARRA DE CAPTURA + ACCIONES RÁPIDAS MONOCROMÁTICAS */}
+          <div className="bg-white border-b border-zinc-200 px-3 py-2 flex flex-col gap-2 shrink-0">
             <form onSubmit={handleCaptureSubmit} className="flex items-center gap-2">
-              <label className="text-xs font-extrabold text-slate-700 whitespace-nowrap">
+              <label className="text-xs font-semibold text-zinc-700 whitespace-nowrap">
                 Código / Producto:
               </label>
               <div className="relative flex-1 max-w-2xl">
-                <ScanBarcode className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <ScanBarcode className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   ref={captureInputRef}
                   autoFocus
@@ -1366,87 +1381,80 @@ export default function PosDesktopPage() {
                   value={captureInput}
                   onChange={(e) => setCaptureInput(e.target.value)}
                   placeholder="Escanea código de barras o escribe nombre del plato / bebida y presiona ENTER..."
-                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded text-sm font-semibold outline-none"
+                  className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-300 focus:border-blue-600 focus:bg-white rounded-md text-sm font-medium text-zinc-900 outline-none transition"
                 />
               </div>
               <button
                 type="submit"
-                className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="px-4 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
               >
                 <Plus className="w-3.5 h-3.5" />
                 ENTER - Agregar Producto
               </button>
             </form>
 
-            {/* Sub-barra de botones rápidos estilo eleventa */}
+            {/* Sub-barra de botones rápidos limpia y uniforme */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => setShowVariosModal(true)}
-                className="px-2.5 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-slate-200 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <Tag className="w-3.5 h-3.5 text-amber-600" />
-                INS Varios
-              </button>
-              <button
-                onClick={() => setShowArtComunModal(true)}
-                className="px-2.5 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-slate-200 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <Flame className="w-3.5 h-3.5 text-orange-600" />
-                CTRL+P Art. Común
-              </button>
-              <button
-                onClick={() => {
-                  setBuscarQuery('');
-                  setBuscarIndex(0);
-                  setShowBuscarModal(true);
-                  setTimeout(() => buscarInputRef.current?.focus(), 60);
-                }}
-                className="px-2.5 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-slate-200 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <Search className="w-3.5 h-3.5 text-blue-600" />
-                F10 Buscar
-              </button>
-              <button
-                onClick={() => setCashFlowModal('ENTRADA')}
-                className="px-2.5 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-emerald-100 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <ArrowDownCircle className="w-3.5 h-3.5 text-emerald-600" />
-                F7 Entradas
-              </button>
-              <button
-                onClick={() => setCashFlowModal('SALIDA')}
-                className="px-2.5 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-rose-100 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <ArrowUpCircle className="w-3.5 h-3.5 text-rose-600" />
-                F8 Salidas
-              </button>
-              <button
-                onClick={() => {
-                  const sel = itemsActivos.find((i) => i.id === selectedItemId);
-                  if (sel) handleAnularItem(sel);
-                }}
-                disabled={!selectedItemId}
-                className="px-2.5 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-red-100 disabled:opacity-40 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <Delete className="w-3.5 h-3.5 text-red-600" />
-                DEL Borrar Art.
-              </button>
-              <button
-                onClick={() => {
-                  setVerificadorQuery('');
-                  setShowVerificadorModal(true);
-                  setTimeout(() => verificadorInputRef.current?.focus(), 60);
-                }}
-                className="px-2.5 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-slate-200 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
-                F9 Verificador
-              </button>
+              {[
+                { key: 'INS', label: 'Varios', icon: Tag, onClick: () => setShowVariosModal(true), disabled: false },
+                { key: 'CTRL+P', label: 'Art. Común', icon: Flame, onClick: () => setShowArtComunModal(true), disabled: false },
+                {
+                  key: 'F10',
+                  label: 'Buscar',
+                  icon: Search,
+                  onClick: () => {
+                    setBuscarQuery('');
+                    setBuscarIndex(0);
+                    setShowBuscarModal(true);
+                    setTimeout(() => buscarInputRef.current?.focus(), 60);
+                  },
+                  disabled: false,
+                },
+                { key: 'F7', label: 'Entradas', icon: ArrowDownCircle, onClick: () => setCashFlowModal('ENTRADA'), disabled: false },
+                { key: 'F8', label: 'Salidas', icon: ArrowUpCircle, onClick: () => setCashFlowModal('SALIDA'), disabled: false },
+                {
+                  key: 'DEL',
+                  label: 'Borrar Art.',
+                  icon: Delete,
+                  onClick: () => {
+                    const sel = itemsActivos.find((i) => i.id === selectedItemId);
+                    if (sel) handleAnularItem(sel);
+                  },
+                  disabled: !selectedItemId,
+                },
+                {
+                  key: 'F9',
+                  label: 'Verificador',
+                  icon: DollarSign,
+                  onClick: () => {
+                    setVerificadorQuery('');
+                    setShowVerificadorModal(true);
+                    setTimeout(() => verificadorInputRef.current?.focus(), 60);
+                  },
+                  disabled: false,
+                },
+              ].map((btn) => {
+                const Icon = btn.icon;
+                return (
+                  <button
+                    key={btn.key}
+                    onClick={btn.onClick}
+                    disabled={btn.disabled}
+                    className="px-2.5 py-1 rounded-md border border-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-medium text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Icon className="w-3.5 h-3.5 text-zinc-500" />
+                    <span className="px-1 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-mono font-semibold text-zinc-700">
+                      {btn.key}
+                    </span>
+                    <span>{btn.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* 3. PESTAÑAS DE TICKETS / MESAS / DOMICILIOS ABIERTOS */}
-          <div className="bg-slate-200 border-b border-slate-300 px-3 pt-1.5 flex items-center gap-1 overflow-x-auto shrink-0">
+          {/* 3. PESTAÑAS DE CUENTAS ABIERTAS */}
+          <div className="bg-zinc-100 border-b border-zinc-200 px-3 pt-1.5 flex items-center gap-1 overflow-x-auto shrink-0">
             {ordenesAbiertas.map((ord) => {
               const isSelected = ordenActiva?.id === ord.id;
               return (
@@ -1456,14 +1464,14 @@ export default function PosDesktopPage() {
                     setOrdenActivaId(ord.id);
                     focusCapture();
                   }}
-                  className={`px-3 py-1.5 rounded-t-md text-xs font-bold border border-b-0 flex items-center gap-2 whitespace-nowrap cursor-pointer transition ${
+                  className={`px-3 py-1.5 rounded-t-md text-xs font-semibold border border-b-0 flex items-center gap-2 whitespace-nowrap cursor-pointer transition ${
                     isSelected
-                      ? 'bg-white text-slate-900 border-slate-300 shadow-2xs'
-                      : 'bg-slate-300/70 text-slate-700 border-transparent hover:bg-slate-100'
+                      ? 'bg-white text-zinc-950 border-zinc-300'
+                      : 'bg-zinc-200 text-zinc-600 border-transparent hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
                 >
                   <span>{getOrdenTabLabel(ord)}</span>
-                  <span className="text-[11px] font-extrabold text-emerald-700">
+                  <span className="text-[11px] font-bold tabular-nums text-zinc-900">
                     {formatMoney(ord.gran_total)}
                   </span>
                 </button>
@@ -1471,40 +1479,38 @@ export default function PosDesktopPage() {
             })}
             <button
               onClick={handleNuevaVentaMostrador}
-              className="px-2.5 py-1 mb-1 rounded bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap transition"
             >
               <Plus className="w-3 h-3" /> Nuevo Ticket
             </button>
           </div>
 
-          {/* 4. ÁREA CENTRAL DE TRABAJO (SPLIT-SCREEN TABLA ELEVENTA + BOTONERA TÁCTIL) */}
+          {/* 4. ÁREA CENTRAL DE TRABAJO (TABLA LIMPIA + PANEL TÁCTIL SÓLIDO) */}
           <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
-            {/* Izquierda: Tabla de Venta estilo eleventa */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden border-r border-slate-300">
+            {/* Izquierda: Tabla de Venta */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden border-r border-zinc-200">
               {ordenActiva ? (
                 <div className="flex-1 overflow-y-auto">
                   <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 bg-slate-100 border-b border-slate-300 text-[11px] uppercase text-slate-600 font-extrabold z-10">
+                    <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200 text-[11px] uppercase text-zinc-500 font-semibold z-10">
                       <tr>
-                        <th className="py-2 px-3 w-24 bg-sky-50/70 border-r border-slate-200">Código</th>
-                        <th className="py-2 px-3">Descripción del Producto</th>
-                        <th className="py-2 px-3 text-right w-28">Precio Venta</th>
-                        <th className="py-2 px-3 text-center w-28">Cant.</th>
-                        <th className="py-2 px-3 text-right w-32 bg-emerald-50/70 border-x border-slate-200">
-                          Importe
-                        </th>
-                        <th className="py-2 px-3 text-center w-28">Estado</th>
-                        <th className="py-2 px-2 text-center w-12"></th>
+                        <th className="py-2.5 px-3 w-24 border-r border-zinc-200">Código</th>
+                        <th className="py-2.5 px-3">Descripción del Producto</th>
+                        <th className="py-2.5 px-3 text-right w-28">Precio Venta</th>
+                        <th className="py-2.5 px-3 text-center w-24">Cant.</th>
+                        <th className="py-2.5 px-3 text-right w-32 border-x border-zinc-200">Importe</th>
+                        <th className="py-2.5 px-3 text-center w-28">Estado</th>
+                        <th className="py-2.5 px-2 text-center w-12"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200 text-sm">
+                    <tbody className="divide-y divide-zinc-200 text-sm">
                       {itemsActivos.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-20 text-center text-slate-400">
-                            <p className="font-bold text-base text-slate-500">
+                          <td colSpan={7} className="py-24 text-center text-zinc-400">
+                            <p className="font-semibold text-base text-zinc-600">
                               Cuenta vacía ({getOrdenTabLabel(ordenActiva)})
                             </p>
-                            <p className="text-xs mt-1">
+                            <p className="text-xs mt-1 text-zinc-500">
                               Escanea un código, escribe un producto arriba o selecciona un plato en el panel táctil.
                             </p>
                           </td>
@@ -1517,24 +1523,24 @@ export default function PosDesktopPage() {
                               key={it.id}
                               onClick={() => setSelectedItemId(it.id)}
                               className={`cursor-pointer transition ${
-                                isRowSel ? 'bg-blue-50 ring-1 ring-inset ring-blue-300' : 'hover:bg-slate-50'
+                                isRowSel ? 'bg-blue-50 border-l-4 border-l-blue-600' : 'hover:bg-zinc-50'
                               }`}
                             >
-                              <td className="py-2 px-3 font-mono text-xs text-slate-600 bg-sky-50/40 border-r border-slate-100">
+                              <td className="py-2.5 px-3 font-mono text-xs text-zinc-500 border-r border-zinc-100">
                                 {it.codigo_producto || '—'}
                               </td>
-                              <td className="py-2 px-3 font-bold text-slate-900">
+                              <td className="py-2.5 px-3 font-semibold text-zinc-900">
                                 {it.nombre_producto}
-                                <span className="ml-2 text-[10px] font-semibold text-slate-400">
+                                <span className="ml-2 text-[10px] font-medium text-zinc-400">
                                   {it.estacion_comanda}
                                 </span>
                               </td>
-                              <td className="py-2 px-3 text-right font-semibold text-slate-700">
+                              <td className="py-2.5 px-3 text-right font-medium tabular-nums text-zinc-700">
                                 {formatMoney(it.precio_unitario)}
                               </td>
-                              <td className="py-2 px-3">
+                              <td className="py-2.5 px-3">
                                 <div className="flex items-center justify-center gap-1.5">
-                                  <span className="font-extrabold text-slate-900 min-w-[24px] text-center">
+                                  <span className="font-bold tabular-nums text-zinc-900 min-w-[24px] text-center">
                                     {it.cantidad}
                                   </span>
                                   <button
@@ -1543,34 +1549,34 @@ export default function PosDesktopPage() {
                                       handleCambiarCantidadItem(it, 1);
                                     }}
                                     title="Agregar +1"
-                                    className="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 flex items-center justify-center font-bold cursor-pointer"
+                                    className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer"
                                   >
                                     <Plus className="w-3 h-3" />
                                   </button>
                                 </div>
                               </td>
-                              <td className="py-2 px-3 text-right font-extrabold text-emerald-700 bg-emerald-50/40 border-x border-slate-100">
+                              <td className="py-2.5 px-3 text-right font-bold tabular-nums text-zinc-950 border-x border-zinc-100">
                                 {formatMoney(it.subtotal)}
                               </td>
-                              <td className="py-2 px-3 text-center">
+                              <td className="py-2.5 px-3 text-center">
                                 <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
                                     it.estado_comanda === 'COMANDADO'
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : 'bg-amber-100 text-amber-800'
+                                      ? 'bg-zinc-900 text-white border-zinc-900'
+                                      : 'bg-zinc-100 text-zinc-700 border-zinc-200'
                                   }`}
                                 >
                                   {it.estado_comanda}
                                 </span>
                               </td>
-                              <td className="py-2 px-2 text-center">
+                              <td className="py-2.5 px-2 text-center">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleAnularItem(it);
                                   }}
                                   title="Quitar ítem (DEL)"
-                                  className="p-1 rounded text-red-500 hover:bg-red-100 cursor-pointer"
+                                  className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 cursor-pointer transition"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -1583,19 +1589,19 @@ export default function PosDesktopPage() {
                   </table>
                 </div>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6">
-                  <Store className="w-12 h-12 mb-2 text-slate-300" />
-                  <p className="font-bold text-slate-600">No hay cuentas abiertas</p>
+                <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 p-6">
+                  <Store className="w-10 h-10 mb-2 text-zinc-300" />
+                  <p className="font-semibold text-zinc-700">No hay cuentas abiertas</p>
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={handleNuevaVentaMostrador}
-                      className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs cursor-pointer"
+                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer transition"
                     >
                       + Abrir Venta Mostrador
                     </button>
                     <button
                       onClick={() => setActiveTab('MESAS')}
-                      className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer"
+                      className="px-4 py-2 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 font-semibold text-xs cursor-pointer transition"
                     >
                       F2 Ver Mapa de Mesas
                     </button>
@@ -1604,18 +1610,18 @@ export default function PosDesktopPage() {
               )}
             </div>
 
-            {/* Derecha: Panel Táctil Acoplable (Categorías + Botonera Grande de Platos) */}
+            {/* Derecha: Panel Táctil Sobrio */}
             {touchMode && (
-              <div className="w-[40%] max-w-[520px] min-w-[320px] bg-slate-50 flex flex-col min-h-0 overflow-hidden">
-                <div className="p-2 border-b border-slate-200 bg-white flex items-center gap-1 overflow-x-auto shrink-0">
+              <div className="w-[40%] max-w-[520px] min-w-[320px] bg-zinc-50 flex flex-col min-h-0 overflow-hidden">
+                <div className="p-2 border-b border-zinc-200 bg-white flex items-center gap-1.5 overflow-x-auto shrink-0">
                   {categoriasProductos.map((c) => (
                     <button
                       key={c}
                       onClick={() => setCatFiltro(c)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap cursor-pointer transition ${
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer transition border ${
                         catFiltro === c
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          ? 'bg-zinc-900 text-white border-zinc-900'
+                          : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'
                       }`}
                     >
                       {c}
@@ -1628,14 +1634,14 @@ export default function PosDesktopPage() {
                       key={p.id}
                       disabled={busyAction}
                       onClick={() => handleAgregarProducto(p, 1)}
-                      className="p-2.5 rounded-xl border border-slate-200 bg-white hover:border-orange-500 hover:bg-orange-50 active:scale-95 text-left transition flex flex-col justify-between min-h-[76px] shadow-2xs cursor-pointer"
+                      className="p-2.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:bg-zinc-100 text-left transition flex flex-col justify-between min-h-[76px] cursor-pointer"
                     >
-                      <span className="font-bold text-xs text-slate-900 leading-tight line-clamp-2">
+                      <span className="font-semibold text-xs text-zinc-900 leading-snug line-clamp-2">
                         {p.nombre}
                       </span>
-                      <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-[10px] font-mono text-slate-400">{p.codigo}</span>
-                        <span className="text-xs font-extrabold text-emerald-700">
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[10px] font-mono text-zinc-400">{p.codigo}</span>
+                        <span className="text-xs font-bold tabular-nums text-zinc-900 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
                           {formatMoney(p.precio_total)}
                         </span>
                       </div>
@@ -1646,77 +1652,75 @@ export default function PosDesktopPage() {
             )}
           </div>
 
-          {/* 5. BARRA INFERIOR PERSISTENTE ESTILO ELEVENTA */}
-          <footer className="bg-slate-100 border-t-2 border-slate-300 px-3 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0">
-            {/* Izquierda: Conteo, Acciones de Cuenta y Memoria del Último Cobro */}
+          {/* 5. BARRA INFERIOR PERSISTENTE ESTILO WINDOWS 11 */}
+          <footer className="bg-white border-t border-zinc-200 px-3 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0">
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-extrabold text-slate-800 mr-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-semibold text-zinc-700 mr-2 tabular-nums">
                   {itemsActivos.reduce((a, b) => a + Number(b.cantidad || 0), 0)} Productos en la venta actual
                 </span>
                 <button
                   onClick={handleCambiarSiguienteTicket}
-                  className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-200 text-xs font-bold text-slate-800 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 cursor-pointer transition"
                 >
                   F5 - Cambiar
                 </button>
                 <button
                   onClick={handleEnviarComanda}
                   disabled={!ordenActiva || busyAction}
-                  className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-orange-100 disabled:opacity-40 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
                 >
-                  <ChefHat className="w-3.5 h-3.5 text-orange-600" />
+                  <ChefHat className="w-3.5 h-3.5 text-zinc-600" />
                   F6 - Comandar Cocina
                 </button>
                 <button
                   onClick={handleImprimirPrecuenta}
                   disabled={!ordenActiva || itemsActivos.length === 0 || busyAction}
-                  className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-200 disabled:opacity-40 text-xs font-bold text-slate-800 flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
                 >
-                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  <Printer className="w-3.5 h-3.5 text-zinc-600" />
                   Precuenta
                 </button>
                 <button
                   onClick={handleEliminarTicket}
                   disabled={!ordenActiva || busyAction}
-                  className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-red-100 disabled:opacity-40 text-xs font-bold text-red-700 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-red-50 hover:border-red-300 disabled:opacity-40 text-xs font-semibold text-red-700 cursor-pointer transition"
                 >
                   Eliminar Ticket
                 </button>
               </div>
 
               {/* Memoria del Último Ticket */}
-              <div className="flex items-center gap-4 text-xs bg-white border border-slate-300 rounded px-3 py-1 w-fit">
+              <div className="flex items-center gap-4 text-xs bg-zinc-50 border border-zinc-200 rounded-md px-3 py-1 w-fit tabular-nums">
                 <div>
-                  <span className="text-slate-500 font-semibold">Último Total: </span>
-                  <span className="font-extrabold text-slate-900">{formatMoney(lastPayment.total)}</span>
+                  <span className="text-zinc-500">Último Total: </span>
+                  <span className="font-bold text-zinc-900">{formatMoney(lastPayment.total)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-semibold">Pagó Con: </span>
-                  <span className="font-extrabold text-slate-900">{formatMoney(lastPayment.pagoCon)}</span>
+                  <span className="text-zinc-500">Pagó Con: </span>
+                  <span className="font-bold text-zinc-900">{formatMoney(lastPayment.pagoCon)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-semibold">Cambio: </span>
-                  <span className="font-extrabold text-emerald-700">{formatMoney(lastPayment.cambio)}</span>
+                  <span className="text-zinc-500">Cambio: </span>
+                  <span className="font-bold text-blue-700">{formatMoney(lastPayment.cambio)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Derecha: Reimprimir, Ventas del Día, Botón F12 - Cobrar y Display Gigante */}
             <div className="flex items-center gap-2.5">
               <div className="flex flex-col gap-1">
                 <button
                   onClick={handleReimprimirUltimo}
-                  className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-200 text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
                 >
-                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  <Printer className="w-3.5 h-3.5 text-zinc-500" />
                   Reimprimir Último Ticket
                 </button>
                 <button
                   onClick={() => setShowVentasDiaModal(true)}
-                  className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-200 text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
                 >
-                  <History className="w-3.5 h-3.5 text-blue-600" />
+                  <History className="w-3.5 h-3.5 text-zinc-500" />
                   Ventas del Día ({resumenDia.cantidadFacturas})
                 </button>
               </div>
@@ -1724,15 +1728,17 @@ export default function PosDesktopPage() {
               <button
                 onClick={abrirModalCobro}
                 disabled={!ordenActiva || itemsActivos.length === 0 || busyAction}
-                className="px-6 py-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-extrabold text-base shadow-md flex items-center gap-2 cursor-pointer transition active:scale-95"
+                className="px-6 py-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-base flex items-center gap-2 cursor-pointer transition"
               >
                 <CreditCard className="w-5 h-5" />
                 F12 - Cobrar
               </button>
 
-              <div className="bg-slate-900 text-emerald-400 px-5 py-2 rounded-lg border-2 border-slate-700 min-w-[180px] text-right">
-                <div className="text-[10px] font-bold uppercase text-slate-400 leading-none">Total Cuenta</div>
-                <div className="text-3xl font-black tracking-tight leading-tight">
+              <div className="bg-zinc-100 text-zinc-950 px-5 py-2 rounded-lg border border-zinc-300 min-w-[180px] text-right">
+                <div className="text-[10px] font-semibold uppercase text-zinc-500 leading-none">
+                  Total Cuenta
+                </div>
+                <div className="text-3xl font-extrabold tabular-nums tracking-tight leading-tight text-zinc-950">
                   {formatMoney(ordenActiva?.gran_total || 0)}
                 </div>
               </div>
@@ -1743,15 +1749,17 @@ export default function PosDesktopPage() {
 
       {/* ==================== MÓDULO F2: MAPA DE MESAS ==================== */}
       {activeTab === 'MESAS' && (
-        <div className="flex-1 flex flex-col p-4 overflow-y-auto">
+        <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-zinc-100">
           <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               {ZONAS.map((z) => (
                 <button
                   key={z}
                   onClick={() => setZonaFiltro(z)}
-                  className={`px-3.5 py-2 rounded-lg text-xs font-bold cursor-pointer ${
-                    zonaFiltro === z ? 'bg-slate-900 text-white' : 'bg-white border border-slate-300 text-slate-700'
+                  className={`px-3.5 py-2 rounded-md text-xs font-semibold cursor-pointer border transition ${
+                    zonaFiltro === z
+                      ? 'bg-zinc-900 text-white border-zinc-900'
+                      : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50'
                   }`}
                 >
                   {z}
@@ -1760,7 +1768,7 @@ export default function PosDesktopPage() {
             </div>
             <button
               onClick={handleNuevaVentaMostrador}
-              className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
             >
               <Plus className="w-4 h-4" /> Venta Mostrador / Para Llevar
             </button>
@@ -1773,38 +1781,40 @@ export default function PosDesktopPage() {
                 <button
                   key={m.id}
                   onClick={() => handleAbrirMesa(m)}
-                  className={`p-4 rounded-xl border-2 text-left transition hover:shadow-md cursor-pointer flex flex-col justify-between min-h-[120px] ${
+                  className={`p-4 rounded-lg border text-left transition cursor-pointer flex flex-col justify-between min-h-[120px] ${
                     m.estado === 'PRECUENTA_IMPRESA'
-                      ? 'bg-sky-50 border-sky-400'
+                      ? 'bg-white border-blue-500 ring-1 ring-blue-500'
                       : ocupada
-                        ? 'bg-amber-50 border-amber-400'
-                        : 'bg-white border-emerald-300 hover:border-emerald-500'
+                        ? 'bg-white border-zinc-900 ring-1 ring-zinc-900'
+                        : 'bg-white border-zinc-200 hover:border-zinc-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-base text-slate-900">{m.nombre}</span>
+                    <span className="font-bold text-base text-zinc-900">{m.nombre}</span>
                     <span
-                      className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
                         m.estado === 'PRECUENTA_IMPRESA'
-                          ? 'bg-sky-200 text-sky-900'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
                           : ocupada
-                            ? 'bg-amber-200 text-amber-900'
-                            : 'bg-emerald-100 text-emerald-800'
+                            ? 'bg-zinc-900 text-white border-zinc-900'
+                            : 'bg-zinc-100 text-zinc-600 border-zinc-200'
                       }`}
                     >
                       {m.estado}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500">{m.zona}</div>
+                  <div className="text-[11px] text-zinc-500">{m.zona}</div>
                   {ocupada && m.orden_activa ? (
-                    <div className="mt-2 pt-2 border-t border-amber-200">
-                      <div className="font-extrabold text-slate-900">{formatMoney(m.orden_activa.gran_total)}</div>
-                      <div className="text-[11px] text-slate-600">
+                    <div className="mt-2 pt-2 border-t border-zinc-200">
+                      <div className="font-bold tabular-nums text-zinc-950">
+                        {formatMoney(m.orden_activa.gran_total)}
+                      </div>
+                      <div className="text-[11px] text-zinc-500">
                         {m.orden_activa.items?.length || 0} platos • {m.mesero_actual || cajeroNombre}
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-2 text-xs text-emerald-700 font-bold">Tocar para abrir</div>
+                    <div className="mt-2 text-xs text-zinc-500 font-medium">Clic para abrir</div>
                   )}
                 </button>
               );
@@ -1815,15 +1825,15 @@ export default function PosDesktopPage() {
 
       {/* ==================== MÓDULO F3: DOMICILIOS ==================== */}
       {activeTab === 'DOMICILIOS' && (
-        <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4">
+        <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4 bg-zinc-100">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Despacho de Domicilios</h2>
-              <p className="text-xs text-slate-500">Pedidos separados de las ventas en punto</p>
+              <h2 className="text-lg font-bold text-zinc-900">Despacho de Domicilios</h2>
+              <p className="text-xs text-zinc-500">Pedidos separados de las ventas en punto</p>
             </div>
             <button
               onClick={() => setShowDomicilioModal(true)}
-              className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
             >
               <Bike className="w-4 h-4" /> + Nuevo Domicilio
             </button>
@@ -1831,23 +1841,27 @@ export default function PosDesktopPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {ordenesDomicilio.map((dom) => (
-              <div key={dom.id} className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col justify-between">
+              <div
+                key={dom.id}
+                className="bg-white rounded-lg border border-zinc-200 p-4 flex flex-col justify-between"
+              >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-sm text-slate-900">{dom.consecutivo}</span>
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                    <span className="font-bold text-sm text-zinc-900">{dom.consecutivo}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700">
                       {dom.estado_domicilio || dom.estado}
                     </span>
                   </div>
-                  <div className="mt-2 text-xs font-bold text-slate-800">{dom.cliente_nombre}</div>
-                  <div className="text-xs text-slate-600">{dom.cliente_telefono}</div>
-                  <div className="text-xs text-slate-600">{dom.cliente_direccion}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Repartidor: <b>{dom.domiciliario_nombre || 'Sin asignar'}</b> • Envío: {formatMoney(dom.costo_domicilio)}
+                  <div className="mt-2 text-xs font-semibold text-zinc-800">{dom.cliente_nombre}</div>
+                  <div className="text-xs text-zinc-600">{dom.cliente_telefono}</div>
+                  <div className="text-xs text-zinc-600">{dom.cliente_direccion}</div>
+                  <div className="text-xs text-zinc-500 mt-1">
+                    Repartidor: <b>{dom.domiciliario_nombre || 'Sin asignar'}</b> • Envío:{' '}
+                    {formatMoney(dom.costo_domicilio)}
                   </div>
                 </div>
-                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <span className="font-extrabold text-slate-900">{formatMoney(dom.gran_total)}</span>
+                <div className="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+                  <span className="font-bold tabular-nums text-zinc-950">{formatMoney(dom.gran_total)}</span>
                   <div className="flex gap-1.5">
                     {dom.estado !== 'FACTURADA' && (
                       <button
@@ -1855,7 +1869,7 @@ export default function PosDesktopPage() {
                           setOrdenActivaId(dom.id);
                           setActiveTab('VENTAS');
                         }}
-                        className="px-2.5 py-1 rounded bg-slate-900 text-white text-xs font-bold cursor-pointer"
+                        className="px-2.5 py-1 rounded bg-zinc-900 text-white text-xs font-semibold cursor-pointer"
                       >
                         Abrir (F1)
                       </button>
@@ -1869,7 +1883,7 @@ export default function PosDesktopPage() {
                           });
                           fetchPosState();
                         }}
-                        className="px-2.5 py-1 rounded bg-amber-500 text-white text-xs font-bold cursor-pointer"
+                        className="px-2.5 py-1 rounded bg-white border border-zinc-300 text-zinc-800 text-xs font-semibold cursor-pointer"
                       >
                         En Ruta
                       </button>
@@ -1883,7 +1897,7 @@ export default function PosDesktopPage() {
                           });
                           fetchPosState();
                         }}
-                        className="px-2.5 py-1 rounded bg-emerald-600 text-white text-xs font-bold cursor-pointer"
+                        className="px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-semibold cursor-pointer"
                       >
                         Entregado
                       </button>
@@ -1898,58 +1912,37 @@ export default function PosDesktopPage() {
 
       {/* ==================== MÓDULO F4: CORTE Y CUADRE DE CAJA ==================== */}
       {activeTab === 'CORTE' && (
-        <div className="flex-1 p-4 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-4 content-start">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+        <div className="flex-1 p-4 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-4 content-start bg-zinc-100">
+          <div className="bg-white rounded-lg border border-zinc-200 p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-extrabold text-slate-900">
+              <h2 className="text-base font-bold text-zinc-900">
                 Corte y Cuadre de Caja — {cajaNombre}
               </h2>
-              <span className="text-xs font-bold text-slate-500">
+              <span className="text-xs font-medium text-zinc-500">
                 Turno #{sesionActiva?.numero_turno || 1} ({cajeroNombre})
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                <div className="text-slate-500">Base Inicial</div>
-                <div className="font-extrabold text-slate-900 text-sm">
-                  {formatMoney(sesionActiva?.base_inicial || 0)}
+              {[
+                { label: 'Base Inicial', value: sesionActiva?.base_inicial || 0 },
+                { label: 'Efectivo Ventas', value: resumenDia.totalEfectivo },
+                { label: 'Datáfono', value: resumenDia.totalDatafono },
+                { label: 'Transferencias', value: resumenDia.totalTransferencia },
+                { label: 'Salidas Caja Menor', value: salidasDiaCaja },
+                { label: 'Propinas', value: resumenDia.totalPropinas },
+              ].map((stat) => (
+                <div key={stat.label} className="p-3 rounded-md bg-zinc-50 border border-zinc-200">
+                  <div className="text-zinc-500">{stat.label}</div>
+                  <div className="font-bold tabular-nums text-zinc-950 text-sm mt-0.5">
+                    {formatMoney(stat.value)}
+                  </div>
                 </div>
-              </div>
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                <div className="text-emerald-700">Efectivo Ventas</div>
-                <div className="font-extrabold text-emerald-900 text-sm">
-                  {formatMoney(resumenDia.totalEfectivo)}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg bg-sky-50 border border-sky-200">
-                <div className="text-sky-700">Datáfono</div>
-                <div className="font-extrabold text-sky-900 text-sm">
-                  {formatMoney(resumenDia.totalDatafono)}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-200">
-                <div className="text-indigo-700">Transferencias</div>
-                <div className="font-extrabold text-indigo-900 text-sm">
-                  {formatMoney(resumenDia.totalTransferencia)}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200">
-                <div className="text-rose-700">Salidas Caja Menor</div>
-                <div className="font-extrabold text-rose-900 text-sm">
-                  {formatMoney(salidasDiaCaja)}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-                <div className="text-amber-800">Propinas</div>
-                <div className="font-extrabold text-amber-900 text-sm">
-                  {formatMoney(resumenDia.totalPropinas)}
-                </div>
-              </div>
+              ))}
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold text-slate-700 block">
+            <div className="space-y-2.5 pt-3 border-t border-zinc-200">
+              <label className="text-xs font-semibold text-zinc-700 block">
                 Efectivo físico contado en cajón (Cierre ciego)
               </label>
               <input
@@ -1957,27 +1950,27 @@ export default function PosDesktopPage() {
                 value={efectivoContado}
                 onChange={(e) => setEfectivoContado(e.target.value)}
                 placeholder="Ej. 850000"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold"
+                className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold text-zinc-900 ${noSpinnerClass}`}
               />
               <textarea
                 value={obsCierre}
                 onChange={(e) => setObsCierre(e.target.value)}
                 placeholder="Observaciones del turno..."
                 rows={2}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                className="w-full px-3 py-2 border border-zinc-300 rounded-md text-xs text-zinc-800"
               />
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleCierreCaja('CIERRE_PARCIAL_TURNO')}
                   disabled={busyAction}
-                  className="py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs cursor-pointer"
+                  className="py-2.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-900 font-semibold text-xs cursor-pointer transition"
                 >
                   Cierre Parcial (Corte X)
                 </button>
                 <button
                   onClick={() => handleCierreCaja('CIERRE_TOTAL_CAJA')}
                   disabled={busyAction}
-                  className="py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer"
+                  className="py-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs cursor-pointer transition"
                 >
                   Cierre Total (Corte Z)
                 </button>
@@ -1985,14 +1978,14 @@ export default function PosDesktopPage() {
             </div>
 
             {ultimoCierreResumen && (
-              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs space-y-1">
-                <div className="font-extrabold text-slate-900">
+              <div className="p-3 rounded-md border border-zinc-200 bg-zinc-50 text-xs space-y-1 tabular-nums">
+                <div className="font-bold text-zinc-900">
                   Resultado del Corte ({ultimoCierreResumen.tipoCierre})
                 </div>
                 <div>Efectivo Esperado: {formatMoney(ultimoCierreResumen.efectivoEsperado)}</div>
                 <div>Efectivo Contado: {formatMoney(ultimoCierreResumen.efectivoContado)}</div>
                 <div
-                  className={`font-extrabold ${
+                  className={`font-bold ${
                     ultimoCierreResumen.diferenciaEfectivo === 0 ? 'text-emerald-700' : 'text-red-600'
                   }`}
                 >
@@ -2002,25 +1995,25 @@ export default function PosDesktopPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col max-h-[520px]">
-            <h3 className="text-sm font-extrabold text-slate-900 mb-3">
+          <div className="bg-white rounded-lg border border-zinc-200 p-5 flex flex-col max-h-[520px]">
+            <h3 className="text-sm font-bold text-zinc-900 mb-3">
               Bitácora de Eventos del Turno ({eventosTurno.length})
             </h3>
             <div className="flex-1 overflow-y-auto space-y-2">
               {eventosTurno.length === 0 ? (
-                <div className="text-xs text-slate-400 text-center py-10">
+                <div className="text-xs text-zinc-400 text-center py-10">
                   Sin novedades registradas en el turno.
                 </div>
               ) : (
                 eventosTurno.map((ev) => (
-                  <div key={ev.id} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs">
-                    <div className="flex items-center justify-between font-bold text-slate-800">
+                  <div key={ev.id} className="p-2.5 rounded-md border border-zinc-200 bg-zinc-50 text-xs">
+                    <div className="flex items-center justify-between font-semibold text-zinc-800">
                       <span>{ev.tipo_alerta.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] text-slate-500">
+                      <span className="text-[10px] text-zinc-500">
                         {new Date(ev.created_at).toLocaleTimeString('es-CO')}
                       </span>
                     </div>
-                    <p className="text-slate-600 mt-1">{ev.descripcion}</p>
+                    <p className="text-zinc-600 mt-1">{ev.descripcion}</p>
                   </div>
                 ))
               )}
@@ -2029,41 +2022,52 @@ export default function PosDesktopPage() {
         </div>
       )}
 
-      {/* ==================== MODALES OPERATIVOS ==================== */}
+      {/* ==================== MODALES OPERATIVOS (SÓLIDOS SIN TRANSPARENCIAS) ==================== */}
 
       {/* Modal F12 - Cobrar */}
       {showCobroModal && ordenActiva && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-lg">F12 — Cobrar {getOrdenTabLabel(ordenActiva)}</h3>
-              <button onClick={() => setShowCobroModal(false)} className="p-1 rounded hover:bg-slate-100 cursor-pointer">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-lg w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
+              <h3 className="font-bold text-base text-zinc-950">
+                F12 — Cobrar {getOrdenTabLabel(ordenActiva)}
+              </h3>
+              <button
+                onClick={() => setShowCobroModal(false)}
+                className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="bg-slate-900 text-white rounded-xl p-4 flex items-center justify-between">
+            <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-4 flex items-center justify-between">
               <div>
-                <div className="text-xs text-slate-400">Subtotal + Domicilio</div>
-                <div className="font-bold text-sm">
-                  {formatMoney(Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0))}
+                <div className="text-xs text-zinc-500">Subtotal + Domicilio</div>
+                <div className="font-bold text-base tabular-nums text-zinc-900">
+                  {formatMoney(
+                    Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0)
+                  )}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-emerald-400 font-bold">TOTAL A COBRAR</div>
-                <div className="text-3xl font-black text-emerald-400">{formatMoney(totalFinalCobro)}</div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">
+                  Total a Cobrar
+                </div>
+                <div className="text-3xl font-extrabold tabular-nums text-zinc-950">
+                  {formatMoney(totalFinalCobro)}
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Propina</label>
+                <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
                 <div className="flex gap-1 mb-1.5">
                   {[0, 0.05, 0.1].map((pct) => (
                     <button
                       key={pct}
                       onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))}
-                      className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 font-bold cursor-pointer"
+                      className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-semibold text-zinc-700 cursor-pointer"
                     >
                       {pct * 100}%
                     </button>
@@ -2073,30 +2077,30 @@ export default function PosDesktopPage() {
                   type="number"
                   value={propinaValor}
                   onChange={(e) => setPropinaValor(Number(e.target.value || 0))}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded font-bold"
+                  className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`}
                 />
               </div>
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Descuento</label>
+                <label className="font-semibold text-zinc-700 block mb-1">Descuento</label>
                 <div className="h-[26px]" />
                 <input
                   type="number"
                   value={descuentoValor}
                   onChange={(e) => setDescuentoValor(Number(e.target.value || 0))}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded font-bold"
+                  className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`}
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
               {(['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'MIXTO'] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setMetodoPago(m)}
-                  className={`py-2 rounded-lg text-xs font-extrabold border cursor-pointer ${
+                  className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition ${
                     metodoPago === m
-                      ? 'bg-emerald-600 text-white border-emerald-600'
-                      : 'bg-white text-slate-700 border-slate-300'
+                      ? 'bg-zinc-900 text-white'
+                      : 'bg-transparent text-zinc-600 hover:text-zinc-950'
                   }`}
                 >
                   {m}
@@ -2105,22 +2109,24 @@ export default function PosDesktopPage() {
             </div>
 
             {metodoPago === 'EFECTIVO' && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-semibold text-zinc-700">
                   <span>Pagó con (Efectivo recibido):</span>
-                  <span className="text-base font-black">Cambio: {formatMoney(cambioCalculado)}</span>
+                  <span className="text-base font-bold tabular-nums text-blue-700">
+                    Cambio: {formatMoney(cambioCalculado)}
+                  </span>
                 </div>
                 <input
                   autoFocus
                   type="number"
                   value={pagoConEfectivo}
                   onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))}
-                  className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-lg font-black text-slate-900"
+                  className={`w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-md text-xl font-bold tabular-nums text-zinc-950 outline-none ${noSpinnerClass}`}
                 />
                 <div className="flex gap-1.5 flex-wrap">
                   <button
                     onClick={() => setPagoConEfectivo(totalFinalCobro)}
-                    className="px-3 py-1 rounded bg-white border border-emerald-300 text-xs font-bold cursor-pointer"
+                    className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold text-zinc-800 cursor-pointer"
                   >
                     Exacto
                   </button>
@@ -2128,7 +2134,7 @@ export default function PosDesktopPage() {
                     <button
                       key={billete}
                       onClick={() => setPagoConEfectivo(billete)}
-                      className="px-3 py-1 rounded bg-white border border-emerald-300 text-xs font-bold cursor-pointer"
+                      className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold tabular-nums text-zinc-800 cursor-pointer"
                     >
                       {formatMoney(billete)}
                     </button>
@@ -2140,30 +2146,30 @@ export default function PosDesktopPage() {
             {metodoPago === 'MIXTO' && (
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div>
-                  <label className="font-bold">Efectivo</label>
+                  <label className="font-semibold text-zinc-700">Efectivo</label>
                   <input
                     type="number"
                     value={pagoEfectivo}
                     onChange={(e) => setPagoEfectivo(Number(e.target.value || 0))}
-                    className="w-full px-2 py-1.5 border rounded font-bold mt-1"
+                    className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`}
                   />
                 </div>
                 <div>
-                  <label className="font-bold">Datáfono</label>
+                  <label className="font-semibold text-zinc-700">Datáfono</label>
                   <input
                     type="number"
                     value={pagoDatafono}
                     onChange={(e) => setPagoDatafono(Number(e.target.value || 0))}
-                    className="w-full px-2 py-1.5 border rounded font-bold mt-1"
+                    className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`}
                   />
                 </div>
                 <div>
-                  <label className="font-bold">Transferencia</label>
+                  <label className="font-semibold text-zinc-700">Transferencia</label>
                   <input
                     type="number"
                     value={pagoTransferencia}
                     onChange={(e) => setPagoTransferencia(Number(e.target.value || 0))}
-                    className="w-full px-2 py-1.5 border rounded font-bold mt-1"
+                    className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`}
                   />
                 </div>
               </div>
@@ -2172,7 +2178,7 @@ export default function PosDesktopPage() {
             <button
               onClick={handleConfirmarCobro}
               disabled={busyAction}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm cursor-pointer"
+              className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer transition"
             >
               Confirmar Cobro e Imprimir Ticket
             </button>
@@ -2182,11 +2188,11 @@ export default function PosDesktopPage() {
 
       {/* Modal F10 - Buscar Producto */}
       {showBuscarModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 space-y-3 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-2xl w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-base">F10 — Buscador de Productos</h3>
-              <button onClick={() => setShowBuscarModal(false)} className="p-1 cursor-pointer">
+              <h3 className="font-bold text-base text-zinc-900">F10 — Buscador de Productos</h3>
+              <button onClick={() => setShowBuscarModal(false)} className="p-1 text-zinc-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2212,9 +2218,9 @@ export default function PosDesktopPage() {
                 }
               }}
               placeholder="Escribe nombre o código... (↑/↓ y ENTER para agregar)"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold"
+              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600"
             />
-            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
+            <div className="max-h-80 overflow-y-auto divide-y divide-zinc-100 border border-zinc-200 rounded-md">
               {productosBusquedaModal.map((p, idx) => (
                 <button
                   key={p.id}
@@ -2223,14 +2229,14 @@ export default function PosDesktopPage() {
                     setShowBuscarModal(false);
                   }}
                   className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs cursor-pointer ${
-                    idx === buscarIndex ? 'bg-blue-50 font-extrabold' : 'hover:bg-slate-50'
+                    idx === buscarIndex ? 'bg-blue-50 font-semibold' : 'hover:bg-zinc-50'
                   }`}
                 >
                   <div>
-                    <span className="font-mono text-slate-400 mr-2">{p.codigo}</span>
-                    <span className="text-slate-900">{p.nombre}</span>
+                    <span className="font-mono text-zinc-400 mr-2">{p.codigo}</span>
+                    <span className="text-zinc-900">{p.nombre}</span>
                   </div>
-                  <span className="font-extrabold text-emerald-700">{formatMoney(p.precio_total)}</span>
+                  <span className="font-bold tabular-nums text-zinc-900">{formatMoney(p.precio_total)}</span>
                 </button>
               ))}
             </div>
@@ -2240,11 +2246,11 @@ export default function PosDesktopPage() {
 
       {/* Modal F9 - Verificador de Precios */}
       {showVerificadorModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-base">F9 — Verificador de Precios</h3>
-              <button onClick={() => setShowVerificadorModal(false)} className="p-1 cursor-pointer">
+              <h3 className="font-bold text-base text-zinc-900">F9 — Verificador de Precios</h3>
+              <button onClick={() => setShowVerificadorModal(false)} className="p-1 text-zinc-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2254,16 +2260,21 @@ export default function PosDesktopPage() {
               value={verificadorQuery}
               onChange={(e) => setVerificadorQuery(e.target.value)}
               placeholder="Escanea código o escribe nombre del plato..."
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold"
+              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600"
             />
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {verificadorMatch.map((p) => (
-                <div key={p.id} className="p-3 rounded-xl bg-slate-900 text-white flex items-center justify-between">
+                <div
+                  key={p.id}
+                  className="p-3 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between"
+                >
                   <div>
-                    <div className="text-xs text-slate-400">{p.codigo}</div>
-                    <div className="font-bold text-sm">{p.nombre}</div>
+                    <div className="text-xs font-mono text-zinc-500">{p.codigo}</div>
+                    <div className="font-semibold text-sm text-zinc-900">{p.nombre}</div>
                   </div>
-                  <div className="text-xl font-black text-emerald-400">{formatMoney(p.precio_total)}</div>
+                  <div className="text-xl font-extrabold tabular-nums text-zinc-950">
+                    {formatMoney(p.precio_total)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -2273,11 +2284,11 @@ export default function PosDesktopPage() {
 
       {/* Modal INS - Artículo Varios */}
       {showVariosModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-base">INS — Agregar Artículo Varios</h3>
-              <button onClick={() => setShowVariosModal(false)} className="p-1 cursor-pointer">
+              <h3 className="font-bold text-base text-zinc-900">INS — Agregar Artículo Varios</h3>
+              <button onClick={() => setShowVariosModal(false)} className="p-1 text-zinc-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2286,7 +2297,7 @@ export default function PosDesktopPage() {
               value={variosNombre}
               onChange={(e) => setVariosNombre(e.target.value)}
               placeholder="Descripción (ej. Adicional especial)"
-              className="w-full px-3 py-2 border rounded-lg text-sm font-semibold"
+              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium"
             />
             <div className="grid grid-cols-2 gap-2">
               <input
@@ -2294,19 +2305,19 @@ export default function PosDesktopPage() {
                 value={variosCantidad}
                 onChange={(e) => setVariosCantidad(Number(e.target.value || 1))}
                 placeholder="Cant."
-                className="px-3 py-2 border rounded-lg text-sm font-bold"
+                className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
               />
               <input
                 type="number"
                 value={variosPrecio}
                 onChange={(e) => setVariosPrecio(Number(e.target.value || 0))}
                 placeholder="Precio"
-                className="px-3 py-2 border rounded-lg text-sm font-bold"
+                className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
               />
             </div>
             <button
               onClick={handleAgregarVarios}
-              className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer"
+              className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer"
             >
               Agregar a la Cuenta
             </button>
@@ -2316,11 +2327,11 @@ export default function PosDesktopPage() {
 
       {/* Modal CTRL+P - Artículos Comunes */}
       {showArtComunModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 space-y-3 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-lg w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-base">CTRL+P — Artículos Comunes</h3>
-              <button onClick={() => setShowArtComunModal(false)} className="p-1 cursor-pointer">
+              <h3 className="font-bold text-base text-zinc-900">CTRL+P — Artículos Comunes</h3>
+              <button onClick={() => setShowArtComunModal(false)} className="p-1 text-zinc-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2332,10 +2343,12 @@ export default function PosDesktopPage() {
                     handleAgregarProducto(p, 1);
                     setShowArtComunModal(false);
                   }}
-                  className="p-3 rounded-xl border border-slate-200 hover:border-orange-500 hover:bg-orange-50 text-left cursor-pointer"
+                  className="p-3 rounded-lg border border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50 text-left cursor-pointer"
                 >
-                  <div className="font-bold text-xs text-slate-900 line-clamp-2">{p.nombre}</div>
-                  <div className="font-extrabold text-xs text-emerald-700 mt-1">{formatMoney(p.precio_total)}</div>
+                  <div className="font-semibold text-xs text-zinc-900 line-clamp-2">{p.nombre}</div>
+                  <div className="font-bold text-xs tabular-nums text-zinc-700 mt-1">
+                    {formatMoney(p.precio_total)}
+                  </div>
                 </button>
               ))}
             </div>
@@ -2345,13 +2358,13 @@ export default function PosDesktopPage() {
 
       {/* Modal F7 / F8 - Entrada o Salida de Efectivo */}
       {cashFlowModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-base">
+              <h3 className="font-bold text-base text-zinc-900">
                 {cashFlowModal === 'ENTRADA' ? 'F7 — Entrada de Efectivo' : 'F8 — Salida de Efectivo'}
               </h3>
-              <button onClick={() => setCashFlowModal(null)} className="p-1 cursor-pointer">
+              <button onClick={() => setCashFlowModal(null)} className="p-1 text-zinc-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2361,21 +2374,19 @@ export default function PosDesktopPage() {
               value={cashFlowMonto}
               onChange={(e) => setCashFlowMonto(e.target.value)}
               placeholder="Monto ($)"
-              className="w-full px-3 py-2 border rounded-lg text-sm font-bold"
+              className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
             />
             <input
               type="text"
               value={cashFlowConcepto}
               onChange={(e) => setCashFlowConcepto(e.target.value)}
               placeholder="Concepto / Motivo (ej. Sencillo, Hielo, Domicilio)"
-              className="w-full px-3 py-2 border rounded-lg text-sm"
+              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
             />
             <button
               onClick={handleRegistrarCashFlow}
               disabled={busyAction}
-              className={`w-full py-2.5 rounded-lg text-white font-bold text-xs cursor-pointer ${
-                cashFlowModal === 'ENTRADA' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
-              }`}
+              className="w-full py-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs cursor-pointer"
             >
               Registrar {cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida'}
             </button>
@@ -2385,29 +2396,33 @@ export default function PosDesktopPage() {
 
       {/* Modal Ventas del Día */}
       {showVentasDiaModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 space-y-3 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-2xl w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-base">Ventas Facturadas del Día ({ordenesFacturadasHoy.length})</h3>
-              <button onClick={() => setShowVentasDiaModal(false)} className="p-1 cursor-pointer">
+              <h3 className="font-bold text-base text-zinc-900">
+                Ventas Facturadas del Día ({ordenesFacturadasHoy.length})
+              </h3>
+              <button onClick={() => setShowVentasDiaModal(false)} className="p-1 text-zinc-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="max-h-96 overflow-y-auto divide-y divide-slate-200 border rounded-lg">
+            <div className="max-h-96 overflow-y-auto divide-y divide-zinc-200 border border-zinc-200 rounded-md">
               {ordenesFacturadasHoy.length === 0 ? (
-                <div className="py-10 text-center text-xs text-slate-400">Sin ventas facturadas hoy.</div>
+                <div className="py-10 text-center text-xs text-zinc-400">Sin ventas facturadas hoy.</div>
               ) : (
                 ordenesFacturadasHoy.map((v) => (
                   <div key={v.id} className="p-3 flex items-center justify-between text-xs">
                     <div>
-                      <div className="font-extrabold text-slate-900">
+                      <div className="font-bold text-zinc-900">
                         {v.consecutivo} • {v.canal_venta}
                       </div>
-                      <div className="text-slate-500">
+                      <div className="text-zinc-500">
                         {v.metodo_pago} • {v.items.length} ítems
                       </div>
                     </div>
-                    <div className="font-black text-sm text-emerald-700">{formatMoney(v.gran_total)}</div>
+                    <div className="font-bold tabular-nums text-sm text-zinc-950">
+                      {formatMoney(v.gran_total)}
+                    </div>
                   </div>
                 ))
               )}
@@ -2418,11 +2433,11 @@ export default function PosDesktopPage() {
 
       {/* Modal Nuevo Domicilio */}
       {showDomicilioModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-base">Nuevo Pedido a Domicilio</h3>
-              <button onClick={() => setShowDomicilioModal(false)} className="p-1 cursor-pointer">
+              <h3 className="font-bold text-base text-zinc-900">Nuevo Pedido a Domicilio</h3>
+              <button onClick={() => setShowDomicilioModal(false)} className="p-1 text-zinc-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2431,21 +2446,21 @@ export default function PosDesktopPage() {
               placeholder="Nombre del cliente"
               value={domNombre}
               onChange={(e) => setDomNombre(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm"
+              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
             />
             <input
               type="text"
               placeholder="Teléfono / WhatsApp"
               value={domTelefono}
               onChange={(e) => setDomTelefono(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm"
+              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
             />
             <input
               type="text"
               placeholder="Dirección completa"
               value={domDireccion}
               onChange={(e) => setDomDireccion(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm"
+              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
             />
             <div className="grid grid-cols-2 gap-2">
               <input
@@ -2453,19 +2468,19 @@ export default function PosDesktopPage() {
                 value={domCostoEnvio}
                 onChange={(e) => setDomCostoEnvio(Number(e.target.value || 0))}
                 placeholder="Valor domicilio"
-                className="px-3 py-2 border rounded-lg text-sm font-bold"
+                className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
               />
               <input
                 type="text"
                 value={domRepartidor}
                 onChange={(e) => setDomRepartidor(e.target.value)}
                 placeholder="Domiciliario"
-                className="px-3 py-2 border rounded-lg text-sm"
+                className="px-3 py-2 border border-zinc-300 rounded-md text-sm"
               />
             </div>
             <button
               onClick={handleCrearDomicilio}
-              className="w-full py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs cursor-pointer"
+              className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer"
             >
               Crear Domicilio
             </button>
@@ -2475,26 +2490,28 @@ export default function PosDesktopPage() {
 
       {/* Modal Abrir Turno */}
       {showAbrirCajaModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
-            <h3 className="font-extrabold text-base">Abrir Turno — {cajaNombre}</h3>
-            <label className="text-xs font-bold text-slate-600 block">Base inicial de efectivo ($)</label>
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
+            <h3 className="font-bold text-base text-zinc-900">Abrir Turno — {cajaNombre}</h3>
+            <label className="text-xs font-semibold text-zinc-600 block">
+              Base inicial de efectivo ($)
+            </label>
             <input
               type="number"
               value={baseInicialInput}
               onChange={(e) => setBaseInicialInput(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm font-bold"
+              className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setShowAbrirCajaModal(false)}
-                className="flex-1 py-2 rounded-lg border text-xs font-bold cursor-pointer"
+                className="flex-1 py-2 rounded-md border border-zinc-300 text-xs font-semibold text-zinc-700 cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleAbrirTurnoCaja}
-                className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold cursor-pointer"
+                className="flex-1 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer"
               >
                 Abrir Turno
               </button>

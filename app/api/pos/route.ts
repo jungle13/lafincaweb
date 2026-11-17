@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { invalidateVentasCache } from '@/app/api/ventas/route';
+import { invalidateVentasCache } from '@/lib/ventasCache';
 import { recalcularHojaDiaria } from '@/services/libroCajaService';
 
 export const dynamic = 'force-dynamic';

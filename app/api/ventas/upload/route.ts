@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { parseVentasTxtContent, guardarVentasEnBaseDeDatos } from '@/services/ventasParserService';
 import { crearNotificacionVentasDia } from '@/services/notificacionesService';
-import { invalidateVentasCache } from '@/app/api/ventas/route';
+import { invalidateVentasCache } from '@/lib/ventasCache';
 
 export const dynamic = 'force-dynamic';
 

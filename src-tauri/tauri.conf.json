@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "La Finca POS",
+  "productName": "Eliana POS",
   "version": "1.0.0",
-  "identifier": "com.lafinca.pos",
+  "identifier": "com.eliana.pos",
   "build": {
     "frontendDist": "./dist",
     "devUrl": "http://localhost:3000/pos"
@@ -11,7 +11,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "La Finca — Punto de Venta",
+        "title": "Eliana POS",
         "width": 1280,
         "height": 800,
         "resizable": true,

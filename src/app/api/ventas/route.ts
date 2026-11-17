@@ -10,14 +10,10 @@ import {
   getVentasResumenCompleto
 } from '@/services/ventasService';
 
+import { cachedVentasByPeriodo } from '@/lib/ventasCache';
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const cachedVentasByPeriodo = new Map<string, { data: any; expiry: number }>();
-
-export function invalidateVentasCache() {
-  cachedVentasByPeriodo.clear();
-}
 
 export async function GET(request: Request) {
   try {
