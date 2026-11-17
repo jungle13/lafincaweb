@@ -15,18 +15,19 @@ import {
   Home,
   Keyboard,
   Lock,
-  Minus,
   MonitorSmartphone,
+  Percent,
   Plus,
   Printer,
   RefreshCw,
   Scale,
   ScanBarcode,
   Search,
-  Store,
+  Settings,
   Tag,
   Trash2,
   Unlock,
+  UserCheck,
   Utensils,
   Wifi,
   WifiOff,
@@ -35,103 +36,39 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { formatMoney } from '@/lib/formatters';
 import {
+  DEFAULT_ELIANA_POS_CONFIG,
+  loadElianaPosConfig,
+  saveElianaPosConfig,
+  type ElianaPosConfig,
+} from '@/lib/posConfig';
+import {
+  lanGetState,
+  lanPostAction,
+  lanSyncSnapshot,
   openCashDrawer,
   printThermalTicket,
   readScaleWeightOnce,
   type ThermalTicketData,
   useBarcodeScanner,
 } from '@/lib/posHardwareBridge';
-
-type PosTab = 'VENTAS' | 'MESAS' | 'DOMICILIOS' | 'CORTE';
-
-interface PosMesa {
-  id: string;
-  numero: number;
-  nombre: string;
-  zona: string;
-  capacidad: number;
-  estado: 'LIBRE' | 'OCUPADA' | 'PRECUENTA_IMPRESA';
-  orden_activa_id: string | null;
-  mesero_actual: string | null;
-  abierta_at: string | null;
-  orden_activa?: PosOrden | null;
-}
-
-interface PosOrdenItem {
-  id: string;
-  orden_id: string;
-  producto_id: string | null;
-  codigo_producto: string;
-  nombre_producto: string;
-  categoria: string;
-  estacion_comanda: string;
-  cantidad: number;
-  unidad: string;
-  precio_unitario: number;
-  subtotal: number;
-  notas_comanda: string | null;
-  estado_comanda: 'PENDIENTE' | 'COMANDADO' | 'ENTREGADO' | 'ANULADO';
-}
-
-interface PosOrden {
-  id: string;
-  consecutivo: string;
-  fecha: string;
-  caja_nombre: string;
-  cajero_nombre: string;
-  mesero_nombre: string | null;
-  canal_venta: 'SALON_MESA' | 'DOMICILIO' | 'MOSTRADOR_LLEVAR';
-  mesa_numero: number | null;
-  cliente_nombre: string | null;
-  cliente_telefono: string | null;
-  cliente_direccion: string | null;
-  domiciliario_nombre: string | null;
-  costo_domicilio: number;
-  estado_domicilio: string | null;
-  subtotal_bruto: number;
-  descuento: number;
-  propina: number;
-  gran_total: number;
-  metodo_pago: string;
-  pago_efectivo: number;
-  pago_datafono: number;
-  pago_transferencia: number;
-  estado: 'ABIERTA' | 'PRECUENTA' | 'FACTURADA' | 'ANULADA';
-  precuenta_impresa_veces: number;
-  items: PosOrdenItem[];
-}
-
-interface ProductoVenta {
-  id: string;
-  codigo: string;
-  nombre: string;
-  categoria: string;
-  subcategoria?: string;
-  precio_total: number;
-  precio_neto: number;
-}
-
-interface SesionCaja {
-  id: string;
-  caja_nombre: string;
-  cajero_nombre: string;
-  numero_turno: number;
-  base_inicial: number;
-  estado: string;
-}
-
-interface EventoTurno {
-  id: string;
-  tipo_alerta: string;
-  nivel_riesgo: 'BAJO' | 'MEDIO' | 'ALTO' | 'CRITICO';
-  caja_nombre: string;
-  usuario_cajero: string;
-  orden_consecutivo: string | null;
-  mesa_numero: number | null;
-  valor_afectado: number;
-  descripcion: string;
-  created_at: string;
-}
+import PosCashCutView from '@/components/pos/PosCashCutView';
+import PosCreditsModal from '@/components/pos/PosCreditsModal';
+import PosReturnsModal from '@/components/pos/PosReturnsModal';
+import PosTerminalSettingsModal from '@/components/pos/PosTerminalSettingsModal';
+import type {
+  CierreResumen,
+  ClienteCreditoResumen,
+  CorteDepartamento,
+  DevolucionDia,
+  EventoTurno,
+  FlujoEfectivoRow,
+  PosMesa,
+  PosOrden,
+  PosOrdenItem,
+  PosTab,
+  ProductoVenta,
+  SesionCaja,
+} from '@/components/pos/types';
 
 interface OfflineOp {
   id: string;
@@ -147,22 +84,8 @@ interface LastPaymentMemory {
   ticketData?: ThermalTicketData;
 }
 
-interface CierreResumen {
-  tipoCierre: string;
-  baseInicial: number;
-  ventasEfectivo: number;
-  ventasDatafono: number;
-  ventasTransf: number;
-  totalVendidoPos: number;
-  totalSalidasCaja: number;
-  efectivoEsperado: number;
-  efectivoContado: number;
-  diferenciaEfectivo: number;
-}
-
-const OFFLINE_QUEUE_KEY = 'lafinca_pos_offline_queue_v1';
-const LAST_PAYMENT_KEY = 'lafinca_pos_last_payment_v1';
-const ZONAS = ['Todas', 'Salón Principal', 'Terraza', 'Kiosco / Parrilla'];
+const OFFLINE_QUEUE_KEY = 'eliana_pos_offline_queue_v1';
+const LAST_PAYMENT_KEY = 'eliana_pos_last_payment_v1';
 
 function getOrdenTabLabel(orden: PosOrden): string {
   if (orden.canal_venta === 'SALON_MESA' && orden.mesa_numero) {
@@ -174,14 +97,15 @@ function getOrdenTabLabel(orden: PosOrden): string {
   return `Mostrador ${orden.consecutivo.split('-').pop() || ''}`;
 }
 
-export default function PosDesktopPage() {
+export default function ElianaPosPage() {
   const { user } = useAuth();
   const cajeroNombre = user?.name || user?.username || 'Cajero Principal';
 
+  const [posConfig, setPosConfig] = useState<ElianaPosConfig>(DEFAULT_ELIANA_POS_CONFIG);
   const [activeTab, setActiveTab] = useState<PosTab>('VENTAS');
-  const [cajaNombre, setCajaNombre] = useState<'Caja 1' | 'Caja 2'>('Caja 1');
   const [touchMode, setTouchMode] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
+  const [lanConnected, setLanConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState(false);
 
@@ -190,11 +114,18 @@ export default function PosDesktopPage() {
   const [ordenes, setOrdenes] = useState<PosOrden[]>([]);
   const [productos, setProductos] = useState<ProductoVenta[]>([]);
   const [sesionActiva, setSesionActiva] = useState<SesionCaja | null>(null);
-  const [salidasDiaCaja, setSalidasDiaCaja] = useState<number>(0);
+  const [salidasDiaCaja, setSalidasDiaCaja] = useState(0);
+  const [abonosEfectivoHoy, setAbonosEfectivoHoy] = useState(0);
+  const [entradasEfectivoHoy, setEntradasEfectivoHoy] = useState(0);
+  const [devolucionesEfectivoHoy, setDevolucionesEfectivoHoy] = useState(0);
   const [eventosTurno, setEventosTurno] = useState<EventoTurno[]>([]);
+  const [creditosClientes, setCreditosClientes] = useState<ClienteCreditoResumen[]>([]);
+  const [devolucionesDia, setDevolucionesDia] = useState<DevolucionDia[]>([]);
+  const [corteDepartamentos, setCorteDepartamentos] = useState<CorteDepartamento[]>([]);
+  const [flujoEfectivoDetallado, setFlujoEfectivoDetallado] = useState<FlujoEfectivoRow[]>([]);
   const [offlineQueue, setOfflineQueue] = useState<OfflineOp[]>([]);
 
-  // Navegación / selección estilo eleventa
+  // Navegación / selección
   const [zonaFiltro, setZonaFiltro] = useState('Todas');
   const [ordenActivaId, setOrdenActivaId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -202,7 +133,6 @@ export default function PosDesktopPage() {
   const [catFiltro, setCatFiltro] = useState('TODAS');
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // Memoria último cobro y reimpresión
   const [lastPayment, setLastPayment] = useState<LastPaymentMemory>({
     total: 0,
     pagoCon: 0,
@@ -210,13 +140,19 @@ export default function PosDesktopPage() {
     consecutivo: '',
   });
 
-  // Modales operativos
+  // Modales
   const [showCobroModal, setShowCobroModal] = useState(false);
-  const [metodoPago, setMetodoPago] = useState<'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'MIXTO'>('EFECTIVO');
+  const [metodoPago, setMetodoPago] = useState<
+    'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO'
+  >('EFECTIVO');
   const [pagoConEfectivo, setPagoConEfectivo] = useState(0);
   const [pagoEfectivo, setPagoEfectivo] = useState(0);
   const [pagoDatafono, setPagoDatafono] = useState(0);
   const [pagoTransferencia, setPagoTransferencia] = useState(0);
+  const [pagoCredito, setPagoCredito] = useState(0);
+  const [comisionTarjeta, setComisionTarjeta] = useState(0);
+  const [clienteCreditoNombre, setClienteCreditoNombre] = useState('');
+  const [clienteCreditoTel, setClienteCreditoTel] = useState('');
   const [propinaValor, setPropinaValor] = useState(0);
   const [descuentoValor, setDescuentoValor] = useState(0);
 
@@ -235,12 +171,19 @@ export default function PosDesktopPage() {
   const [verificadorQuery, setVerificadorQuery] = useState('');
 
   const [showVariosModal, setShowVariosModal] = useState(false);
-  const [variosNombre, setVariosNombre] = useState('Adicional Especial');
+  const [variosNombre, setVariosNombre] = useState('Artículo Varios');
   const [variosCantidad, setVariosCantidad] = useState(1);
   const [variosPrecio, setVariosPrecio] = useState(5000);
 
+  const [showMayoreoModal, setShowMayoreoModal] = useState(false);
+  const [mayoreoCantidad, setMayoreoCantidad] = useState(1);
+  const [mayoreoPrecio, setMayoreoPrecio] = useState(0);
+  const [mayoreoNotas, setMayoreoNotas] = useState('');
+
   const [showArtComunModal, setShowArtComunModal] = useState(false);
   const [showVentasDiaModal, setShowVentasDiaModal] = useState(false);
+  const [showCreditosModal, setShowCreditosModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const [cashFlowModal, setCashFlowModal] = useState<'ENTRADA' | 'SALIDA' | null>(null);
   const [cashFlowMonto, setCashFlowMonto] = useState('');
@@ -249,13 +192,13 @@ export default function PosDesktopPage() {
   const [showAbrirCajaModal, setShowAbrirCajaModal] = useState(false);
   const [baseInicialInput, setBaseInicialInput] = useState('200000');
 
-  const [efectivoContado, setEfectivoContado] = useState('');
-  const [obsCierre, setObsCierre] = useState('');
-  const [ultimoCierreResumen, setUltimoCierreResumen] = useState<CierreResumen | null>(null);
-
   const captureInputRef = useRef<HTMLInputElement | null>(null);
   const buscarInputRef = useRef<HTMLInputElement | null>(null);
   const verificadorInputRef = useRef<HTMLInputElement | null>(null);
+
+  const cajaNombre = posConfig.nombreCaja || 'Caja 1';
+  const noSpinnerClass =
+    '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
   const notify = useCallback((type: 'ok' | 'err', text: string) => {
     setToast({ type, text });
@@ -266,40 +209,66 @@ export default function PosDesktopPage() {
     setTimeout(() => captureInputRef.current?.focus(), 40);
   }, []);
 
-  const fetchPosState = useCallback(async () => {
-    try {
-      const fechaHoy = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`/api/pos?fecha=${fechaHoy}&caja=${encodeURIComponent(cajaNombre)}`);
-      const data = await res.json();
-      if (data.success) {
-        setMesas(data.mesas || []);
-        setOrdenes(data.ordenes || []);
-        setProductos(data.productos || []);
-        setSesionActiva(data.sesionActiva || null);
-        setSalidasDiaCaja(data.salidasDiaCaja || 0);
-        setEventosTurno(data.eventosTurno || []);
-      }
-    } catch {
-      notify('err', 'Sin conexión al servidor — trabajando con respaldo local.');
-    } finally {
-      setLoading(false);
-    }
-  }, [cajaNombre, notify]);
-
   useEffect(() => {
-    fetchPosState();
-  }, [fetchPosState]);
-
-  useEffect(() => {
+    setPosConfig(loadElianaPosConfig());
     try {
       const savedQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
       if (savedQ) setOfflineQueue(JSON.parse(savedQ));
       const savedLast = localStorage.getItem(LAST_PAYMENT_KEY);
       if (savedLast) setLastPayment(JSON.parse(savedLast));
     } catch {
-      // ignore storage parse error
+      // ignore storage errors
     }
   }, []);
+
+  const applyPosPayload = useCallback((data: Record<string, unknown>) => {
+    setMesas((data.mesas as PosMesa[]) || []);
+    setOrdenes((data.ordenes as PosOrden[]) || []);
+    setProductos((data.productos as ProductoVenta[]) || []);
+    setSesionActiva((data.sesionActiva as SesionCaja) || null);
+    setSalidasDiaCaja(Number(data.salidasDiaCaja || 0));
+    setAbonosEfectivoHoy(Number(data.abonosEfectivoHoy || 0));
+    setEntradasEfectivoHoy(Number(data.entradasEfectivoHoy || 0));
+    setDevolucionesEfectivoHoy(Number(data.devolucionesEfectivoHoy || 0));
+    setEventosTurno((data.eventosTurno as EventoTurno[]) || []);
+    setCreditosClientes((data.creditosClientes as ClienteCreditoResumen[]) || []);
+    setDevolucionesDia((data.devolucionesDia as DevolucionDia[]) || []);
+    setCorteDepartamentos((data.corteDepartamentos as CorteDepartamento[]) || []);
+    setFlujoEfectivoDetallado((data.flujoEfectivoDetallado as FlujoEfectivoRow[]) || []);
+  }, []);
+
+  const fetchPosState = useCallback(async () => {
+    const fechaHoy = new Date().toISOString().slice(0, 10);
+    try {
+      const res = await fetch(`/api/pos?fecha=${fechaHoy}&caja=${encodeURIComponent(cajaNombre)}`);
+      const data = await res.json();
+      if (data.success) {
+        applyPosPayload(data);
+        setLanConnected(false);
+        // Sincronizar espejo local en Caja Principal para respaldo LAN
+        if (posConfig.rolTerminal === 'PRINCIPAL') {
+          lanSyncSnapshot(posConfig.ipCajaPrincipal, data);
+        }
+        return;
+      }
+    } catch {
+      // Fallback automático a Red Local LAN (Caja Principal :4545)
+      const lanData = await lanGetState(posConfig.ipCajaPrincipal);
+      if (lanData) {
+        applyPosPayload(lanData);
+        setLanConnected(true);
+        notify('ok', 'Operando en Red Local LAN (sin internet).');
+      } else {
+        notify('err', 'Sin conexión al servidor ni a Caja Principal LAN.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [cajaNombre, posConfig.rolTerminal, posConfig.ipCajaPrincipal, applyPosPayload, notify]);
+
+  useEffect(() => {
+    fetchPosState();
+  }, [fetchPosState]);
 
   const executePosAction = useCallback(
     async (action: string, payload: Record<string, unknown>) => {
@@ -311,6 +280,13 @@ export default function PosDesktopPage() {
       };
 
       if (!navigator.onLine) {
+        // Intentar enviar primero al servidor LAN de Caja Principal
+        const lanRes = await lanPostAction(posConfig.ipCajaPrincipal, fullPayload);
+        if (lanRes?.success) {
+          setLanConnected(true);
+          notify('ok', 'Operación guardada en Caja Principal (LAN sin internet).');
+          return { success: true, lan: true };
+        }
         const queued: OfflineOp = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           action,
@@ -319,7 +295,7 @@ export default function PosDesktopPage() {
         const updated = [...offlineQueue, queued];
         setOfflineQueue(updated);
         localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(updated));
-        notify('ok', `Guardado offline (${updated.length} en cola).`);
+        notify('ok', `Guardado en respaldo local (${updated.length} en cola).`);
         return { success: true, offline: true };
       }
 
@@ -332,7 +308,7 @@ export default function PosDesktopPage() {
       if (!data.success) throw new Error(data.error || 'Error en operación POS');
       return data;
     },
-    [cajaNombre, cajeroNombre, offlineQueue, notify]
+    [cajaNombre, cajeroNombre, posConfig.ipCajaPrincipal, offlineQueue, notify]
   );
 
   const syncOfflineQueue = useCallback(async () => {
@@ -356,7 +332,7 @@ export default function PosDesktopPage() {
     setOfflineQueue(remaining);
     localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
     if (synced > 0) {
-      notify('ok', `${synced} operación(es) offline sincronizada(s).`);
+      notify('ok', `${synced} operación(es) offline sincronizada(s) a la nube.`);
       fetchPosState();
     }
   }, [offlineQueue, notify, fetchPosState]);
@@ -366,6 +342,7 @@ export default function PosDesktopPage() {
     const goOnline = () => {
       setIsOnline(true);
       syncOfflineQueue();
+      fetchPosState();
     };
     const goOffline = () => setIsOnline(false);
     window.addEventListener('online', goOnline);
@@ -374,19 +351,16 @@ export default function PosDesktopPage() {
       window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
     };
-  }, [syncOfflineQueue]);
+  }, [syncOfflineQueue, fetchPosState]);
 
-  // Cuentas abiertas y facturadas
   const ordenesAbiertas = useMemo(
     () => ordenes.filter((o) => o.estado === 'ABIERTA' || o.estado === 'PRECUENTA'),
     [ordenes]
   );
-
   const ordenesFacturadasHoy = useMemo(
     () => ordenes.filter((o) => o.estado === 'FACTURADA'),
     [ordenes]
   );
-
   const ordenActiva = useMemo(
     () => ordenesAbiertas.find((o) => o.id === ordenActivaId) || ordenesAbiertas[0] || null,
     [ordenesAbiertas, ordenActivaId]
@@ -404,9 +378,8 @@ export default function PosDesktopPage() {
   );
 
   useEffect(() => {
-    if (itemsActivos.length === 0) {
-      setSelectedItemId(null);
-    } else if (!selectedItemId || !itemsActivos.some((i) => i.id === selectedItemId)) {
+    if (itemsActivos.length === 0) setSelectedItemId(null);
+    else if (!selectedItemId || !itemsActivos.some((i) => i.id === selectedItemId)) {
       setSelectedItemId(itemsActivos[itemsActivos.length - 1].id);
     }
   }, [itemsActivos, selectedItemId]);
@@ -444,6 +417,8 @@ export default function PosDesktopPage() {
       .slice(0, 8);
   }, [productos, verificadorQuery]);
 
+  const zonasDisponibles = useMemo(() => ['Todas', ...(posConfig.zonasMesas || [])], [posConfig.zonasMesas]);
+
   const mesasFiltradas = useMemo(() => {
     if (zonaFiltro === 'Todas') return mesas;
     return mesas.filter((m) => m.zona === zonaFiltro);
@@ -479,7 +454,6 @@ export default function PosDesktopPage() {
     };
   }, [ordenesFacturadasHoy]);
 
-  // Acciones de Ticket y Mesa
   const handleAbrirMesa = async (mesa: PosMesa) => {
     if (mesa.orden_activa_id && mesa.orden_activa) {
       setOrdenActivaId(mesa.orden_activa.id);
@@ -518,7 +492,7 @@ export default function PosDesktopPage() {
       if (res.orden?.id) setOrdenActivaId(res.orden.id);
       setActiveTab('VENTAS');
       focusCapture();
-      notify('ok', 'Nuevo ticket de mostrador abierto.');
+      notify('ok', 'Nuevo ticket abierto.');
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error creando ticket');
     } finally {
@@ -593,25 +567,55 @@ export default function PosDesktopPage() {
     }
   };
 
+  const handleAbrirMayoreo = useCallback(() => {
+    const sel = itemsActivos.find((i) => i.id === selectedItemId);
+    if (!sel) {
+      notify('err', 'Selecciona una línea de la tabla para ajustar precio o cantidad.');
+      return;
+    }
+    setMayoreoCantidad(sel.cantidad);
+    setMayoreoPrecio(sel.precio_unitario);
+    setMayoreoNotas(sel.notas_comanda || '');
+    setShowMayoreoModal(true);
+  }, [itemsActivos, selectedItemId, notify]);
+
+  const handleGuardarMayoreo = async () => {
+    const sel = itemsActivos.find((i) => i.id === selectedItemId);
+    if (!sel || !ordenActiva) return;
+    setBusyAction(true);
+    try {
+      await executePosAction('ACTUALIZAR_ITEM_PRECIO_CANTIDAD', {
+        orden_id: ordenActiva.id,
+        item_id: sel.id,
+        cantidad: mayoreoCantidad,
+        precio_unitario: mayoreoPrecio,
+        notas_comanda: mayoreoNotas.trim() || null,
+      });
+      setShowMayoreoModal(false);
+      await fetchPosState();
+      focusCapture();
+      notify('ok', 'Precio y cantidad actualizados.');
+    } catch (e: unknown) {
+      notify('err', e instanceof Error ? e.message : 'Error actualizando línea');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
   const handleCambiarCantidadItem = useCallback(
     async (item: PosOrdenItem, delta: number) => {
-      if (!ordenActiva) return;
-      if (delta < 0 && item.cantidad <= 1) {
-        return;
-      }
-      if (delta > 0) {
-        await handleAgregarProducto(
-          {
-            id: item.producto_id || '',
-            codigo: item.codigo_producto,
-            nombre: item.nombre_producto,
-            categoria: item.categoria,
-            precio_total: item.precio_unitario,
-            precio_neto: item.precio_unitario,
-          },
-          delta
-        );
-      }
+      if (!ordenActiva || delta <= 0) return;
+      await handleAgregarProducto(
+        {
+          id: item.producto_id || '',
+          codigo: item.codigo_producto,
+          nombre: item.nombre_producto,
+          categoria: item.categoria,
+          precio_total: item.precio_unitario,
+          precio_neto: item.precio_unitario,
+        },
+        delta
+      );
     },
     [ordenActiva, handleAgregarProducto]
   );
@@ -619,10 +623,10 @@ export default function PosDesktopPage() {
   const handleAnularItem = useCallback(
     async (item: PosOrdenItem) => {
       if (!ordenActiva) return;
-      let motivo = 'Ajuste de pedido en caja';
+      let motivo = 'Ajuste en caja';
       if (item.estado_comanda === 'COMANDADO') {
         const resp = window.prompt(
-          `El plato "${item.nombre_producto}" ya fue enviado a cocina. Ingresa el motivo de la anulación:`
+          `El ítem "${item.nombre_producto}" ya fue enviado a preparación. Ingresa el motivo:`
         );
         if (!resp || !resp.trim()) return;
         motivo = resp.trim();
@@ -636,9 +640,9 @@ export default function PosDesktopPage() {
         });
         await fetchPosState();
         focusCapture();
-        notify('ok', 'Ítem eliminado de la cuenta.');
+        notify('ok', 'Ítem eliminado.');
       } catch (e: unknown) {
-        notify('err', e instanceof Error ? e.message : 'Error anulando ítem');
+        notify('err', e instanceof Error ? e.message : 'Error eliminando ítem');
       } finally {
         setBusyAction(false);
       }
@@ -648,12 +652,12 @@ export default function PosDesktopPage() {
 
   const handleEliminarTicket = async () => {
     if (!ordenActiva) return;
-    if (!window.confirm(`¿Cancelar y eliminar el ticket ${ordenActiva.consecutivo}?`)) return;
+    if (!window.confirm(`¿Cancelar el ticket ${ordenActiva.consecutivo}?`)) return;
     setBusyAction(true);
     try {
       await executePosAction('ANULAR_ORDEN_COMPLETA', {
         orden_id: ordenActiva.id,
-        motivo: 'Ticket cancelado por cajero',
+        motivo: 'Ticket cancelado en caja',
       });
       setOrdenActivaId(null);
       await fetchPosState();
@@ -670,7 +674,7 @@ export default function PosDesktopPage() {
     if (!ordenActiva) return;
     const pendientes = itemsActivos.filter((i) => i.estado_comanda === 'PENDIENTE');
     if (pendientes.length === 0) {
-      notify('ok', 'No hay platos pendientes por enviar a cocina.');
+      notify('ok', 'No hay artículos pendientes por comandar.');
       return;
     }
     setBusyAction(true);
@@ -702,7 +706,7 @@ export default function PosDesktopPage() {
       }
       await fetchPosState();
       focusCapture();
-      notify('ok', `Comanda enviada (${pendientes.length} platos).`);
+      notify('ok', `Comanda enviada (${pendientes.length} ítems).`);
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error enviando comanda');
     } finally {
@@ -715,7 +719,9 @@ export default function PosDesktopPage() {
     setBusyAction(true);
     try {
       await executePosAction('IMPRIMIR_PRECUENTA', { orden_id: ordenActiva.id });
-      const propinaSug = Math.round(ordenActiva.subtotal_bruto * 0.1);
+      const propinaSug = posConfig.habilitaPropinas
+        ? Math.round(ordenActiva.subtotal_bruto * (posConfig.porcentajePropinaSugerida / 100))
+        : 0;
       await printThermalTicket({
         titulo: 'PRECUENTA',
         subtitulo: 'Documento informativo - No es factura',
@@ -737,7 +743,6 @@ export default function PosDesktopPage() {
         propina: propinaSug,
         costoDomicilio: ordenActiva.costo_domicilio,
         total: ordenActiva.subtotal_bruto + propinaSug + Number(ordenActiva.costo_domicilio || 0),
-        footer: 'Incluye propina sugerida del 10%',
       });
       await fetchPosState();
       notify('ok', 'Precuenta impresa.');
@@ -750,19 +755,28 @@ export default function PosDesktopPage() {
 
   const abrirModalCobro = useCallback(() => {
     if (!ordenActiva || itemsActivos.length === 0) {
-      notify('err', 'Agrega al menos un producto antes de cobrar.');
+      notify('err', 'Agrega al menos un artículo antes de cobrar.');
       return;
     }
-    const baseTotal = Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0);
-    setPropinaValor(ordenActiva.canal_venta === 'SALON_MESA' ? Math.round(ordenActiva.subtotal_bruto * 0.1) : 0);
+    const propSug =
+      posConfig.habilitaPropinas && ordenActiva.canal_venta === 'SALON_MESA'
+        ? Math.round(ordenActiva.subtotal_bruto * (posConfig.porcentajePropinaSugerida / 100))
+        : 0;
+    const baseTotal =
+      Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0) + propSug;
+    setPropinaValor(propSug);
     setDescuentoValor(0);
     setMetodoPago('EFECTIVO');
     setPagoEfectivo(baseTotal);
     setPagoConEfectivo(baseTotal);
     setPagoDatafono(0);
     setPagoTransferencia(0);
+    setPagoCredito(0);
+    setComisionTarjeta(0);
+    setClienteCreditoNombre(ordenActiva.cliente_nombre || '');
+    setClienteCreditoTel(ordenActiva.cliente_telefono || '');
     setShowCobroModal(true);
-  }, [ordenActiva, itemsActivos.length, notify]);
+  }, [ordenActiva, itemsActivos.length, posConfig, notify]);
 
   const totalFinalCobro = useMemo(() => {
     if (!ordenActiva) return 0;
@@ -785,6 +799,8 @@ export default function PosDesktopPage() {
     let ef = 0;
     let dat = 0;
     let trf = 0;
+    let cred = 0;
+
     if (metodoPago === 'EFECTIVO') {
       ef = totalFinalCobro;
       if (pagoConEfectivo > 0 && pagoConEfectivo < totalFinalCobro) {
@@ -794,12 +810,21 @@ export default function PosDesktopPage() {
       dat = totalFinalCobro;
     } else if (metodoPago === 'TRANSFERENCIA') {
       trf = totalFinalCobro;
+    } else if (metodoPago === 'CREDITO') {
+      if (!clienteCreditoNombre.trim()) {
+        return notify('err', 'Ingresa el nombre del cliente para ventas a crédito.');
+      }
+      cred = totalFinalCobro;
     } else {
       ef = pagoEfectivo;
       dat = pagoDatafono;
       trf = pagoTransferencia;
-      if (Math.abs(ef + dat + trf - totalFinalCobro) > 100) {
+      cred = pagoCredito;
+      if (Math.abs(ef + dat + trf + cred - totalFinalCobro) > 100) {
         return notify('err', 'La suma de pagos mixtos debe coincidir con el total.');
+      }
+      if (cred > 0 && !clienteCreditoNombre.trim()) {
+        return notify('err', 'Ingresa el cliente para la parte a crédito.');
       }
     }
 
@@ -811,8 +836,13 @@ export default function PosDesktopPage() {
         pago_efectivo: ef,
         pago_datafono: dat,
         pago_transferencia: trf,
+        pago_credito: cred,
+        comision_tarjeta: comisionTarjeta,
+        cliente_nombre: clienteCreditoNombre.trim() || ordenActiva.cliente_nombre,
+        cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono,
         propina: propinaValor,
         descuento: descuentoValor,
+        efectivo_recibido: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : totalFinalCobro,
       });
 
       const ticketData: ThermalTicketData = {
@@ -823,8 +853,8 @@ export default function PosDesktopPage() {
         cajero: cajeroNombre,
         canal: ordenActiva.canal_venta,
         mesaNumero: ordenActiva.mesa_numero,
-        clienteNombre: ordenActiva.cliente_nombre,
-        clienteTelefono: ordenActiva.cliente_telefono,
+        clienteNombre: clienteCreditoNombre.trim() || ordenActiva.cliente_nombre,
+        clienteTelefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono,
         clienteDireccion: ordenActiva.cliente_direccion,
         items: itemsActivos.map((it) => ({
           nombre: it.nombre_producto,
@@ -841,7 +871,6 @@ export default function PosDesktopPage() {
         metodoPago,
         efectivoRecibido: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : undefined,
         cambio: metodoPago === 'EFECTIVO' ? cambioCalculado : undefined,
-        footer: '¡Gracias por su visita!',
       };
 
       const memory: LastPaymentMemory = {
@@ -861,7 +890,7 @@ export default function PosDesktopPage() {
       setOrdenActivaId(null);
       await fetchPosState();
       focusCapture();
-      notify('ok', `Factura ${ordenActiva.consecutivo} cobrada. Cambio: ${formatMoney(cambioCalculado)}.`);
+      notify('ok', `Factura ${ordenActiva.consecutivo} cobrada.`);
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error cobrando orden');
     } finally {
@@ -905,7 +934,7 @@ export default function PosDesktopPage() {
         setActiveTab('VENTAS');
       }
       focusCapture();
-      notify('ok', 'Domicilio creado y listo para agregar platos.');
+      notify('ok', 'Domicilio creado.');
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error creando domicilio');
     } finally {
@@ -931,12 +960,9 @@ export default function PosDesktopPage() {
       setCashFlowConcepto('');
       await fetchPosState();
       focusCapture();
-      notify(
-        'ok',
-        `${cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida'} de ${formatMoney(monto)} registrada.`
-      );
+      notify('ok', `${cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida'} de ${formatMoney(monto)} registrada.`);
     } catch (e: unknown) {
-      notify('err', e instanceof Error ? e.message : 'Error registrando movimiento de caja');
+      notify('err', e instanceof Error ? e.message : 'Error registrando movimiento');
     } finally {
       setBusyAction(false);
     }
@@ -951,26 +977,6 @@ export default function PosDesktopPage() {
       notify('ok', `Turno abierto en ${cajaNombre}.`);
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error abriendo turno');
-    } finally {
-      setBusyAction(false);
-    }
-  };
-
-  const handleCierreCaja = async (tipo: 'CIERRE_PARCIAL_TURNO' | 'CIERRE_TOTAL_CAJA') => {
-    if (!efectivoContado) {
-      return notify('err', 'Ingresa el efectivo físico contado en el cajón.');
-    }
-    setBusyAction(true);
-    try {
-      const res = await executePosAction(tipo, {
-        efectivo_contado: Number(efectivoContado),
-        observaciones: obsCierre,
-      });
-      setUltimoCierreResumen(res.resumen);
-      await fetchPosState();
-      notify('ok', `${tipo === 'CIERRE_TOTAL_CAJA' ? 'Cierre Total (Z)' : 'Cierre Parcial (X)'} ejecutado.`);
-    } catch (e: unknown) {
-      notify('err', e instanceof Error ? e.message : 'Error ejecutando cierre');
     } finally {
       setBusyAction(false);
     }
@@ -1001,21 +1007,17 @@ export default function PosDesktopPage() {
     focusCapture();
   }, [ordenesAbiertas, ordenActiva, focusCapture, notify]);
 
-  // Lector de códigos de barras USB/HID
   useBarcodeScanner((barcode) => {
-    const match = productos.find(
-      (p) => (p.codigo || '').toLowerCase() === barcode.toLowerCase()
-    );
+    const match = productos.find((p) => (p.codigo || '').toLowerCase() === barcode.toLowerCase());
     if (match) {
       handleAgregarProducto(match, 1);
       notify('ok', `Escaneado: ${match.nombre}`);
     } else {
       setCaptureInput(barcode);
-      notify('err', `Código ${barcode} no encontrado en productos.`);
+      notify('err', `Código ${barcode} no encontrado.`);
     }
   });
 
-  // Motor global de atajos de teclado estilo eleventa (F1-F12, INS, DEL, +, -, flechas, ESC)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -1025,9 +1027,12 @@ export default function PosDesktopPage() {
         showBuscarModal ||
         showVerificadorModal ||
         showVariosModal ||
+        showMayoreoModal ||
         showArtComunModal ||
         showDomicilioModal ||
         showVentasDiaModal ||
+        showCreditosModal ||
+        showSettingsModal ||
         showAbrirCajaModal ||
         cashFlowModal !== null;
 
@@ -1037,60 +1042,34 @@ export default function PosDesktopPage() {
         setShowBuscarModal(false);
         setShowVerificadorModal(false);
         setShowVariosModal(false);
+        setShowMayoreoModal(false);
         setShowArtComunModal(false);
         setShowDomicilioModal(false);
         setShowVentasDiaModal(false);
+        setShowCreditosModal(false);
+        setShowSettingsModal(false);
         setShowAbrirCajaModal(false);
         setCashFlowModal(null);
         focusCapture();
         return;
       }
 
-      if (e.key === 'F1') {
-        e.preventDefault();
-        setActiveTab('VENTAS');
-        focusCapture();
-        return;
-      }
-      if (e.key === 'F2') {
-        e.preventDefault();
-        setActiveTab('MESAS');
-        return;
-      }
-      if (e.key === 'F3') {
-        e.preventDefault();
-        setActiveTab('DOMICILIOS');
-        return;
-      }
-      if (e.key === 'F4') {
-        e.preventDefault();
-        setActiveTab('CORTE');
-        return;
-      }
-      if (e.key === 'F5') {
-        e.preventDefault();
-        handleCambiarSiguienteTicket();
-        return;
-      }
+      if (e.key === 'F1') { e.preventDefault(); setActiveTab('VENTAS'); focusCapture(); return; }
+      if (e.key === 'F2' && posConfig.habilitaMesas) { e.preventDefault(); setActiveTab('MESAS'); return; }
+      if (e.key === 'F3' && posConfig.habilitaDomicilios) { e.preventDefault(); setActiveTab('DOMICILIOS'); return; }
+      if (e.key === 'F4') { e.preventDefault(); setActiveTab('CORTE'); return; }
+      if (e.key === 'F5') { e.preventDefault(); handleCambiarSiguienteTicket(); return; }
       if (e.key === 'F6') {
         e.preventDefault();
-        if (ordenActiva && itemsActivos.some((i) => i.estado_comanda === 'PENDIENTE')) {
+        if (posConfig.habilitaComandasCocina && ordenActiva && itemsActivos.some((i) => i.estado_comanda === 'PENDIENTE')) {
           handleEnviarComanda();
         } else {
           handleNuevaVentaMostrador();
         }
         return;
       }
-      if (e.key === 'F7') {
-        e.preventDefault();
-        setCashFlowModal('ENTRADA');
-        return;
-      }
-      if (e.key === 'F8') {
-        e.preventDefault();
-        setCashFlowModal('SALIDA');
-        return;
-      }
+      if (e.key === 'F7') { e.preventDefault(); setCashFlowModal('ENTRADA'); return; }
+      if (e.key === 'F8') { e.preventDefault(); setCashFlowModal('SALIDA'); return; }
       if (e.key === 'F9') {
         e.preventDefault();
         setVerificadorQuery('');
@@ -1106,84 +1085,46 @@ export default function PosDesktopPage() {
         setTimeout(() => buscarInputRef.current?.focus(), 60);
         return;
       }
-      if (e.key === 'F12') {
-        e.preventDefault();
-        abrirModalCobro();
-        return;
-      }
-      if (e.key === 'Insert' && !isAnyModalOpen) {
-        e.preventDefault();
-        setShowVariosModal(true);
-        return;
-      }
-      if (e.ctrlKey && e.key.toLowerCase() === 'p') {
-        e.preventDefault();
-        setShowArtComunModal(true);
-        return;
-      }
+      if (e.key === 'F11') { e.preventDefault(); handleAbrirMayoreo(); return; }
+      if (e.key === 'F12') { e.preventDefault(); abrirModalCobro(); return; }
+      if (e.key === 'Insert' && !isAnyModalOpen) { e.preventDefault(); setShowVariosModal(true); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'p') { e.preventDefault(); setShowArtComunModal(true); return; }
 
       if (isAnyModalOpen || isTextArea || activeTab !== 'VENTAS') return;
-
       const isTypingInCapture = target === captureInputRef.current;
 
       if (e.key === 'Delete' && (!isTypingInCapture || captureInput === '')) {
         const selected = itemsActivos.find((i) => i.id === selectedItemId);
-        if (selected) {
-          e.preventDefault();
-          handleAnularItem(selected);
-        }
+        if (selected) { e.preventDefault(); handleAnularItem(selected); }
         return;
       }
-
       if (e.key === 'ArrowDown' && itemsActivos.length > 0) {
         e.preventDefault();
         const idx = itemsActivos.findIndex((i) => i.id === selectedItemId);
-        const nextIdx = idx < 0 ? 0 : Math.min(itemsActivos.length - 1, idx + 1);
-        setSelectedItemId(itemsActivos[nextIdx].id);
+        setSelectedItemId(itemsActivos[idx < 0 ? 0 : Math.min(itemsActivos.length - 1, idx + 1)].id);
         return;
       }
-
       if (e.key === 'ArrowUp' && itemsActivos.length > 0) {
         e.preventDefault();
         const idx = itemsActivos.findIndex((i) => i.id === selectedItemId);
-        const prevIdx = idx < 0 ? 0 : Math.max(0, idx - 1);
-        setSelectedItemId(itemsActivos[prevIdx].id);
+        setSelectedItemId(itemsActivos[idx < 0 ? 0 : Math.max(0, idx - 1)].id);
         return;
       }
-
       if ((e.key === '+' || e.key === 'Add') && (!isTypingInCapture || captureInput === '')) {
         const selected = itemsActivos.find((i) => i.id === selectedItemId);
-        if (selected) {
-          e.preventDefault();
-          handleCambiarCantidadItem(selected, 1);
-        }
+        if (selected) { e.preventDefault(); handleCambiarCantidadItem(selected, 1); }
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    activeTab,
-    captureInput,
-    itemsActivos,
-    selectedItemId,
-    ordenActiva,
-    showCobroModal,
-    showBuscarModal,
-    showVerificadorModal,
-    showVariosModal,
-    showArtComunModal,
-    showDomicilioModal,
-    showVentasDiaModal,
-    showAbrirCajaModal,
-    cashFlowModal,
-    abrirModalCobro,
-    focusCapture,
-    handleAnularItem,
-    handleCambiarCantidadItem,
-    handleCambiarSiguienteTicket,
-    handleEnviarComanda,
-    handleNuevaVentaMostrador,
+    activeTab, captureInput, itemsActivos, selectedItemId, ordenActiva, posConfig,
+    showCobroModal, showBuscarModal, showVerificadorModal, showVariosModal, showMayoreoModal,
+    showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal, showSettingsModal,
+    showAbrirCajaModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
+    handleAnularItem, handleCambiarCantidadItem, handleCambiarSiguienteTicket,
+    handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
 
   const handleCaptureSubmit = (e: React.FormEvent) => {
@@ -1192,37 +1133,48 @@ export default function PosDesktopPage() {
     if (!q) return;
     const exactCode = productos.find((p) => (p.codigo || '').toLowerCase() === q);
     const firstMatch = exactCode || productosFiltrados[0];
-    if (firstMatch) {
-      handleAgregarProducto(firstMatch, 1);
-    } else {
-      notify('err', `No se encontró producto con "${captureInput}".`);
-    }
+    if (firstMatch) handleAgregarProducto(firstMatch, 1);
+    else notify('err', `No se encontró producto con "${captureInput}".`);
   };
 
-  const noSpinnerClass =
-    '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+  const navModules = useMemo(() => {
+    const mods: Array<{ key: PosTab; fKey: string; label: string; icon: typeof ScanBarcode }> = [
+      { key: 'VENTAS', fKey: 'F1', label: 'Ventas', icon: ScanBarcode },
+    ];
+    if (posConfig.habilitaMesas) {
+      mods.push({
+        key: 'MESAS',
+        fKey: 'F2',
+        label: `Mesas (${mesas.filter((m) => m.estado !== 'LIBRE').length})`,
+        icon: Utensils,
+      });
+    }
+    if (posConfig.habilitaDomicilios) {
+      mods.push({
+        key: 'DOMICILIOS',
+        fKey: 'F3',
+        label: `Domicilios (${ordenesDomicilio.filter((d) => d.estado !== 'FACTURADA').length})`,
+        icon: Bike,
+      });
+    }
+    mods.push({ key: 'CORTE', fKey: 'F4', label: 'Corte de Caja', icon: Lock });
+    return mods;
+  }, [posConfig.habilitaMesas, posConfig.habilitaDomicilios, mesas, ordenesDomicilio]);
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-zinc-100 text-zinc-900 flex flex-col overflow-hidden select-none font-sans">
-      {/* Toast flotante sólido */}
       {toast && (
         <div
           className={`fixed top-14 right-4 z-50 px-4 py-2.5 rounded-lg shadow-lg border text-xs font-semibold flex items-center gap-2 ${
-            toast.type === 'ok'
-              ? 'bg-white text-zinc-900 border-zinc-300'
-              : 'bg-red-50 text-red-900 border-red-300'
+            toast.type === 'ok' ? 'bg-white text-zinc-900 border-zinc-300' : 'bg-red-50 text-red-900 border-red-300'
           }`}
         >
-          <span
-            className={`w-2 h-2 rounded-full shrink-0 ${
-              toast.type === 'ok' ? 'bg-emerald-600' : 'bg-red-600'
-            }`}
-          />
+          <span className={`w-2 h-2 rounded-full shrink-0 ${toast.type === 'ok' ? 'bg-emerald-600' : 'bg-red-600'}`} />
           {toast.text}
         </div>
       )}
 
-      {/* 1. BARRA SUPERIOR ESTILO WINDOWS 11 ENTERPRISE (SÓLIDA Y CLARA) */}
+      {/* 1. BARRA SUPERIOR WINDOWS 11 ENTERPRISE */}
       <header className="bg-white text-zinc-900 px-3 py-2 flex items-center justify-between gap-2 shrink-0 border-b border-zinc-200">
         <div className="flex items-center gap-2.5 flex-wrap">
           <Link
@@ -1240,24 +1192,8 @@ export default function PosDesktopPage() {
             <span className="font-bold text-sm tracking-tight text-zinc-950">Eliana POS</span>
           </div>
 
-          {/* Botones de módulos F1 - F4 */}
           <nav className="flex items-center gap-1">
-            {[
-              { key: 'VENTAS' as PosTab, fKey: 'F1', label: 'Ventas', icon: ScanBarcode },
-              {
-                key: 'MESAS' as PosTab,
-                fKey: 'F2',
-                label: `Mesas (${mesas.filter((m) => m.estado !== 'LIBRE').length})`,
-                icon: Utensils,
-              },
-              {
-                key: 'DOMICILIOS' as PosTab,
-                fKey: 'F3',
-                label: `Domicilios (${ordenesDomicilio.filter((d) => d.estado !== 'FACTURADA').length})`,
-                icon: Bike,
-              },
-              { key: 'CORTE' as PosTab, fKey: 'F4', label: 'Corte de Caja', icon: Lock },
-            ].map((tab) => {
+            {navModules.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
               return (
@@ -1285,42 +1221,41 @@ export default function PosDesktopPage() {
           </nav>
         </div>
 
-        {/* Derecha: Controles unificados monocromáticos */}
         <div className="flex items-center gap-1.5 text-xs">
-          <select
-            value={cajaNombre}
-            onChange={(e) => setCajaNombre(e.target.value as 'Caja 1' | 'Caja 2')}
-            className="bg-white border border-zinc-300 text-zinc-900 rounded-md px-2.5 py-1.5 font-semibold text-xs outline-none focus:border-blue-600"
-          >
-            <option value="Caja 1">Caja 1</option>
-            <option value="Caja 2">Caja 2</option>
-          </select>
+          <span className="px-2.5 py-1.5 rounded-md bg-zinc-100 border border-zinc-200 font-semibold text-zinc-800">
+            {cajaNombre}
+          </span>
 
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-semibold text-xs bg-zinc-100 text-zinc-700 border border-zinc-200">
-            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-600' : 'bg-amber-500'}`} />
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-600' : lanConnected ? 'bg-blue-600' : 'bg-amber-500'}`} />
             {isOnline ? <Wifi className="w-3.5 h-3.5 text-zinc-500" /> : <WifiOff className="w-3.5 h-3.5 text-zinc-500" />}
-            {isOnline ? 'En Línea' : `Offline (${offlineQueue.length})`}
+            {isOnline ? 'En Línea' : lanConnected ? 'LAN Local' : `Offline (${offlineQueue.length})`}
           </span>
 
           <button
+            onClick={() => setShowCreditosModal(true)}
+            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer"
+          >
+            <UserCheck className="w-3.5 h-3.5 text-zinc-600" />
+            <span className="hidden xl:inline">Créditos</span>
+          </button>
+
+          <button
             onClick={() => setTouchMode((v) => !v)}
-            title="Alternar entre Modo Híbrido Táctil y Modo Clásico Tabla"
             className={`px-2.5 py-1.5 rounded-md font-semibold flex items-center gap-1.5 border cursor-pointer transition ${
-              touchMode
-                ? 'bg-zinc-900 border-zinc-900 text-white'
-                : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-100'
+              touchMode ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-100'
             }`}
           >
             {touchMode ? <MonitorSmartphone className="w-3.5 h-3.5" /> : <Keyboard className="w-3.5 h-3.5" />}
-            {touchMode ? 'Táctil + Teclado' : 'Solo Tabla'}
+            <span className="hidden lg:inline">{touchMode ? 'Táctil + Teclado' : 'Solo Tabla'}</span>
           </button>
 
           <button
             onClick={handlePesarGramera}
-            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer transition"
+            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer"
           >
             <Scale className="w-3.5 h-3.5 text-zinc-600" />
-            <span className="hidden lg:inline">Gramera</span>
+            <span className="hidden xl:inline">Gramera</span>
           </button>
 
           <button
@@ -1329,23 +1264,30 @@ export default function PosDesktopPage() {
               await executePosAction('REGISTRAR_APERTURA_CAJON_SIN_VENTA', {});
               notify('ok', 'Cajón monedero abierto.');
             }}
-            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer transition"
+            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer"
           >
             <Unlock className="w-3.5 h-3.5 text-zinc-600" />
-            <span className="hidden lg:inline">Cajón</span>
+            <span className="hidden xl:inline">Cajón</span>
+          </button>
+
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            title="Configuración de Negocio, Red Local y Periféricos"
+            className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer"
+          >
+            <Settings className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={fetchPosState}
             title="Sincronizar"
-            className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer transition"
+            className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </header>
 
-      {/* Banner discreto de turno cerrado */}
       {!sesionActiva && (
         <div className="bg-zinc-100 border-b border-zinc-200 px-3 py-1.5 flex items-center justify-between text-xs shrink-0">
           <div className="flex items-center gap-2 text-zinc-700 font-medium">
@@ -1356,22 +1298,19 @@ export default function PosDesktopPage() {
           </div>
           <button
             onClick={() => setShowAbrirCajaModal(true)}
-            className="px-3 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold cursor-pointer transition"
+            className="px-3 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold cursor-pointer"
           >
             Abrir Turno
           </button>
         </div>
       )}
 
-      {/* ==================== MÓDULO F1: VENTAS ==================== */}
+      {/* ==================== F1: VENTAS ==================== */}
       {activeTab === 'VENTAS' && (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* 2. BARRA DE CAPTURA + ACCIONES RÁPIDAS MONOCROMÁTICAS */}
           <div className="bg-white border-b border-zinc-200 px-3 py-2 flex flex-col gap-2 shrink-0">
             <form onSubmit={handleCaptureSubmit} className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-zinc-700 whitespace-nowrap">
-                Código / Producto:
-              </label>
+              <label className="text-xs font-semibold text-zinc-700 whitespace-nowrap">Código / Producto:</label>
               <div className="relative flex-1 max-w-2xl">
                 <ScanBarcode className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -1380,20 +1319,19 @@ export default function PosDesktopPage() {
                   type="text"
                   value={captureInput}
                   onChange={(e) => setCaptureInput(e.target.value)}
-                  placeholder="Escanea código de barras o escribe nombre del plato / bebida y presiona ENTER..."
-                  className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-300 focus:border-blue-600 focus:bg-white rounded-md text-sm font-medium text-zinc-900 outline-none transition"
+                  placeholder="Escanea código de barras o escribe nombre del producto y presiona ENTER..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-300 focus:border-blue-600 focus:bg-white rounded-md text-sm font-medium text-zinc-900 outline-none"
                 />
               </div>
               <button
                 type="submit"
-                className="px-4 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
+                className="px-4 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 ENTER - Agregar Producto
               </button>
             </form>
 
-            {/* Sub-barra de botones rápidos limpia y uniforme */}
             <div className="flex items-center gap-1.5 flex-wrap">
               {[
                 { key: 'INS', label: 'Varios', icon: Tag, onClick: () => setShowVariosModal(true), disabled: false },
@@ -1410,6 +1348,7 @@ export default function PosDesktopPage() {
                   },
                   disabled: false,
                 },
+                { key: 'F11', label: 'Mayoreo / Desc.', icon: Percent, onClick: handleAbrirMayoreo, disabled: !selectedItemId },
                 { key: 'F7', label: 'Entradas', icon: ArrowDownCircle, onClick: () => setCashFlowModal('ENTRADA'), disabled: false },
                 { key: 'F8', label: 'Salidas', icon: ArrowUpCircle, onClick: () => setCashFlowModal('SALIDA'), disabled: false },
                 {
@@ -1440,7 +1379,7 @@ export default function PosDesktopPage() {
                     key={btn.key}
                     onClick={btn.onClick}
                     disabled={btn.disabled}
-                    className="px-2.5 py-1 rounded-md border border-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-medium text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
+                    className="px-2.5 py-1 rounded-md border border-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-medium text-zinc-700 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Icon className="w-3.5 h-3.5 text-zinc-500" />
                     <span className="px-1 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-mono font-semibold text-zinc-700">
@@ -1453,7 +1392,7 @@ export default function PosDesktopPage() {
             </div>
           </div>
 
-          {/* 3. PESTAÑAS DE CUENTAS ABIERTAS */}
+          {/* Pestañas de tickets abiertos */}
           <div className="bg-zinc-100 border-b border-zinc-200 px-3 pt-1.5 flex items-center gap-1 overflow-x-auto shrink-0">
             {ordenesAbiertas.map((ord) => {
               const isSelected = ordenActiva?.id === ord.id;
@@ -1464,7 +1403,7 @@ export default function PosDesktopPage() {
                     setOrdenActivaId(ord.id);
                     focusCapture();
                   }}
-                  className={`px-3 py-1.5 rounded-t-md text-xs font-semibold border border-b-0 flex items-center gap-2 whitespace-nowrap cursor-pointer transition ${
+                  className={`px-3 py-1.5 rounded-t-md text-xs font-semibold border border-b-0 flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                     isSelected
                       ? 'bg-white text-zinc-950 border-zinc-300'
                       : 'bg-zinc-200 text-zinc-600 border-transparent hover:bg-zinc-50 hover:text-zinc-900'
@@ -1479,15 +1418,13 @@ export default function PosDesktopPage() {
             })}
             <button
               onClick={handleNuevaVentaMostrador}
-              className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap transition"
+              className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3 h-3" /> Nuevo Ticket
             </button>
           </div>
 
-          {/* 4. ÁREA CENTRAL DE TRABAJO (TABLA LIMPIA + PANEL TÁCTIL SÓLIDO) */}
           <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
-            {/* Izquierda: Tabla de Venta */}
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden border-r border-zinc-200">
               {ordenActiva ? (
                 <div className="flex-1 overflow-y-auto">
@@ -1499,19 +1436,19 @@ export default function PosDesktopPage() {
                         <th className="py-2.5 px-3 text-right w-28">Precio Venta</th>
                         <th className="py-2.5 px-3 text-center w-24">Cant.</th>
                         <th className="py-2.5 px-3 text-right w-32 border-x border-zinc-200">Importe</th>
-                        <th className="py-2.5 px-3 text-center w-28">Estado</th>
+                        {posConfig.habilitaComandasCocina && <th className="py-2.5 px-3 text-center w-28">Estado</th>}
                         <th className="py-2.5 px-2 text-center w-12"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-200 text-sm">
                       {itemsActivos.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-24 text-center text-zinc-400">
+                          <td colSpan={posConfig.habilitaComandasCocina ? 7 : 6} className="py-24 text-center text-zinc-400">
                             <p className="font-semibold text-base text-zinc-600">
                               Cuenta vacía ({getOrdenTabLabel(ordenActiva)})
                             </p>
                             <p className="text-xs mt-1 text-zinc-500">
-                              Escanea un código, escribe un producto arriba o selecciona un plato en el panel táctil.
+                              Escanea un código, escribe un producto arriba o selecciona en el panel táctil.
                             </p>
                           </td>
                         </tr>
@@ -1522,7 +1459,7 @@ export default function PosDesktopPage() {
                             <tr
                               key={it.id}
                               onClick={() => setSelectedItemId(it.id)}
-                              className={`cursor-pointer transition ${
+                              className={`cursor-pointer ${
                                 isRowSel ? 'bg-blue-50 border-l-4 border-l-blue-600' : 'hover:bg-zinc-50'
                               }`}
                             >
@@ -1531,9 +1468,9 @@ export default function PosDesktopPage() {
                               </td>
                               <td className="py-2.5 px-3 font-semibold text-zinc-900">
                                 {it.nombre_producto}
-                                <span className="ml-2 text-[10px] font-medium text-zinc-400">
-                                  {it.estacion_comanda}
-                                </span>
+                                {it.notas_comanda && (
+                                  <span className="ml-2 text-[11px] font-normal text-zinc-500">({it.notas_comanda})</span>
+                                )}
                               </td>
                               <td className="py-2.5 px-3 text-right font-medium tabular-nums text-zinc-700">
                                 {formatMoney(it.precio_unitario)}
@@ -1548,7 +1485,6 @@ export default function PosDesktopPage() {
                                       e.stopPropagation();
                                       handleCambiarCantidadItem(it, 1);
                                     }}
-                                    title="Agregar +1"
                                     className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer"
                                   >
                                     <Plus className="w-3 h-3" />
@@ -1558,25 +1494,26 @@ export default function PosDesktopPage() {
                               <td className="py-2.5 px-3 text-right font-bold tabular-nums text-zinc-950 border-x border-zinc-100">
                                 {formatMoney(it.subtotal)}
                               </td>
-                              <td className="py-2.5 px-3 text-center">
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                                    it.estado_comanda === 'COMANDADO'
-                                      ? 'bg-zinc-900 text-white border-zinc-900'
-                                      : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                                  }`}
-                                >
-                                  {it.estado_comanda}
-                                </span>
-                              </td>
+                              {posConfig.habilitaComandasCocina && (
+                                <td className="py-2.5 px-3 text-center">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                      it.estado_comanda === 'COMANDADO'
+                                        ? 'bg-zinc-900 text-white border-zinc-900'
+                                        : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                                    }`}
+                                  >
+                                    {it.estado_comanda}
+                                  </span>
+                                </td>
+                              )}
                               <td className="py-2.5 px-2 text-center">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleAnularItem(it);
                                   }}
-                                  title="Quitar ítem (DEL)"
-                                  className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 cursor-pointer transition"
+                                  className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -1590,27 +1527,27 @@ export default function PosDesktopPage() {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 p-6">
-                  <Store className="w-10 h-10 mb-2 text-zinc-300" />
                   <p className="font-semibold text-zinc-700">No hay cuentas abiertas</p>
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={handleNuevaVentaMostrador}
-                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer transition"
+                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer"
                     >
                       + Abrir Venta Mostrador
                     </button>
-                    <button
-                      onClick={() => setActiveTab('MESAS')}
-                      className="px-4 py-2 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 font-semibold text-xs cursor-pointer transition"
-                    >
-                      F2 Ver Mapa de Mesas
-                    </button>
+                    {posConfig.habilitaMesas && (
+                      <button
+                        onClick={() => setActiveTab('MESAS')}
+                        className="px-4 py-2 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 font-semibold text-xs cursor-pointer"
+                      >
+                        F2 Ver Mapa de Mesas
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Derecha: Panel Táctil Sobrio */}
             {touchMode && (
               <div className="w-[40%] max-w-[520px] min-w-[320px] bg-zinc-50 flex flex-col min-h-0 overflow-hidden">
                 <div className="p-2 border-b border-zinc-200 bg-white flex items-center gap-1.5 overflow-x-auto shrink-0">
@@ -1618,7 +1555,7 @@ export default function PosDesktopPage() {
                     <button
                       key={c}
                       onClick={() => setCatFiltro(c)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer transition border ${
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer border ${
                         catFiltro === c
                           ? 'bg-zinc-900 text-white border-zinc-900'
                           : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'
@@ -1634,11 +1571,9 @@ export default function PosDesktopPage() {
                       key={p.id}
                       disabled={busyAction}
                       onClick={() => handleAgregarProducto(p, 1)}
-                      className="p-2.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:bg-zinc-100 text-left transition flex flex-col justify-between min-h-[76px] cursor-pointer"
+                      className="p-2.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:bg-zinc-100 text-left flex flex-col justify-between min-h-[76px] cursor-pointer"
                     >
-                      <span className="font-semibold text-xs text-zinc-900 leading-snug line-clamp-2">
-                        {p.nombre}
-                      </span>
+                      <span className="font-semibold text-xs text-zinc-900 leading-snug line-clamp-2">{p.nombre}</span>
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-[10px] font-mono text-zinc-400">{p.codigo}</span>
                         <span className="text-xs font-bold tabular-nums text-zinc-900 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
@@ -1652,7 +1587,6 @@ export default function PosDesktopPage() {
             )}
           </div>
 
-          {/* 5. BARRA INFERIOR PERSISTENTE ESTILO WINDOWS 11 */}
           <footer className="bg-white border-t border-zinc-200 px-3 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -1661,36 +1595,39 @@ export default function PosDesktopPage() {
                 </span>
                 <button
                   onClick={handleCambiarSiguienteTicket}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 cursor-pointer transition"
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 cursor-pointer"
                 >
                   F5 - Cambiar
                 </button>
-                <button
-                  onClick={handleEnviarComanda}
-                  disabled={!ordenActiva || busyAction}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
-                >
-                  <ChefHat className="w-3.5 h-3.5 text-zinc-600" />
-                  F6 - Comandar Cocina
-                </button>
-                <button
-                  onClick={handleImprimirPrecuenta}
-                  disabled={!ordenActiva || itemsActivos.length === 0 || busyAction}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
-                >
-                  <Printer className="w-3.5 h-3.5 text-zinc-600" />
-                  Precuenta
-                </button>
+                {posConfig.habilitaComandasCocina && (
+                  <>
+                    <button
+                      onClick={handleEnviarComanda}
+                      disabled={!ordenActiva || busyAction}
+                      className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ChefHat className="w-3.5 h-3.5 text-zinc-600" />
+                      F6 - Comandar Cocina
+                    </button>
+                    <button
+                      onClick={handleImprimirPrecuenta}
+                      disabled={!ordenActiva || itemsActivos.length === 0 || busyAction}
+                      className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-zinc-600" />
+                      Precuenta
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={handleEliminarTicket}
                   disabled={!ordenActiva || busyAction}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-red-50 hover:border-red-300 disabled:opacity-40 text-xs font-semibold text-red-700 cursor-pointer transition"
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-red-50 hover:border-red-300 disabled:opacity-40 text-xs font-semibold text-red-700 cursor-pointer"
                 >
                   Eliminar Ticket
                 </button>
               </div>
 
-              {/* Memoria del Último Ticket */}
               <div className="flex items-center gap-4 text-xs bg-zinc-50 border border-zinc-200 rounded-md px-3 py-1 w-fit tabular-nums">
                 <div>
                   <span className="text-zinc-500">Último Total: </span>
@@ -1711,33 +1648,31 @@ export default function PosDesktopPage() {
               <div className="flex flex-col gap-1">
                 <button
                   onClick={handleReimprimirUltimo}
-                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
+                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5 text-zinc-500" />
                   Reimprimir Último Ticket
                 </button>
                 <button
                   onClick={() => setShowVentasDiaModal(true)}
-                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer transition"
+                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
                 >
                   <History className="w-3.5 h-3.5 text-zinc-500" />
-                  Ventas del Día ({resumenDia.cantidadFacturas})
+                  Ventas y Devoluciones ({resumenDia.cantidadFacturas})
                 </button>
               </div>
 
               <button
                 onClick={abrirModalCobro}
                 disabled={!ordenActiva || itemsActivos.length === 0 || busyAction}
-                className="px-6 py-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-base flex items-center gap-2 cursor-pointer transition"
+                className="px-6 py-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-base flex items-center gap-2 cursor-pointer"
               >
                 <CreditCard className="w-5 h-5" />
                 F12 - Cobrar
               </button>
 
               <div className="bg-zinc-100 text-zinc-950 px-5 py-2 rounded-lg border border-zinc-300 min-w-[180px] text-right">
-                <div className="text-[10px] font-semibold uppercase text-zinc-500 leading-none">
-                  Total Cuenta
-                </div>
+                <div className="text-[10px] font-semibold uppercase text-zinc-500 leading-none">Total Cuenta</div>
                 <div className="text-3xl font-extrabold tabular-nums tracking-tight leading-tight text-zinc-950">
                   {formatMoney(ordenActiva?.gran_total || 0)}
                 </div>
@@ -1747,19 +1682,17 @@ export default function PosDesktopPage() {
         </div>
       )}
 
-      {/* ==================== MÓDULO F2: MAPA DE MESAS ==================== */}
-      {activeTab === 'MESAS' && (
+      {/* ==================== F2: MAPA DE MESAS ==================== */}
+      {activeTab === 'MESAS' && posConfig.habilitaMesas && (
         <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-zinc-100">
           <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
-              {ZONAS.map((z) => (
+              {zonasDisponibles.map((z) => (
                 <button
                   key={z}
                   onClick={() => setZonaFiltro(z)}
-                  className={`px-3.5 py-2 rounded-md text-xs font-semibold cursor-pointer border transition ${
-                    zonaFiltro === z
-                      ? 'bg-zinc-900 text-white border-zinc-900'
-                      : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+                  className={`px-3.5 py-2 rounded-md text-xs font-semibold cursor-pointer border ${
+                    zonaFiltro === z ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-300 text-zinc-700'
                   }`}
                 >
                   {z}
@@ -1768,7 +1701,7 @@ export default function PosDesktopPage() {
             </div>
             <button
               onClick={handleNuevaVentaMostrador}
-              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
+              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Venta Mostrador / Para Llevar
             </button>
@@ -1781,7 +1714,7 @@ export default function PosDesktopPage() {
                 <button
                   key={m.id}
                   onClick={() => handleAbrirMesa(m)}
-                  className={`p-4 rounded-lg border text-left transition cursor-pointer flex flex-col justify-between min-h-[120px] ${
+                  className={`p-4 rounded-lg border text-left cursor-pointer flex flex-col justify-between min-h-[120px] ${
                     m.estado === 'PRECUENTA_IMPRESA'
                       ? 'bg-white border-blue-500 ring-1 ring-blue-500'
                       : ocupada
@@ -1806,11 +1739,9 @@ export default function PosDesktopPage() {
                   <div className="text-[11px] text-zinc-500">{m.zona}</div>
                   {ocupada && m.orden_activa ? (
                     <div className="mt-2 pt-2 border-t border-zinc-200">
-                      <div className="font-bold tabular-nums text-zinc-950">
-                        {formatMoney(m.orden_activa.gran_total)}
-                      </div>
+                      <div className="font-bold tabular-nums text-zinc-950">{formatMoney(m.orden_activa.gran_total)}</div>
                       <div className="text-[11px] text-zinc-500">
-                        {m.orden_activa.items?.length || 0} platos • {m.mesero_actual || cajeroNombre}
+                        {m.orden_activa.items?.length || 0} ítems • {m.mesero_actual || cajeroNombre}
                       </div>
                     </div>
                   ) : (
@@ -1823,8 +1754,8 @@ export default function PosDesktopPage() {
         </div>
       )}
 
-      {/* ==================== MÓDULO F3: DOMICILIOS ==================== */}
-      {activeTab === 'DOMICILIOS' && (
+      {/* ==================== F3: DOMICILIOS ==================== */}
+      {activeTab === 'DOMICILIOS' && posConfig.habilitaDomicilios && (
         <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4 bg-zinc-100">
           <div className="flex items-center justify-between">
             <div>
@@ -1833,7 +1764,7 @@ export default function PosDesktopPage() {
             </div>
             <button
               onClick={() => setShowDomicilioModal(true)}
-              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
+              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
             >
               <Bike className="w-4 h-4" /> + Nuevo Domicilio
             </button>
@@ -1841,10 +1772,7 @@ export default function PosDesktopPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {ordenesDomicilio.map((dom) => (
-              <div
-                key={dom.id}
-                className="bg-white rounded-lg border border-zinc-200 p-4 flex flex-col justify-between"
-              >
+              <div key={dom.id} className="bg-white rounded-lg border border-zinc-200 p-4 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-sm text-zinc-900">{dom.consecutivo}</span>
@@ -1856,8 +1784,7 @@ export default function PosDesktopPage() {
                   <div className="text-xs text-zinc-600">{dom.cliente_telefono}</div>
                   <div className="text-xs text-zinc-600">{dom.cliente_direccion}</div>
                   <div className="text-xs text-zinc-500 mt-1">
-                    Repartidor: <b>{dom.domiciliario_nombre || 'Sin asignar'}</b> • Envío:{' '}
-                    {formatMoney(dom.costo_domicilio)}
+                    Repartidor: <b>{dom.domiciliario_nombre || 'Sin asignar'}</b> • Envío: {formatMoney(dom.costo_domicilio)}
                   </div>
                 </div>
                 <div className="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
@@ -1910,132 +1837,50 @@ export default function PosDesktopPage() {
         </div>
       )}
 
-      {/* ==================== MÓDULO F4: CORTE Y CUADRE DE CAJA ==================== */}
+      {/* ==================== F4: CORTE MULTIDIMENSIONAL ==================== */}
       {activeTab === 'CORTE' && (
-        <div className="flex-1 p-4 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-4 content-start bg-zinc-100">
-          <div className="bg-white rounded-lg border border-zinc-200 p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-zinc-900">
-                Corte y Cuadre de Caja — {cajaNombre}
-              </h2>
-              <span className="text-xs font-medium text-zinc-500">
-                Turno #{sesionActiva?.numero_turno || 1} ({cajeroNombre})
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-              {[
-                { label: 'Base Inicial', value: sesionActiva?.base_inicial || 0 },
-                { label: 'Efectivo Ventas', value: resumenDia.totalEfectivo },
-                { label: 'Datáfono', value: resumenDia.totalDatafono },
-                { label: 'Transferencias', value: resumenDia.totalTransferencia },
-                { label: 'Salidas Caja Menor', value: salidasDiaCaja },
-                { label: 'Propinas', value: resumenDia.totalPropinas },
-              ].map((stat) => (
-                <div key={stat.label} className="p-3 rounded-md bg-zinc-50 border border-zinc-200">
-                  <div className="text-zinc-500">{stat.label}</div>
-                  <div className="font-bold tabular-nums text-zinc-950 text-sm mt-0.5">
-                    {formatMoney(stat.value)}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-2.5 pt-3 border-t border-zinc-200">
-              <label className="text-xs font-semibold text-zinc-700 block">
-                Efectivo físico contado en cajón (Cierre ciego)
-              </label>
-              <input
-                type="number"
-                value={efectivoContado}
-                onChange={(e) => setEfectivoContado(e.target.value)}
-                placeholder="Ej. 850000"
-                className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold text-zinc-900 ${noSpinnerClass}`}
-              />
-              <textarea
-                value={obsCierre}
-                onChange={(e) => setObsCierre(e.target.value)}
-                placeholder="Observaciones del turno..."
-                rows={2}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-md text-xs text-zinc-800"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleCierreCaja('CIERRE_PARCIAL_TURNO')}
-                  disabled={busyAction}
-                  className="py-2.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-900 font-semibold text-xs cursor-pointer transition"
-                >
-                  Cierre Parcial (Corte X)
-                </button>
-                <button
-                  onClick={() => handleCierreCaja('CIERRE_TOTAL_CAJA')}
-                  disabled={busyAction}
-                  className="py-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs cursor-pointer transition"
-                >
-                  Cierre Total (Corte Z)
-                </button>
-              </div>
-            </div>
-
-            {ultimoCierreResumen && (
-              <div className="p-3 rounded-md border border-zinc-200 bg-zinc-50 text-xs space-y-1 tabular-nums">
-                <div className="font-bold text-zinc-900">
-                  Resultado del Corte ({ultimoCierreResumen.tipoCierre})
-                </div>
-                <div>Efectivo Esperado: {formatMoney(ultimoCierreResumen.efectivoEsperado)}</div>
-                <div>Efectivo Contado: {formatMoney(ultimoCierreResumen.efectivoContado)}</div>
-                <div
-                  className={`font-bold ${
-                    ultimoCierreResumen.diferenciaEfectivo === 0 ? 'text-emerald-700' : 'text-red-600'
-                  }`}
-                >
-                  Diferencia: {formatMoney(ultimoCierreResumen.diferenciaEfectivo)}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white rounded-lg border border-zinc-200 p-5 flex flex-col max-h-[520px]">
-            <h3 className="text-sm font-bold text-zinc-900 mb-3">
-              Bitácora de Eventos del Turno ({eventosTurno.length})
-            </h3>
-            <div className="flex-1 overflow-y-auto space-y-2">
-              {eventosTurno.length === 0 ? (
-                <div className="text-xs text-zinc-400 text-center py-10">
-                  Sin novedades registradas en el turno.
-                </div>
-              ) : (
-                eventosTurno.map((ev) => (
-                  <div key={ev.id} className="p-2.5 rounded-md border border-zinc-200 bg-zinc-50 text-xs">
-                    <div className="flex items-center justify-between font-semibold text-zinc-800">
-                      <span>{ev.tipo_alerta.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] text-zinc-500">
-                        {new Date(ev.created_at).toLocaleTimeString('es-CO')}
-                      </span>
-                    </div>
-                    <p className="text-zinc-600 mt-1">{ev.descripcion}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <PosCashCutView
+          config={posConfig}
+          cajaNombre={cajaNombre}
+          cajeroNombre={cajeroNombre}
+          sesionActiva={sesionActiva}
+          resumenDia={resumenDia}
+          salidasDiaCaja={salidasDiaCaja}
+          abonosEfectivoHoy={abonosEfectivoHoy}
+          entradasEfectivoHoy={entradasEfectivoHoy}
+          devolucionesEfectivoHoy={devolucionesEfectivoHoy}
+          corteDepartamentos={corteDepartamentos}
+          flujoEfectivoDetallado={flujoEfectivoDetallado}
+          eventosTurno={eventosTurno}
+          busyAction={busyAction}
+          onExecuteCierre={async (tipo, contado, obs) => {
+            setBusyAction(true);
+            try {
+              const res = await executePosAction(tipo, {
+                sesion_id: sesionActiva?.id,
+                efectivo_contado: contado,
+                observaciones: obs,
+              });
+              await fetchPosState();
+              notify('ok', `${tipo === 'CIERRE_TOTAL_CAJA' ? 'Cierre Total (Z)' : 'Cierre Parcial (X)'} ejecutado.`);
+              return (res.resumen as CierreResumen) || null;
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error ejecutando cierre');
+              return null;
+            } finally {
+              setBusyAction(false);
+            }
+          }}
+        />
       )}
 
-      {/* ==================== MODALES OPERATIVOS (SÓLIDOS SIN TRANSPARENCIAS) ==================== */}
-
-      {/* Modal F12 - Cobrar */}
+      {/* ==================== MODAL F12: COBRAR (CON CRÉDITO Y COMISIÓN) ==================== */}
       {showCobroModal && ordenActiva && (
         <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-lg w-full p-5 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
-              <h3 className="font-bold text-base text-zinc-950">
-                F12 — Cobrar {getOrdenTabLabel(ordenActiva)}
-              </h3>
-              <button
-                onClick={() => setShowCobroModal(false)}
-                className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-500 cursor-pointer"
-              >
+              <h3 className="font-bold text-base text-zinc-950">F12 — Cobrar {getOrdenTabLabel(ordenActiva)}</h3>
+              <button onClick={() => setShowCobroModal(false)} className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-500 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2044,45 +1889,41 @@ export default function PosDesktopPage() {
               <div>
                 <div className="text-xs text-zinc-500">Subtotal + Domicilio</div>
                 <div className="font-bold text-base tabular-nums text-zinc-900">
-                  {formatMoney(
-                    Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0)
-                  )}
+                  {formatMoney(Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0))}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">
-                  Total a Cobrar
-                </div>
-                <div className="text-3xl font-extrabold tabular-nums text-zinc-950">
-                  {formatMoney(totalFinalCobro)}
-                </div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Total a Cobrar</div>
+                <div className="text-3xl font-extrabold tabular-nums text-zinc-950">{formatMoney(totalFinalCobro)}</div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
-                <div className="flex gap-1 mb-1.5">
-                  {[0, 0.05, 0.1].map((pct) => (
-                    <button
-                      key={pct}
-                      onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))}
-                      className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-semibold text-zinc-700 cursor-pointer"
-                    >
-                      {pct * 100}%
-                    </button>
-                  ))}
+            <div className={`grid ${posConfig.habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs`}>
+              {posConfig.habilitaPropinas && (
+                <div>
+                  <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
+                  <div className="flex gap-1 mb-1.5">
+                    {[0, 0.05, 0.1].map((pct) => (
+                      <button
+                        key={pct}
+                        onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))}
+                        className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-semibold text-zinc-700 cursor-pointer"
+                      >
+                        {pct * 100}%
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    value={propinaValor}
+                    onChange={(e) => setPropinaValor(Number(e.target.value || 0))}
+                    className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`}
+                  />
                 </div>
-                <input
-                  type="number"
-                  value={propinaValor}
-                  onChange={(e) => setPropinaValor(Number(e.target.value || 0))}
-                  className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`}
-                />
-              </div>
+              )}
               <div>
-                <label className="font-semibold text-zinc-700 block mb-1">Descuento</label>
-                <div className="h-[26px]" />
+                <label className="font-semibold text-zinc-700 block mb-1">Descuento Global ($)</label>
+                {posConfig.habilitaPropinas && <div className="h-[26px]" />}
                 <input
                   type="number"
                   value={descuentoValor}
@@ -2092,15 +1933,13 @@ export default function PosDesktopPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-1.5 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-              {(['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'MIXTO'] as const).map((m) => (
+            <div className="grid grid-cols-5 gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+              {(['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'CREDITO', 'MIXTO'] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setMetodoPago(m)}
-                  className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition ${
-                    metodoPago === m
-                      ? 'bg-zinc-900 text-white'
-                      : 'bg-transparent text-zinc-600 hover:text-zinc-950'
+                  className={`py-2 rounded-md text-[11px] font-semibold cursor-pointer ${
+                    metodoPago === m ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-950'
                   }`}
                 >
                   {m}
@@ -2112,9 +1951,7 @@ export default function PosDesktopPage() {
               <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5 space-y-2.5">
                 <div className="flex items-center justify-between text-xs font-semibold text-zinc-700">
                   <span>Pagó con (Efectivo recibido):</span>
-                  <span className="text-base font-bold tabular-nums text-blue-700">
-                    Cambio: {formatMoney(cambioCalculado)}
-                  </span>
+                  <span className="text-base font-bold tabular-nums text-blue-700">Cambio: {formatMoney(cambioCalculado)}</span>
                 </div>
                 <input
                   autoFocus
@@ -2143,34 +1980,63 @@ export default function PosDesktopPage() {
               </div>
             )}
 
+            {metodoPago === 'DATAFONO' && (
+              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-xs">
+                <label className="font-semibold text-zinc-700 block mb-1">Comisión Bancaria Datáfono (opcional $)</label>
+                <input
+                  type="number"
+                  value={comisionTarjeta}
+                  onChange={(e) => setComisionTarjeta(Number(e.target.value || 0))}
+                  className={`w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`}
+                />
+              </div>
+            )}
+
+            {(metodoPago === 'CREDITO' || (metodoPago === 'MIXTO' && pagoCredito > 0)) && (
+              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 space-y-2 text-xs">
+                <div className="font-bold text-zinc-800">Cliente para Cargo a Crédito (Libro Mayor)</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={clienteCreditoNombre}
+                    onChange={(e) => setClienteCreditoNombre(e.target.value)}
+                    placeholder="Nombre completo del cliente"
+                    list="clientes-credito-list"
+                    className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-semibold"
+                  />
+                  <datalist id="clientes-credito-list">
+                    {creditosClientes.map((c) => (
+                      <option key={c.cliente_nombre} value={c.cliente_nombre} />
+                    ))}
+                  </datalist>
+                  <input
+                    type="text"
+                    value={clienteCreditoTel}
+                    onChange={(e) => setClienteCreditoTel(e.target.value)}
+                    placeholder="Teléfono (opcional)"
+                    className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md"
+                  />
+                </div>
+              </div>
+            )}
+
             {metodoPago === 'MIXTO' && (
-              <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="grid grid-cols-4 gap-2 text-xs">
                 <div>
                   <label className="font-semibold text-zinc-700">Efectivo</label>
-                  <input
-                    type="number"
-                    value={pagoEfectivo}
-                    onChange={(e) => setPagoEfectivo(Number(e.target.value || 0))}
-                    className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`}
-                  />
+                  <input type="number" value={pagoEfectivo} onChange={(e) => setPagoEfectivo(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
                 </div>
                 <div>
                   <label className="font-semibold text-zinc-700">Datáfono</label>
-                  <input
-                    type="number"
-                    value={pagoDatafono}
-                    onChange={(e) => setPagoDatafono(Number(e.target.value || 0))}
-                    className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`}
-                  />
+                  <input type="number" value={pagoDatafono} onChange={(e) => setPagoDatafono(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
                 </div>
                 <div>
-                  <label className="font-semibold text-zinc-700">Transferencia</label>
-                  <input
-                    type="number"
-                    value={pagoTransferencia}
-                    onChange={(e) => setPagoTransferencia(Number(e.target.value || 0))}
-                    className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`}
-                  />
+                  <label className="font-semibold text-zinc-700">Transf.</label>
+                  <input type="number" value={pagoTransferencia} onChange={(e) => setPagoTransferencia(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
+                </div>
+                <div>
+                  <label className="font-semibold text-zinc-700">Crédito</label>
+                  <input type="number" value={pagoCredito} onChange={(e) => setPagoCredito(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
                 </div>
               </div>
             )}
@@ -2178,9 +2044,38 @@ export default function PosDesktopPage() {
             <button
               onClick={handleConfirmarCobro}
               disabled={busyAction}
-              className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer transition"
+              className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer"
             >
               Confirmar Cobro e Imprimir Ticket
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal F11 - Mayoreo / Ajuste de Precio y Cantidad */}
+      {showMayoreoModal && (
+        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl text-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-zinc-900">F11 — Ajustar Precio / Cantidad</h3>
+              <button onClick={() => setShowMayoreoModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="font-semibold text-zinc-700 block mb-1">Cantidad</label>
+                <input type="number" step="any" value={mayoreoCantidad} onChange={(e) => setMayoreoCantidad(Number(e.target.value || 1))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} />
+              </div>
+              <div>
+                <label className="font-semibold text-zinc-700 block mb-1">Precio Unitario ($)</label>
+                <input type="number" value={mayoreoPrecio} onChange={(e) => setMayoreoPrecio(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} />
+              </div>
+            </div>
+            <div>
+              <label className="font-semibold text-zinc-700 block mb-1">Nota / Observación</label>
+              <input type="text" value={mayoreoNotas} onChange={(e) => setMayoreoNotas(e.target.value)} placeholder="Ej. Término 3/4, precio mayoreo..." className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-md" />
+            </div>
+            <button onClick={handleGuardarMayoreo} disabled={busyAction} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer">
+              Aplicar Cambios
             </button>
           </div>
         </div>
@@ -2192,26 +2087,17 @@ export default function PosDesktopPage() {
           <div className="bg-white rounded-xl border border-zinc-300 max-w-2xl w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">F10 — Buscador de Productos</h3>
-              <button onClick={() => setShowBuscarModal(false)} className="p-1 text-zinc-500 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setShowBuscarModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
             <input
               ref={buscarInputRef}
               type="text"
               value={buscarQuery}
-              onChange={(e) => {
-                setBuscarQuery(e.target.value);
-                setBuscarIndex(0);
-              }}
+              onChange={(e) => { setBuscarQuery(e.target.value); setBuscarIndex(0); }}
               onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setBuscarIndex((i) => Math.min(productosBusquedaModal.length - 1, i + 1));
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setBuscarIndex((i) => Math.max(0, i - 1));
-                } else if (e.key === 'Enter' && productosBusquedaModal[buscarIndex]) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setBuscarIndex((i) => Math.min(productosBusquedaModal.length - 1, i + 1)); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setBuscarIndex((i) => Math.max(0, i - 1)); }
+                else if (e.key === 'Enter' && productosBusquedaModal[buscarIndex]) {
                   e.preventDefault();
                   handleAgregarProducto(productosBusquedaModal[buscarIndex], 1);
                   setShowBuscarModal(false);
@@ -2224,18 +2110,10 @@ export default function PosDesktopPage() {
               {productosBusquedaModal.map((p, idx) => (
                 <button
                   key={p.id}
-                  onClick={() => {
-                    handleAgregarProducto(p, 1);
-                    setShowBuscarModal(false);
-                  }}
-                  className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs cursor-pointer ${
-                    idx === buscarIndex ? 'bg-blue-50 font-semibold' : 'hover:bg-zinc-50'
-                  }`}
+                  onClick={() => { handleAgregarProducto(p, 1); setShowBuscarModal(false); }}
+                  className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs cursor-pointer ${idx === buscarIndex ? 'bg-blue-50 font-semibold' : 'hover:bg-zinc-50'}`}
                 >
-                  <div>
-                    <span className="font-mono text-zinc-400 mr-2">{p.codigo}</span>
-                    <span className="text-zinc-900">{p.nombre}</span>
-                  </div>
+                  <div><span className="font-mono text-zinc-400 mr-2">{p.codigo}</span><span className="text-zinc-900">{p.nombre}</span></div>
                   <span className="font-bold tabular-nums text-zinc-900">{formatMoney(p.precio_total)}</span>
                 </button>
               ))}
@@ -2244,37 +2122,20 @@ export default function PosDesktopPage() {
         </div>
       )}
 
-      {/* Modal F9 - Verificador de Precios */}
+      {/* Modal F9 - Verificador */}
       {showVerificadorModal && (
         <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">F9 — Verificador de Precios</h3>
-              <button onClick={() => setShowVerificadorModal(false)} className="p-1 text-zinc-500 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setShowVerificadorModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
-            <input
-              ref={verificadorInputRef}
-              type="text"
-              value={verificadorQuery}
-              onChange={(e) => setVerificadorQuery(e.target.value)}
-              placeholder="Escanea código o escribe nombre del plato..."
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600"
-            />
+            <input ref={verificadorInputRef} type="text" value={verificadorQuery} onChange={(e) => setVerificadorQuery(e.target.value)} placeholder="Escanea código o escribe nombre..." className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600" />
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {verificadorMatch.map((p) => (
-                <div
-                  key={p.id}
-                  className="p-3 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between"
-                >
-                  <div>
-                    <div className="text-xs font-mono text-zinc-500">{p.codigo}</div>
-                    <div className="font-semibold text-sm text-zinc-900">{p.nombre}</div>
-                  </div>
-                  <div className="text-xl font-extrabold tabular-nums text-zinc-950">
-                    {formatMoney(p.precio_total)}
-                  </div>
+                <div key={p.id} className="p-3 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between">
+                  <div><div className="text-xs font-mono text-zinc-500">{p.codigo}</div><div className="font-semibold text-sm text-zinc-900">{p.nombre}</div></div>
+                  <div className="text-xl font-extrabold tabular-nums text-zinc-950">{formatMoney(p.precio_total)}</div>
                 </div>
               ))}
             </div>
@@ -2282,45 +2143,20 @@ export default function PosDesktopPage() {
         </div>
       )}
 
-      {/* Modal INS - Artículo Varios */}
+      {/* Modal INS - Varios */}
       {showVariosModal && (
         <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">INS — Agregar Artículo Varios</h3>
-              <button onClick={() => setShowVariosModal(false)} className="p-1 text-zinc-500 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setShowVariosModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
-            <input
-              type="text"
-              value={variosNombre}
-              onChange={(e) => setVariosNombre(e.target.value)}
-              placeholder="Descripción (ej. Adicional especial)"
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium"
-            />
+            <input type="text" value={variosNombre} onChange={(e) => setVariosNombre(e.target.value)} placeholder="Descripción" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium" />
             <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                value={variosCantidad}
-                onChange={(e) => setVariosCantidad(Number(e.target.value || 1))}
-                placeholder="Cant."
-                className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
-              />
-              <input
-                type="number"
-                value={variosPrecio}
-                onChange={(e) => setVariosPrecio(Number(e.target.value || 0))}
-                placeholder="Precio"
-                className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
-              />
+              <input type="number" value={variosCantidad} onChange={(e) => setVariosCantidad(Number(e.target.value || 1))} placeholder="Cant." className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
+              <input type="number" value={variosPrecio} onChange={(e) => setVariosPrecio(Number(e.target.value || 0))} placeholder="Precio" className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
             </div>
-            <button
-              onClick={handleAgregarVarios}
-              className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer"
-            >
-              Agregar a la Cuenta
-            </button>
+            <button onClick={handleAgregarVarios} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer">Agregar a la Cuenta</button>
           </div>
         </div>
       )}
@@ -2331,24 +2167,13 @@ export default function PosDesktopPage() {
           <div className="bg-white rounded-xl border border-zinc-300 max-w-lg w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">CTRL+P — Artículos Comunes</h3>
-              <button onClick={() => setShowArtComunModal(false)} className="p-1 text-zinc-500 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setShowArtComunModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {productosComunes.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    handleAgregarProducto(p, 1);
-                    setShowArtComunModal(false);
-                  }}
-                  className="p-3 rounded-lg border border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50 text-left cursor-pointer"
-                >
+                <button key={p.id} onClick={() => { handleAgregarProducto(p, 1); setShowArtComunModal(false); }} className="p-3 rounded-lg border border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50 text-left cursor-pointer">
                   <div className="font-semibold text-xs text-zinc-900 line-clamp-2">{p.nombre}</div>
-                  <div className="font-bold text-xs tabular-nums text-zinc-700 mt-1">
-                    {formatMoney(p.precio_total)}
-                  </div>
+                  <div className="font-bold text-xs tabular-nums text-zinc-700 mt-1">{formatMoney(p.precio_total)}</div>
                 </button>
               ))}
             </div>
@@ -2356,79 +2181,104 @@ export default function PosDesktopPage() {
         </div>
       )}
 
-      {/* Modal F7 / F8 - Entrada o Salida de Efectivo */}
+      {/* Modal F7 / F8 */}
       {cashFlowModal && (
         <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-zinc-900">
-                {cashFlowModal === 'ENTRADA' ? 'F7 — Entrada de Efectivo' : 'F8 — Salida de Efectivo'}
-              </h3>
-              <button onClick={() => setCashFlowModal(null)} className="p-1 text-zinc-500 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+              <h3 className="font-bold text-base text-zinc-900">{cashFlowModal === 'ENTRADA' ? 'F7 — Entrada de Efectivo' : 'F8 — Salida de Efectivo'}</h3>
+              <button onClick={() => setCashFlowModal(null)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
-            <input
-              autoFocus
-              type="number"
-              value={cashFlowMonto}
-              onChange={(e) => setCashFlowMonto(e.target.value)}
-              placeholder="Monto ($)"
-              className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
-            />
-            <input
-              type="text"
-              value={cashFlowConcepto}
-              onChange={(e) => setCashFlowConcepto(e.target.value)}
-              placeholder="Concepto / Motivo (ej. Sencillo, Hielo, Domicilio)"
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
-            />
-            <button
-              onClick={handleRegistrarCashFlow}
-              disabled={busyAction}
-              className="w-full py-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs cursor-pointer"
-            >
+            <input autoFocus type="number" value={cashFlowMonto} onChange={(e) => setCashFlowMonto(e.target.value)} placeholder="Monto ($)" className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
+            <input type="text" value={cashFlowConcepto} onChange={(e) => setCashFlowConcepto(e.target.value)} placeholder="Concepto / Motivo" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
+            <button onClick={handleRegistrarCashFlow} disabled={busyAction} className="w-full py-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs cursor-pointer">
               Registrar {cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal Ventas del Día */}
+      {/* Modal Ventas del Día y Devoluciones */}
       {showVentasDiaModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-zinc-300 max-w-2xl w-full p-5 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-zinc-900">
-                Ventas Facturadas del Día ({ordenesFacturadasHoy.length})
-              </h3>
-              <button onClick={() => setShowVentasDiaModal(false)} className="p-1 text-zinc-500 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="max-h-96 overflow-y-auto divide-y divide-zinc-200 border border-zinc-200 rounded-md">
-              {ordenesFacturadasHoy.length === 0 ? (
-                <div className="py-10 text-center text-xs text-zinc-400">Sin ventas facturadas hoy.</div>
-              ) : (
-                ordenesFacturadasHoy.map((v) => (
-                  <div key={v.id} className="p-3 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-zinc-900">
-                        {v.consecutivo} • {v.canal_venta}
-                      </div>
-                      <div className="text-zinc-500">
-                        {v.metodo_pago} • {v.items.length} ítems
-                      </div>
-                    </div>
-                    <div className="font-bold tabular-nums text-sm text-zinc-950">
-                      {formatMoney(v.gran_total)}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <PosReturnsModal
+          ordenesFacturadas={ordenesFacturadasHoy}
+          devolucionesDia={devolucionesDia}
+          busyAction={busyAction}
+          onClose={() => setShowVentasDiaModal(false)}
+          onReimprimirOrden={async (orden) => {
+            await printThermalTicket({
+              titulo: 'COPIA DE FACTURA POS',
+              consecutivo: orden.consecutivo,
+              fecha: orden.fecha,
+              caja: orden.caja_nombre,
+              cajero: orden.cajero_nombre,
+              canal: orden.canal_venta,
+              mesaNumero: orden.mesa_numero,
+              clienteNombre: orden.cliente_nombre,
+              items: orden.items.map((it) => ({
+                nombre: it.nombre_producto,
+                cantidad: it.cantidad,
+                precioUnitario: it.precio_unitario,
+                subtotal: it.subtotal,
+              })),
+              subtotal: orden.subtotal_bruto,
+              descuento: orden.descuento,
+              propina: orden.propina,
+              costoDomicilio: orden.costo_domicilio,
+              total: orden.gran_total,
+              metodoPago: orden.metodo_pago,
+            });
+            notify('ok', `Copia de ${orden.consecutivo} enviada a impresora.`);
+          }}
+          onDevolverItem={async (payload) => {
+            setBusyAction(true);
+            try {
+              await executePosAction('DEVOLVER_ITEM_FACTURADO', payload);
+              await fetchPosState();
+              notify('ok', 'Devolución registrada y descontada del cuadre.');
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error procesando devolución');
+            } finally {
+              setBusyAction(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Modal Cartera y Créditos */}
+      {showCreditosModal && (
+        <PosCreditsModal
+          clientes={creditosClientes}
+          busyAction={busyAction}
+          onClose={() => setShowCreditosModal(false)}
+          onRegistrarAbono={async (payload) => {
+            setBusyAction(true);
+            try {
+              await executePosAction('REGISTRAR_ABONO_CREDITO', payload);
+              await fetchPosState();
+              notify('ok', `Abono de ${formatMoney(payload.monto)} registrado.`);
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error registrando abono');
+            } finally {
+              setBusyAction(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Modal Configuración Multi-Negocio, LAN y Periféricos */}
+      {showSettingsModal && (
+        <PosTerminalSettingsModal
+          config={posConfig}
+          onClose={() => setShowSettingsModal(false)}
+          onSave={(next) => {
+            setPosConfig(next);
+            saveElianaPosConfig(next);
+            if (!next.habilitaMesas && activeTab === 'MESAS') setActiveTab('VENTAS');
+            if (!next.habilitaDomicilios && activeTab === 'DOMICILIOS') setActiveTab('VENTAS');
+            notify('ok', 'Configuración guardada correctamente.');
+          }}
+        />
       )}
 
       {/* Modal Nuevo Domicilio */}
@@ -2437,53 +2287,16 @@ export default function PosDesktopPage() {
           <div className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">Nuevo Pedido a Domicilio</h3>
-              <button onClick={() => setShowDomicilioModal(false)} className="p-1 text-zinc-500 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setShowDomicilioModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
-            <input
-              type="text"
-              placeholder="Nombre del cliente"
-              value={domNombre}
-              onChange={(e) => setDomNombre(e.target.value)}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
-            />
-            <input
-              type="text"
-              placeholder="Teléfono / WhatsApp"
-              value={domTelefono}
-              onChange={(e) => setDomTelefono(e.target.value)}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
-            />
-            <input
-              type="text"
-              placeholder="Dirección completa"
-              value={domDireccion}
-              onChange={(e) => setDomDireccion(e.target.value)}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm"
-            />
+            <input type="text" placeholder="Nombre del cliente" value={domNombre} onChange={(e) => setDomNombre(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
+            <input type="text" placeholder="Teléfono / WhatsApp" value={domTelefono} onChange={(e) => setDomTelefono(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
+            <input type="text" placeholder="Dirección completa" value={domDireccion} onChange={(e) => setDomDireccion(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
             <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                value={domCostoEnvio}
-                onChange={(e) => setDomCostoEnvio(Number(e.target.value || 0))}
-                placeholder="Valor domicilio"
-                className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
-              />
-              <input
-                type="text"
-                value={domRepartidor}
-                onChange={(e) => setDomRepartidor(e.target.value)}
-                placeholder="Domiciliario"
-                className="px-3 py-2 border border-zinc-300 rounded-md text-sm"
-              />
+              <input type="number" value={domCostoEnvio} onChange={(e) => setDomCostoEnvio(Number(e.target.value || 0))} placeholder="Valor domicilio" className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
+              <input type="text" value={domRepartidor} onChange={(e) => setDomRepartidor(e.target.value)} placeholder="Domiciliario" className="px-3 py-2 border border-zinc-300 rounded-md text-sm" />
             </div>
-            <button
-              onClick={handleCrearDomicilio}
-              className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer"
-            >
-              Crear Domicilio
-            </button>
+            <button onClick={handleCrearDomicilio} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer">Crear Domicilio</button>
           </div>
         </div>
       )}
@@ -2493,28 +2306,11 @@ export default function PosDesktopPage() {
         <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
             <h3 className="font-bold text-base text-zinc-900">Abrir Turno — {cajaNombre}</h3>
-            <label className="text-xs font-semibold text-zinc-600 block">
-              Base inicial de efectivo ($)
-            </label>
-            <input
-              type="number"
-              value={baseInicialInput}
-              onChange={(e) => setBaseInicialInput(e.target.value)}
-              className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`}
-            />
+            <label className="text-xs font-semibold text-zinc-600 block">Base inicial de efectivo ($)</label>
+            <input type="number" value={baseInicialInput} onChange={(e) => setBaseInicialInput(e.target.value)} className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
             <div className="flex gap-2">
-              <button
-                onClick={() => setShowAbrirCajaModal(false)}
-                className="flex-1 py-2 rounded-md border border-zinc-300 text-xs font-semibold text-zinc-700 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleAbrirTurnoCaja}
-                className="flex-1 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer"
-              >
-                Abrir Turno
-              </button>
+              <button onClick={() => setShowAbrirCajaModal(false)} className="flex-1 py-2 rounded-md border border-zinc-300 text-xs font-semibold text-zinc-700 cursor-pointer">Cancelar</button>
+              <button onClick={handleAbrirTurnoCaja} className="flex-1 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer">Abrir Turno</button>
             </div>
           </div>
         </div>

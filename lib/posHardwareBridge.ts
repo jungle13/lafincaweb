@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import {
+  loadElianaPosConfig,
+  type ElianaPosConfig,
+  type ModeloBascula,
+  type ModeloCajon,
+} from '@/lib/posConfig';
 
 export interface ThermalTicketData {
   titulo: string;
@@ -32,122 +38,155 @@ export interface ThermalTicketData {
   footer?: string;
 }
 
-export function isTauriDesktop(): boolean {
-  if (typeof window === 'undefined') return false;
-  return Boolean((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__);
+interface TauriWindowLike {
+  __TAURI__?: {
+    core?: {
+      invoke?: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+    };
+  };
+  __TAURI_INTERNALS__?: {
+    invoke?: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+  };
 }
 
-async function invokeTauri<T = any>(cmd: string, args?: Record<string, any>): Promise<T | null> {
+export function isTauriDesktop(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as unknown as TauriWindowLike;
+  return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
+}
+
+async function invokeTauri<T = unknown>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T | null> {
   if (!isTauriDesktop()) return null;
   try {
-    const core = (window as any).__TAURI__?.core || (window as any).__TAURI_INTERNALS__;
+    const w = window as unknown as TauriWindowLike;
+    const core = w.__TAURI__?.core || w.__TAURI_INTERNALS__;
     if (core?.invoke) {
-      return await core.invoke(cmd, args);
+      return await core.invoke<T>(cmd, args);
     }
   } catch (err) {
-    console.warn(`[TauriBridge] Error invocando comando ${cmd}:`, err);
+    console.warn(`[ElianaBridge] Error invocando comando ${cmd}:`, err);
   }
   return null;
 }
 
 /**
- * Construye el texto plano formateado para tirilla térmica de 80mm (42 columnas).
+ * Construye el texto plano formateado para tirilla térmica de 80mm (42 col) o 58mm (32 col),
+ * usando exclusivamente la identidad comercial configurada por el usuario (cero textos quemados).
  */
-export function formatThermalTicket80mm(ticket: ThermalTicketData): string {
-  const line = '------------------------------------------';
+export function formatThermalTicket(
+  ticket: ThermalTicketData,
+  configOverride?: ElianaPosConfig
+): string {
+  const cfg = configOverride || loadElianaPosConfig();
+  const cols = cfg.anchoTicketMm === 58 ? 32 : 42;
+  const line = '-'.repeat(cols);
+  const center = (txt: string) => {
+    const clean = txt.slice(0, cols);
+    const pad = Math.max(0, Math.floor((cols - clean.length) / 2));
+    return ' '.repeat(pad) + clean;
+  };
+
   const lines: string[] = [
-    '       RESTAURANTE LA FINCA               ',
-    '       Choclos y Asados                   ',
+    center(cfg.nombreComercial || 'Eliana POS'),
+    cfg.subtituloComercial ? center(cfg.subtituloComercial) : '',
+    cfg.nit ? center(`NIT: ${cfg.nit}`) : '',
+    cfg.direccion ? center(cfg.direccion) : '',
+    cfg.telefono ? center(`Tel: ${cfg.telefono}`) : '',
     line,
-    `${ticket.titulo.toUpperCase()}`,
-    ticket.subtitulo ? ticket.subtitulo : '',
-    `Doc: ${ticket.consecutivo}   Fecha: ${ticket.fecha}`,
-    `Caja: ${ticket.caja}   Cajero: ${ticket.cajero}`,
+    ticket.titulo.toUpperCase(),
+    ticket.subtitulo || '',
+    `Doc: ${ticket.consecutivo}`,
+    `Fecha: ${ticket.fecha}`,
+    `Caja: ${ticket.caja} | Cajero: ${ticket.cajero}`,
     ticket.canal === 'SALON_MESA'
       ? `Canal: MESA ${ticket.mesaNumero || ''}`
       : ticket.canal === 'DOMICILIO'
         ? 'Canal: DOMICILIO'
-        : 'Canal: PARA LLEVAR / MOSTRADOR',
+        : 'Canal: MOSTRADOR',
   ].filter(Boolean);
 
-  if (ticket.clienteNombre) {
-    lines.push(`Cliente: ${ticket.clienteNombre}`);
-  }
-  if (ticket.clienteTelefono) {
-    lines.push(`Tel: ${ticket.clienteTelefono}`);
-  }
-  if (ticket.clienteDireccion) {
-    lines.push(`Dir: ${ticket.clienteDireccion}`);
-  }
+  if (ticket.clienteNombre) lines.push(`Cliente: ${ticket.clienteNombre}`);
+  if (ticket.clienteTelefono) lines.push(`Tel: ${ticket.clienteTelefono}`);
+  if (ticket.clienteDireccion) lines.push(`Dir: ${ticket.clienteDireccion}`);
 
   lines.push(line);
-  lines.push('CANT  DESCRIPCION                  TOTAL  ');
+  lines.push(cols === 32 ? 'CANT DESCRIPCION         TOTAL' : 'CANT  DESCRIPCION                  TOTAL');
   lines.push(line);
 
+  const nameWidth = cols === 32 ? 15 : 24;
   for (const it of ticket.items) {
-    const qtyStr = String(it.cantidad).padEnd(5, ' ');
-    const nameStr = it.nombre.slice(0, 24).padEnd(24, ' ');
-    const totStr = `$${Math.round(it.subtotal).toLocaleString('es-CO')}`.padStart(12, ' ');
-    lines.push(`${qtyStr} ${nameStr}${totStr}`);
+    const qtyStr = String(it.cantidad).padEnd(cols === 32 ? 4 : 5, ' ');
+    const nameStr = it.nombre.slice(0, nameWidth).padEnd(nameWidth, ' ');
+    const totStr = `$${Math.round(it.subtotal).toLocaleString('es-CO')}`.padStart(
+      cols - qtyStr.length - nameStr.length,
+      ' '
+    );
+    lines.push(`${qtyStr}${nameStr}${totStr}`);
     if (it.notas) {
-      lines.push(`   * Nota: ${it.notas}`);
+      lines.push(`  * ${it.notas}`);
     }
   }
 
   lines.push(line);
-  lines.push(`SUBTOTAL:        $${Math.round(ticket.subtotal).toLocaleString('es-CO')}`);
+  lines.push(`SUBTOTAL:      $${Math.round(ticket.subtotal).toLocaleString('es-CO')}`);
   if (ticket.descuento && ticket.descuento > 0) {
-    lines.push(`DESCUENTO:      -$${Math.round(ticket.descuento).toLocaleString('es-CO')}`);
+    lines.push(`DESCUENTO:    -$${Math.round(ticket.descuento).toLocaleString('es-CO')}`);
   }
   if (ticket.costoDomicilio && ticket.costoDomicilio > 0) {
-    lines.push(`DOMICILIO:       $${Math.round(ticket.costoDomicilio).toLocaleString('es-CO')}`);
+    lines.push(`DOMICILIO:     $${Math.round(ticket.costoDomicilio).toLocaleString('es-CO')}`);
   }
   if (ticket.propina && ticket.propina > 0) {
-    lines.push(`PROPINA VOL.:    $${Math.round(ticket.propina).toLocaleString('es-CO')}`);
+    lines.push(`PROPINA:       $${Math.round(ticket.propina).toLocaleString('es-CO')}`);
   }
-  lines.push(`TOTAL A PAGAR:   $${Math.round(ticket.total).toLocaleString('es-CO')}`);
+  lines.push(`TOTAL:         $${Math.round(ticket.total).toLocaleString('es-CO')}`);
 
   if (ticket.metodoPago) {
-    lines.push(`Forma de Pago: ${ticket.metodoPago}`);
+    lines.push(`PAGO: ${ticket.metodoPago}`);
   }
   if (ticket.efectivoRecibido && ticket.efectivoRecibido > 0) {
-    lines.push(`Recibido: $${Math.round(ticket.efectivoRecibido).toLocaleString('es-CO')}  Cambio: $${Math.round(ticket.cambio || 0).toLocaleString('es-CO')}`);
+    lines.push(`RECIBIDO:      $${Math.round(ticket.efectivoRecibido).toLocaleString('es-CO')}`);
+    lines.push(`CAMBIO:        $${Math.round(ticket.cambio || 0).toLocaleString('es-CO')}`);
   }
 
   lines.push(line);
-  lines.push(ticket.footer || '    Gracias por preferir La Finca!        ');
+  lines.push(center(ticket.footer || cfg.mensajePieTicket || '¡Gracias por su compra!'));
   lines.push('\n\n\n');
 
   return lines.join('\n');
 }
 
 /**
- * Imprime en impresora térmica vía Tauri Rust (TCP 9100 / USB) o abre impresión térmica 80mm en navegador.
+ * Envía el ticket a la impresora térmica nativa en Tauri o usa diálogo de impresión del navegador.
  */
 export async function printThermalTicket(
   ticket: ThermalTicketData,
-  printerIp?: string
+  printerIpOverride?: string
 ): Promise<{ ok: boolean; mode: 'tauri' | 'browser' }> {
-  const rawText = formatThermalTicket80mm(ticket);
+  const cfg = loadElianaPosConfig();
+  const rawText = formatThermalTicket(ticket, cfg);
+  const printerIp = printerIpOverride || cfg.ipImpresora || '127.0.0.1:9100';
 
   if (isTauriDesktop()) {
-    await invokeTauri('print_escpos_ticket', {
-      printerIp: printerIp || '127.0.0.1:9100',
+    const res = await invokeTauri<string>('print_escpos_ticket', {
+      printerIp,
       content: rawText,
     });
-    return { ok: true, mode: 'tauri' };
+    if (res) return { ok: true, mode: 'tauri' };
   }
 
-  // Fallback limpio en navegador: ventana de impresión 80mm
   if (typeof window !== 'undefined') {
     const win = window.open('', '_blank', 'width=340,height=600');
     if (win) {
+      const mm = cfg.anchoTicketMm || 80;
       win.document.write(`
         <html>
           <head>
             <title>${ticket.titulo}</title>
             <style>
-              @page { size: 80mm auto; margin: 2mm; }
+              @page { size: ${mm}mm auto; margin: 2mm; }
               body { font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; margin: 0; padding: 6px; }
             </style>
           </head>
@@ -162,12 +201,17 @@ export async function printThermalTicket(
 }
 
 /**
- * Envía el pulso de apertura de cajón monedero (RJ11 conectado a la impresora térmica).
+ * Envía el pulso de apertura de cajón monedero según el perfil de impresora configurado.
  */
-export async function openCashDrawer(printerIp?: string): Promise<boolean> {
+export async function openCashDrawer(
+  printerIpOverride?: string,
+  modelOverride?: ModeloCajon
+): Promise<boolean> {
+  const cfg = loadElianaPosConfig();
   if (isTauriDesktop()) {
     await invokeTauri('open_cash_drawer', {
-      printerIp: printerIp || '127.0.0.1:9100',
+      printerIp: printerIpOverride || cfg.ipImpresora || '127.0.0.1:9100',
+      model: modelOverride || cfg.modeloCajon || 'EPSON_STD',
     });
     return true;
   }
@@ -175,17 +219,31 @@ export async function openCashDrawer(printerIp?: string): Promise<boolean> {
 }
 
 /**
- * Lee peso en vivo desde una gramera serial conectada (Tauri Rust COM o WebSerial API en Chrome/Edge).
+ * Lee peso en vivo desde una gramera serial (Torrey, Rhino, CAS, Kretz o WebSerial).
  */
-export async function readScaleWeightOnce(portName: string = 'COM3'): Promise<number | null> {
+export async function readScaleWeightOnce(
+  portNameOverride?: string,
+  modelOverride?: ModeloBascula
+): Promise<number | null> {
+  const cfg = loadElianaPosConfig();
+  const portName = portNameOverride || cfg.puertoBascula || 'COM3';
+  const model = modelOverride || cfg.modeloBascula || 'TORREY_MFQ';
+
   if (isTauriDesktop()) {
-    const kg = await invokeTauri<number>('read_scale_weight', { portName });
+    const kg = await invokeTauri<number>('read_scale_weight', { portName, model });
     return typeof kg === 'number' ? kg : null;
   }
 
-  // Soporte WebSerial API en navegadores Chromium
   try {
-    const nav = navigator as any;
+    const nav = navigator as unknown as {
+      serial?: {
+        requestPort: () => Promise<{
+          open: (opts: { baudRate: number }) => Promise<void>;
+          readable: { getReader: () => { read: () => Promise<{ value?: Uint8Array }>; releaseLock: () => void } };
+          close: () => Promise<void>;
+        }>;
+      };
+    };
     if (nav?.serial?.requestPort) {
       const port = await nav.serial.requestPort();
       await port.open({ baudRate: 9600 });
@@ -206,8 +264,78 @@ export async function readScaleWeightOnce(portName: string = 'COM3'): Promise<nu
 }
 
 /**
+ * Puente LAN Multi-Caja: obtiene la IP local del PC principal y sincroniza con el servidor LAN Rust (:4545).
+ */
+export async function getLocalLanIp(): Promise<string> {
+  if (isTauriDesktop()) {
+    const ip = await invokeTauri<string>('get_local_ip');
+    if (ip) return ip;
+  }
+  return '127.0.0.1';
+}
+
+export function normalizeLanBaseUrl(ipCajaPrincipal: string): string {
+  const clean = (ipCajaPrincipal || '127.0.0.1:4545').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const withPort = clean.includes(':') ? clean : `${clean}:4545`;
+  return `http://${withPort}`;
+}
+
+export async function checkLanHealth(ipCajaPrincipal: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${normalizeLanBaseUrl(ipCajaPrincipal)}/lan/health`, {
+      signal: AbortSignal.timeout(1800),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function lanSyncSnapshot(ipCajaPrincipal: string, snapshot: unknown): Promise<void> {
+  try {
+    await fetch(`${normalizeLanBaseUrl(ipCajaPrincipal)}/lan/sync-cache`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+      signal: AbortSignal.timeout(2000),
+    });
+  } catch {
+    // ignore if LAN server is not active (e.g. web browser mode)
+  }
+}
+
+export async function lanGetState<T = Record<string, unknown>>(ipCajaPrincipal: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${normalizeLanBaseUrl(ipCajaPrincipal)}/lan/state`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function lanPostAction<T = Record<string, unknown>>(
+  ipCajaPrincipal: string,
+  payload: Record<string, unknown>
+): Promise<T | null> {
+  try {
+    const res = await fetch(`${normalizeLanBaseUrl(ipCajaPrincipal)}/lan/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Hook global para pistolas lectoras de código de barras (USB HID / emulación teclado).
- * Captura ráfagas rápidas (< 45ms entre caracteres) terminadas en Enter.
  */
 export function useBarcodeScanner(onScan: (code: string) => void, enabled = true) {
   const bufferRef = useRef('');
@@ -228,23 +356,23 @@ export function useBarcodeScanner(onScan: (code: string) => void, enabled = true
 
       if (e.key === 'Enter') {
         if (bufferRef.current.length >= 3 && diff < 120) {
-          e.preventDefault();
-          const scanned = bufferRef.current.trim();
+          const code = bufferRef.current.trim();
           bufferRef.current = '';
-          onScan(scanned);
+          if (!isInput) {
+            e.preventDefault();
+          }
+          onScan(code);
           return;
         }
         bufferRef.current = '';
         return;
       }
 
-      if (e.key.length === 1) {
-        if (diff > 60 && !isInput) {
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (diff > 80) {
           bufferRef.current = e.key;
-        } else if (diff <= 60) {
-          bufferRef.current += e.key;
         } else {
-          bufferRef.current = '';
+          bufferRef.current += e.key;
         }
       }
     };

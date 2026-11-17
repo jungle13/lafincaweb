@@ -72,6 +72,8 @@ export async function GET(request: Request) {
       { data: sesiones, error: errS },
       { data: salidasCaja },
       { data: alertas },
+      { data: creditosMovs },
+      { data: devolucionesDia },
     ] = await Promise.all([
       supabase.from('pos_mesas').select('*').order('numero', { ascending: true }),
       supabase
@@ -91,7 +93,7 @@ export async function GET(request: Request) {
         .order('numero_turno', { ascending: false }),
       supabase
         .from('libro_caja_registros')
-        .select('valor_pagado, caja_nombre, responsable_caja')
+        .select('valor_pagado, caja_nombre, responsable_caja, concepto, created_at')
         .eq('fecha', fecha)
         .eq('tipo_libro', 'CAJA_MENOR'),
       supabase
@@ -100,6 +102,16 @@ export async function GET(request: Request) {
         .eq('fecha', fecha)
         .order('created_at', { ascending: false })
         .limit(100),
+      supabase
+        .from('pos_creditos_movimientos')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500),
+      supabase
+        .from('pos_devoluciones')
+        .select('*')
+        .eq('fecha', fecha)
+        .order('created_at', { ascending: false }),
     ]);
 
     if (errM) throw errM;
@@ -149,6 +161,143 @@ export async function GET(request: Request) {
       .filter((r: any) => !r.caja_nombre || r.caja_nombre.toLowerCase() === cajaNombre.toLowerCase())
       .reduce((acc: number, r: any) => acc + Number(r.valor_pagado || 0), 0);
 
+    // Libro Mayor de Créditos por Cliente
+    const creditosMap = new Map<string, {
+      cliente_nombre: string;
+      cliente_telefono: string;
+      total_cargos: number;
+      total_abonos: number;
+      saldo: number;
+      movimientos: Record<string, unknown>[];
+    }>();
+    for (const mov of creditosMovs || []) {
+      const key = String(mov.cliente_nombre || 'Cliente General').trim();
+      const entry = creditosMap.get(key) || {
+        cliente_nombre: key,
+        cliente_telefono: mov.cliente_telefono || '',
+        total_cargos: 0,
+        total_abonos: 0,
+        saldo: 0,
+        movimientos: [] as Record<string, unknown>[],
+      };
+      const mVal = Number(mov.monto || 0);
+      if (mov.tipo === 'CARGO_CREDITO' || mov.tipo === 'REVERSO_ABONO') {
+        entry.total_cargos += mVal;
+        entry.saldo += mVal;
+      } else if (mov.tipo === 'ABONO') {
+        entry.total_abonos += mVal;
+        entry.saldo -= mVal;
+      }
+      if (!entry.cliente_telefono && mov.cliente_telefono) {
+        entry.cliente_telefono = mov.cliente_telefono;
+      }
+      entry.movimientos.push(mov);
+      creditosMap.set(key, entry);
+    }
+    const creditosClientes = Array.from(creditosMap.values()).sort((a, b) => b.saldo - a.saldo);
+
+    // Corte por Departamentos (Categorías)
+    const deptoMap = new Map<string, { categoria: string; cantidad: number; total: number }>();
+    const facturadasHoy = ordenesEnriquecidas.filter((o: any) => o.estado === 'FACTURADA' && o.fecha === fecha);
+    for (const o of facturadasHoy) {
+      for (const it of o.items || []) {
+        if (it.estado_comanda === 'ANULADO') continue;
+        const cat = it.categoria || 'General';
+        const prev = deptoMap.get(cat) || { categoria: cat, cantidad: 0, total: 0 };
+        prev.cantidad += Number(it.cantidad || 0);
+        prev.total += Number(it.subtotal || 0);
+        deptoMap.set(cat, prev);
+      }
+    }
+    const totalDeptos = Array.from(deptoMap.values()).reduce((a, b) => a + b.total, 0);
+    const corteDepartamentos = Array.from(deptoMap.values())
+      .map((d) => ({
+        ...d,
+        porcentaje: totalDeptos > 0 ? Math.round((d.total / totalDeptos) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    // Abonos y entradas en efectivo del día
+    const abonosEfectivoHoy = (creditosMovs || [])
+      .filter((m: any) => m.fecha === fecha && m.tipo === 'ABONO' && m.metodo_pago === 'EFECTIVO')
+      .reduce((acc: number, m: any) => acc + Number(m.monto || 0), 0);
+    const entradasEfectivoHoy = (alertas || [])
+      .filter((a: any) => a.tipo_alerta === 'ENTRADA_EFECTIVO_CAJA')
+      .reduce((acc: number, a: any) => acc + Number(a.valor_afectado || 0), 0);
+    const devolucionesEfectivoHoy = (devolucionesDia || [])
+      .filter((d: any) => d.metodo_reembolso === 'EFECTIVO')
+      .reduce((acc: number, d: any) => acc + Number(d.valor_devuelto || 0), 0);
+
+    // Flujo cronológico de efectivo para Excel
+    const flujoRaw: Array<{ ts: string; hora: string; movimiento: string; monto: number }> = [];
+    if (sesionActiva) {
+      flujoRaw.push({
+        ts: sesionActiva.created_at || `${fecha}T06:00:00`,
+        hora: new Date(sesionActiva.created_at || `${fecha}T06:00:00`).toLocaleTimeString('es-CO'),
+        movimiento: `Base Inicial (${cajaNombre})`,
+        monto: Number(sesionActiva.base_inicial || sesionActiva.efectivo_inicial || 0),
+      });
+    }
+    for (const o of facturadasHoy) {
+      if (Number(o.pago_efectivo || 0) > 0) {
+        flujoRaw.push({
+          ts: o.closed_at || o.created_at,
+          hora: new Date(o.closed_at || o.created_at).toLocaleTimeString('es-CO'),
+          movimiento: `Venta ${o.consecutivo}`,
+          monto: Number(o.pago_efectivo),
+        });
+      }
+    }
+    for (const m of creditosMovs || []) {
+      if (m.fecha === fecha && m.tipo === 'ABONO' && m.metodo_pago === 'EFECTIVO') {
+        flujoRaw.push({
+          ts: m.created_at,
+          hora: new Date(m.created_at).toLocaleTimeString('es-CO'),
+          movimiento: `Abono Crédito (${m.cliente_nombre})`,
+          monto: Number(m.monto || 0),
+        });
+      }
+    }
+    for (const a of alertas || []) {
+      if (a.tipo_alerta === 'ENTRADA_EFECTIVO_CAJA') {
+        flujoRaw.push({
+          ts: a.created_at,
+          hora: new Date(a.created_at).toLocaleTimeString('es-CO'),
+          movimiento: a.descripcion || 'Entrada de efectivo',
+          monto: Number(a.valor_afectado || 0),
+        });
+      }
+    }
+    for (const s of salidasCaja || []) {
+      flujoRaw.push({
+        ts: s.created_at || `${fecha}T12:00:00`,
+        hora: new Date(s.created_at || `${fecha}T12:00:00`).toLocaleTimeString('es-CO'),
+        movimiento: `Salida: ${s.concepto || 'Caja Menor'}`,
+        monto: -Number(s.valor_pagado || 0),
+      });
+    }
+    for (const d of devolucionesDia || []) {
+      if (d.metodo_reembolso === 'EFECTIVO') {
+        flujoRaw.push({
+          ts: d.created_at,
+          hora: new Date(d.created_at).toLocaleTimeString('es-CO'),
+          movimiento: `Devolución ${d.orden_consecutivo}: ${d.nombre_producto}`,
+          monto: -Number(d.valor_devuelto || 0),
+        });
+      }
+    }
+    flujoRaw.sort((a, b) => a.ts.localeCompare(b.ts));
+    let saldoCorrido = 0;
+    const flujoEfectivoDetallado = flujoRaw.map((f) => {
+      saldoCorrido += f.monto;
+      return {
+        hora: f.hora,
+        movimiento: f.movimiento,
+        monto: f.monto,
+        efectivo_en_caja: saldoCorrido,
+      };
+    });
+
     return NextResponse.json({
       success: true,
       fecha,
@@ -158,7 +307,14 @@ export async function GET(request: Request) {
       sesiones: sesiones || [],
       sesionActiva,
       salidasDiaCaja,
+      abonosEfectivoHoy,
+      entradasEfectivoHoy,
+      devolucionesEfectivoHoy,
       eventosTurno: alertas || [],
+      creditosClientes,
+      devolucionesDia: devolucionesDia || [],
+      corteDepartamentos,
+      flujoEfectivoDetallado,
     });
   } catch (err: any) {
     console.error('Error en GET /api/pos:', err);
@@ -452,7 +608,11 @@ export async function POST(request: Request) {
         pago_efectivo = 0,
         pago_datafono = 0,
         pago_transferencia = 0,
+        pago_credito = 0,
+        comision_tarjeta = 0,
         efectivo_recibido = 0,
+        cliente_nombre = '',
+        cliente_telefono = '',
       } = body;
 
       const { data: ord } = await supabase.from('pos_ordenes').select('*').eq('id', orden_id).single();
@@ -463,7 +623,7 @@ export async function POST(request: Request) {
         .neq('estado_comanda', 'ANULADO');
 
       if (!ord || !itemsActivos || itemsActivos.length === 0) {
-        return NextResponse.json({ success: false, error: 'La orden no tiene platos activos para facturar.' }, { status: 400 });
+        return NextResponse.json({ success: false, error: 'La orden no tiene artículos activos para facturar.' }, { status: 400 });
       }
 
       const subtotalBruto = itemsActivos.reduce((acc, it) => acc + Number(it.subtotal || 0), 0);
@@ -475,14 +635,22 @@ export async function POST(request: Request) {
       let pEf = Number(pago_efectivo || 0);
       let pDat = Number(pago_datafono || 0);
       let pTr = Number(pago_transferencia || 0);
+      let pCred = Number(pago_credito || 0);
       if (metodo_pago === 'EFECTIVO' && pEf === 0) pEf = granTotal;
       if (metodo_pago === 'DATAFONO' && pDat === 0) pDat = granTotal;
-      if (metodo_pago === 'TRANSFERENCIA_NEQUI' && pTr === 0) pTr = granTotal;
+      if ((metodo_pago === 'TRANSFERENCIA' || metodo_pago === 'TRANSFERENCIA_NEQUI') && pTr === 0) pTr = granTotal;
+      if (metodo_pago === 'CREDITO' && pCred === 0) pCred = granTotal;
+
+      const finalClienteNombre = (cliente_nombre || ord.cliente_nombre || '').trim();
+      if (pCred > 0 && !finalClienteNombre) {
+        return NextResponse.json({ success: false, error: 'Debes indicar el nombre del cliente para ventas a crédito.' }, { status: 400 });
+      }
 
       const cambio = metodo_pago === 'EFECTIVO' && Number(efectivo_recibido) > granTotal
         ? Math.round(Number(efectivo_recibido) - granTotal)
         : 0;
 
+      const nowIso = new Date().toISOString();
       const { data: facturada, error: errFac } = await supabase
         .from('pos_ordenes')
         .update({
@@ -495,18 +663,40 @@ export async function POST(request: Request) {
           pago_efectivo: pEf,
           pago_datafono: pDat,
           pago_transferencia: pTr,
+          pago_credito: pCred,
+          comision_tarjeta: Number(comision_tarjeta || 0),
+          pagado_at: pCred > 0 && pEf === 0 && pDat === 0 && pTr === 0 ? null : nowIso,
+          cliente_nombre: finalClienteNombre || ord.cliente_nombre || null,
+          cliente_telefono: (cliente_telefono || ord.cliente_telefono || '').trim() || null,
           efectivo_recibido: Number(efectivo_recibido || granTotal),
           cambio_entregado: cambio,
           estado: 'FACTURADA',
           ...(ord.canal_venta === 'DOMICILIO' ? { estado_domicilio: 'ENTREGADO' } : {}),
-          closed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          closed_at: nowIso,
+          updated_at: nowIso,
         })
         .eq('id', orden_id)
         .select('*')
         .single();
 
       if (errFac) throw errFac;
+
+      // Registrar cargo en Libro Mayor de Créditos si aplica
+      if (pCred > 0) {
+        await supabase.from('pos_creditos_movimientos').insert({
+          fecha: todayStr,
+          cliente_nombre: finalClienteNombre,
+          cliente_telefono: (cliente_telefono || ord.cliente_telefono || '').trim() || null,
+          tipo: 'CARGO_CREDITO',
+          orden_id: ord.id,
+          orden_consecutivo: ord.consecutivo,
+          monto: pCred,
+          metodo_pago: 'CREDITO',
+          caja_nombre: cajaNombre,
+          cajero_nombre: cajeroNombre,
+          observaciones: `Factura ${ord.consecutivo} cargada a crédito`,
+        });
+      }
 
       // Liberar mesa si aplica
       if (ord.mesa_numero) {
@@ -626,20 +816,35 @@ export async function POST(request: Request) {
         ? await supabase.from('libro_caja_sesiones').select('*').eq('id', sesion_id).maybeSingle()
         : { data: null };
 
-      const { data: salidasRows } = await supabase
-        .from('libro_caja_registros')
-        .select('valor_pagado')
-        .eq('fecha', todayStr)
-        .eq('tipo_libro', 'CAJA_MENOR');
+      const [{ data: salidasRows }, { data: abonosEfRows }, { data: devEfRows }, { data: entradasEfRows }] = await Promise.all([
+        supabase.from('libro_caja_registros').select('valor_pagado').eq('fecha', todayStr).eq('tipo_libro', 'CAJA_MENOR'),
+        supabase.from('pos_creditos_movimientos').select('monto').eq('fecha', todayStr).eq('tipo', 'ABONO').eq('metodo_pago', 'EFECTIVO'),
+        supabase.from('pos_devoluciones').select('valor_devuelto').eq('fecha', todayStr).eq('metodo_reembolso', 'EFECTIVO'),
+        supabase.from('pos_auditoria_eventos').select('valor_afectado').eq('fecha', todayStr).eq('tipo_alerta', 'ENTRADA_EFECTIVO_CAJA'),
+      ]);
 
       const totalSalidasCaja = (salidasRows || []).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
+      const totalAbonosEfectivo = (abonosEfRows || []).reduce((acc, r) => acc + Number(r.monto || 0), 0);
+      const totalDevolucionesEfectivo = (devEfRows || []).reduce((acc, r) => acc + Number(r.valor_devuelto || 0), 0);
+      const totalEntradasEfectivo = (entradasEfRows || []).reduce((acc, r) => acc + Number(r.valor_afectado || 0), 0);
+
       const baseInicial = Number(sesion?.efectivo_inicial || 0);
       const ventasEfectivo = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.pago_efectivo || 0), 0);
       const ventasDatafono = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.pago_datafono || 0), 0);
       const ventasTransf = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.pago_transferencia || 0), 0);
       const totalVendidoPos = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.gran_total || 0), 0);
 
-      const efectivoEsperado = Math.max(0, Math.round(baseInicial + ventasEfectivo - totalSalidasCaja));
+      const efectivoEsperado = Math.max(
+        0,
+        Math.round(
+          baseInicial +
+            ventasEfectivo +
+            totalAbonosEfectivo +
+            totalEntradasEfectivo -
+            totalSalidasCaja -
+            totalDevolucionesEfectivo
+        )
+      );
       const diferenciaEfectivo = Math.round(Number(efectivo_contado) - efectivoEsperado);
 
       if (sesion?.id) {
@@ -674,20 +879,26 @@ export async function POST(request: Request) {
         });
       }
 
+      const resumenObj = {
+        tipoCierre: isTotal ? 'TOTAL' : 'PARCIAL',
+        baseInicial,
+        ventasEfectivo,
+        ventasDatafono,
+        ventasTransf,
+        totalAbonosEfectivo,
+        totalEntradasEfectivo,
+        totalDevolucionesEfectivo,
+        totalVendidoPos,
+        totalSalidasCaja,
+        efectivoEsperado,
+        efectivoContado: Number(efectivo_contado),
+        diferenciaEfectivo,
+      };
+
       return NextResponse.json({
         success: true,
-        resumenCuadre: {
-          tipoCierre: isTotal ? 'TOTAL' : 'PARCIAL',
-          baseInicial,
-          ventasEfectivo,
-          ventasDatafono,
-          ventasTransf,
-          totalVendidoPos,
-          totalSalidasCaja,
-          efectivoEsperado,
-          efectivoContado: Number(efectivo_contado),
-          diferenciaEfectivo,
-        },
+        resumen: resumenObj,
+        resumenCuadre: resumenObj,
       });
     }
 
@@ -789,6 +1000,130 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json({ success: true });
+    }
+
+    // 12. Registrar Abono a Crédito de Cliente (Libro Mayor)
+    if (action === 'REGISTRAR_ABONO_CREDITO') {
+      const { cliente_nombre, cliente_telefono = '', monto, metodo_pago = 'EFECTIVO', observaciones = '' } = body;
+      const valor = Math.max(0, Math.round(Number(monto || 0)));
+      if (!cliente_nombre || valor <= 0) {
+        return NextResponse.json({ success: false, error: 'Cliente y monto mayor a cero son obligatorios' }, { status: 400 });
+      }
+      const { data: abono, error: errAb } = await supabase
+        .from('pos_creditos_movimientos')
+        .insert({
+          fecha: todayStr,
+          cliente_nombre: String(cliente_nombre).trim(),
+          cliente_telefono: String(cliente_telefono || '').trim() || null,
+          tipo: 'ABONO',
+          monto: valor,
+          metodo_pago,
+          caja_nombre: cajaNombre,
+          cajero_nombre: cajeroNombre,
+          observaciones: observaciones || `Abono en ${metodo_pago}`,
+        })
+        .select('*')
+        .single();
+      if (errAb) throw errAb;
+      return NextResponse.json({ success: true, abono });
+    }
+
+    // 13. Devolución Post-Factura (descuenta del método de reembolso y ventas del día)
+    if (action === 'DEVOLVER_ITEM_FACTURADO') {
+      const { orden_id, item_id, cantidad_devuelta = 1, metodo_reembolso = 'EFECTIVO', motivo = '' } = body;
+      if (!orden_id || !item_id) {
+        return NextResponse.json({ success: false, error: 'orden_id e item_id son requeridos' }, { status: 400 });
+      }
+      const [{ data: ord }, { data: item }] = await Promise.all([
+        supabase.from('pos_ordenes').select('*').eq('id', orden_id).single(),
+        supabase.from('pos_orden_items').select('*').eq('id', item_id).single(),
+      ]);
+      if (!ord || !item) {
+        return NextResponse.json({ success: false, error: 'Factura o artículo no encontrado' }, { status: 404 });
+      }
+      const cantDev = Math.min(Number(item.cantidad || 1), Math.max(0.01, Number(cantidad_devuelta || 1)));
+      const valorDev = Math.round(cantDev * Number(item.precio_unitario || 0));
+
+      const { data: devRow, error: errDev } = await supabase
+        .from('pos_devoluciones')
+        .insert({
+          fecha: todayStr,
+          orden_id: ord.id,
+          orden_consecutivo: ord.consecutivo,
+          item_id: item.id,
+          nombre_producto: item.nombre_producto,
+          cantidad_devuelta: cantDev,
+          valor_devuelto: valorDev,
+          metodo_reembolso,
+          motivo: motivo || 'Devolución en caja',
+          caja_nombre: cajaNombre,
+          cajero_nombre: cajeroNombre,
+        })
+        .select('*')
+        .single();
+      if (errDev) throw errDev;
+
+      if (metodo_reembolso === 'CREDITO' && ord.cliente_nombre) {
+        await supabase.from('pos_creditos_movimientos').insert({
+          fecha: todayStr,
+          cliente_nombre: ord.cliente_nombre,
+          cliente_telefono: ord.cliente_telefono || null,
+          tipo: 'ABONO',
+          orden_id: ord.id,
+          orden_consecutivo: ord.consecutivo,
+          monto: valorDev,
+          metodo_pago: 'CREDITO',
+          caja_nombre: cajaNombre,
+          cajero_nombre: cajeroNombre,
+          observaciones: `Nota crédito por devolución de ${cantDev}x ${item.nombre_producto}`,
+        });
+      }
+
+      // Descontar de ventas_diarias si existe registro del día
+      const periodoId = `per-${todayStr.slice(0, 7)}`;
+      const { data: vtaDia } = await supabase
+        .from('ventas_diarias')
+        .select('*')
+        .eq('periodo_id', periodoId)
+        .eq('fecha', todayStr)
+        .maybeSingle();
+      if (vtaDia) {
+        await supabase
+          .from('ventas_diarias')
+          .update({
+            venta_neta: Math.max(0, Number(vtaDia.venta_neta || 0) - valorDev),
+            gran_total: Math.max(0, Number(vtaDia.gran_total || 0) - valorDev),
+          })
+          .eq('id', vtaDia.id);
+        invalidateVentasCache();
+      }
+
+      return NextResponse.json({ success: true, devolucion: devRow });
+    }
+
+    // 14. Actualizar Cantidad / Precio Especial / Mayoreo (F11) sobre ítem abierto
+    if (action === 'ACTUALIZAR_ITEM_PRECIO_CANTIDAD') {
+      const { orden_id, item_id, cantidad, precio_unitario, notas_comanda } = body;
+      if (!orden_id || !item_id) {
+        return NextResponse.json({ success: false, error: 'orden_id e item_id son requeridos' }, { status: 400 });
+      }
+      const cantNum = Math.max(0.01, Number(cantidad || 1));
+      const precioNum = Math.max(0, Math.round(Number(precio_unitario || 0)));
+      const subtotal = Math.round(cantNum * precioNum);
+
+      const { error: errUpd } = await supabase
+        .from('pos_orden_items')
+        .update({
+          cantidad: cantNum,
+          precio_unitario: precioNum,
+          subtotal,
+          ...(notas_comanda !== undefined ? { notas_comanda } : {}),
+        })
+        .eq('id', item_id);
+      if (errUpd) throw errUpd;
+
+      const updated = await recalcularTotalesOrden(orden_id);
+      return NextResponse.json({ success: true, ...(updated || {}) });
     }
 
     return NextResponse.json({ success: false, error: 'Acción POS no reconocida' }, { status: 400 });
