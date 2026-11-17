@@ -8,7 +8,8 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
   const isChatBot = pathname?.startsWith('/chat-bot') || pathname?.startsWith('/chat_bot');
   const isCajeroPortal =
     pathname?.startsWith('/libros-apoyo/acceso') ||
-    pathname?.startsWith('/libros-apoyo/cajero');
+    pathname?.startsWith('/libros-apoyo/cajero') ||
+    pathname?.startsWith('/pos');
   const isLibrosApoyoAdmin = pathname === '/libros-apoyo';
 
   // Bloquear completamente el scroll del body y html cuando estamos en el chat-bot o en el portal cajero

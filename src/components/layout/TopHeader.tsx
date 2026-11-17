@@ -31,7 +31,8 @@ export default function TopHeader() {
   // El Portal Cajero es una interfaz totalmente hermética: no muestra header administrativo ni sidebar
   const isCajeroPortal =
     pathname?.startsWith('/libros-apoyo/acceso') ||
-    pathname?.startsWith('/libros-apoyo/cajero');
+    pathname?.startsWith('/libros-apoyo/cajero') ||
+    pathname?.startsWith('/pos');
 
   if (isCajeroPortal) return null;
 

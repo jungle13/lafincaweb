@@ -11,7 +11,8 @@ export default function MobileBottomBar() {
   if (
     pathname?.startsWith('/chat-bot') ||
     pathname?.startsWith('/libros-apoyo/acceso') ||
-    pathname?.startsWith('/libros-apoyo/cajero')
+    pathname?.startsWith('/libros-apoyo/cajero') ||
+    pathname?.startsWith('/pos')
   ) {
     return null;
   }

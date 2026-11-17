@@ -158,7 +158,7 @@ export async function GET(request: Request) {
       sesiones: sesiones || [],
       sesionActiva,
       salidasDiaCaja,
-      alertasAntifraude: alertas || [],
+      eventosTurno: alertas || [],
     });
   } catch (err: any) {
     console.error('Error en GET /api/pos:', err);
@@ -691,7 +691,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 9. Registrar apertura de cajón sin venta (Antifraude)
+    // 9. Registrar apertura de cajón sin venta
     if (action === 'REGISTRAR_APERTURA_CAJON_SIN_VENTA') {
       await supabase.from('pos_auditoria_eventos').insert({
         fecha: todayStr,
@@ -702,6 +702,92 @@ export async function POST(request: Request) {
         valor_afectado: 0,
         descripcion: `Apertura manual del cajón monedero sin venta registrada en ${cajaNombre} por ${cajeroNombre}.`,
       });
+      return NextResponse.json({ success: true });
+    }
+
+    // 10. Entradas (F7) y Salidas (F8) rápidas de efectivo en caja
+    if (action === 'MOVIMIENTO_EFECTIVO_CAJA') {
+      const { tipo, monto, concepto } = body;
+      const valor = Math.max(0, Math.round(Number(monto || 0)));
+      if (!valor || !concepto) {
+        return NextResponse.json({ success: false, error: 'Monto y concepto son obligatorios' }, { status: 400 });
+      }
+      const isEntrada = tipo === 'ENTRADA';
+      const periodoId = `per-${todayStr.slice(0, 7)}`;
+
+      if (isEntrada) {
+        await supabase.from('pos_auditoria_eventos').insert({
+          fecha: todayStr,
+          caja_nombre: cajaNombre,
+          usuario_cajero: cajeroNombre,
+          tipo_alerta: 'ENTRADA_EFECTIVO_CAJA',
+          nivel_riesgo: 'BAJO',
+          valor_afectado: valor,
+          descripcion: `Entrada de efectivo (+$${valor.toLocaleString('es-CO')}) en ${cajaNombre}: ${String(concepto).trim()} (${cajeroNombre}).`,
+        });
+      } else {
+        await supabase.from('libro_caja_registros').insert({
+          fecha: todayStr,
+          periodo_id: periodoId,
+          tipo_libro: 'CAJA_MENOR',
+          caja_nombre: cajaNombre,
+          responsable_caja: cajeroNombre,
+          concepto: String(concepto).trim(),
+          categoria: 'Salida Rápida POS',
+          valor_pagado: valor,
+          metodo_pago: 'Efectivo',
+        });
+        await recalcularHojaDiaria(todayStr, cajaNombre).catch(() => {});
+      }
+
+      return NextResponse.json({ success: true, tipo, monto: valor });
+    }
+
+    // 11. Anular / Eliminar ticket completo abierto (y liberar mesa si aplica)
+    if (action === 'ANULAR_ORDEN_COMPLETA') {
+      const { orden_id, motivo } = body;
+      if (!orden_id) {
+        return NextResponse.json({ success: false, error: 'orden_id requerido' }, { status: 400 });
+      }
+      const { data: orden } = await supabase.from('pos_ordenes').select('*').eq('id', orden_id).single();
+      if (!orden) {
+        return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 });
+      }
+
+      await supabase
+        .from('pos_ordenes')
+        .update({ estado: 'ANULADA', updated_at: new Date().toISOString() })
+        .eq('id', orden_id);
+
+      await supabase
+        .from('pos_orden_items')
+        .update({ estado_comanda: 'ANULADO' })
+        .eq('orden_id', orden_id);
+
+      if (orden.canal_venta === 'SALON_MESA' && orden.mesa_numero) {
+        await supabase
+          .from('pos_mesas')
+          .update({
+            estado: 'LIBRE',
+            orden_activa_id: null,
+            mesero_actual: null,
+            abierta_at: null,
+          })
+          .eq('numero', orden.mesa_numero);
+      }
+
+      await supabase.from('pos_auditoria_eventos').insert({
+        fecha: todayStr,
+        caja_nombre: cajaNombre,
+        usuario_cajero: cajeroNombre,
+        tipo_alerta: 'ANULACION_ORDEN_COMPLETA',
+        nivel_riesgo: Number(orden.gran_total || 0) > 0 ? 'MEDIO' : 'BAJO',
+        orden_consecutivo: orden.consecutivo,
+        mesa_numero: orden.mesa_numero,
+        valor_afectado: Number(orden.gran_total || 0),
+        descripcion: `Ticket ${orden.consecutivo} cancelado por ${cajeroNombre}. Motivo: ${motivo || 'Cancelación en caja'}.`,
+      });
+
       return NextResponse.json({ success: true });
     }
 
