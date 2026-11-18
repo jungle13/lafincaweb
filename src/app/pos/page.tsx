@@ -1,21 +1,24 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
   Bike,
+  Boxes,
   ChefHat,
   CreditCard,
   Delete,
   DollarSign,
   Flame,
   History,
-  Home,
   Keyboard,
   Lock,
+  LogOut,
+  Maximize2,
   MonitorSmartphone,
+  Package,
   Percent,
   Plus,
   Printer,
@@ -28,6 +31,7 @@ import {
   Trash2,
   Unlock,
   UserCheck,
+  UserPlus,
   Utensils,
   Wifi,
   WifiOff,
@@ -55,6 +59,9 @@ import PosCashCutView from '@/components/pos/PosCashCutView';
 import PosCreditsModal from '@/components/pos/PosCreditsModal';
 import PosReturnsModal from '@/components/pos/PosReturnsModal';
 import PosTerminalSettingsModal from '@/components/pos/PosTerminalSettingsModal';
+import PosProductsModule from '@/components/pos/PosProductsModule';
+import PosInventoryModule from '@/components/pos/PosInventoryModule';
+import { PosExitConfirmModal, PosOpenShiftGate } from '@/components/pos/PosShiftGateModal';
 import type {
   CierreResumen,
   ClienteCreditoResumen,
@@ -62,6 +69,7 @@ import type {
   DevolucionDia,
   EventoTurno,
   FlujoEfectivoRow,
+  InventarioMovimiento,
   PosMesa,
   PosOrden,
   PosOrdenItem,
@@ -98,8 +106,9 @@ function getOrdenTabLabel(orden: PosOrden): string {
 }
 
 export default function ElianaPosPage() {
+  const router = useRouter();
   const { user } = useAuth();
-  const cajeroNombre = user?.name || user?.username || 'Cajero Principal';
+  const fallbackUser = user?.name || user?.username || 'Cajero Principal';
 
   const [posConfig, setPosConfig] = useState<ElianaPosConfig>(DEFAULT_ELIANA_POS_CONFIG);
   const [activeTab, setActiveTab] = useState<PosTab>('VENTAS');
@@ -123,6 +132,9 @@ export default function ElianaPosPage() {
   const [devolucionesDia, setDevolucionesDia] = useState<DevolucionDia[]>([]);
   const [corteDepartamentos, setCorteDepartamentos] = useState<CorteDepartamento[]>([]);
   const [flujoEfectivoDetallado, setFlujoEfectivoDetallado] = useState<FlujoEfectivoRow[]>([]);
+  const [consumosInternosHoy, setConsumosInternosHoy] = useState<PosOrden[]>([]);
+  const [gananciaEstimadaHoy, setGananciaEstimadaHoy] = useState(0);
+  const [movimientosInventario, setMovimientosInventario] = useState<InventarioMovimiento[]>([]);
   const [offlineQueue, setOfflineQueue] = useState<OfflineOp[]>([]);
 
   // Navegación / selección
@@ -143,7 +155,7 @@ export default function ElianaPosPage() {
   // Modales
   const [showCobroModal, setShowCobroModal] = useState(false);
   const [metodoPago, setMetodoPago] = useState<
-    'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO'
+    'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO' | 'CONSUMO_INTERNO'
   >('EFECTIVO');
   const [pagoConEfectivo, setPagoConEfectivo] = useState(0);
   const [pagoEfectivo, setPagoEfectivo] = useState(0);
@@ -153,8 +165,13 @@ export default function ElianaPosPage() {
   const [comisionTarjeta, setComisionTarjeta] = useState(0);
   const [clienteCreditoNombre, setClienteCreditoNombre] = useState('');
   const [clienteCreditoTel, setClienteCreditoTel] = useState('');
+  const [areaConsumo, setAreaConsumo] = useState('Personal Cocina');
   const [propinaValor, setPropinaValor] = useState(0);
   const [descuentoValor, setDescuentoValor] = useState(0);
+
+  const [showAsignarClienteModal, setShowAsignarClienteModal] = useState(false);
+  const [asignarNombre, setAsignarNombre] = useState('');
+  const [asignarTel, setAsignarTel] = useState('');
 
   const [showDomicilioModal, setShowDomicilioModal] = useState(false);
   const [domNombre, setDomNombre] = useState('');
@@ -184,19 +201,19 @@ export default function ElianaPosPage() {
   const [showVentasDiaModal, setShowVentasDiaModal] = useState(false);
   const [showCreditosModal, setShowCreditosModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
 
   const [cashFlowModal, setCashFlowModal] = useState<'ENTRADA' | 'SALIDA' | null>(null);
   const [cashFlowMonto, setCashFlowMonto] = useState('');
   const [cashFlowConcepto, setCashFlowConcepto] = useState('');
-
-  const [showAbrirCajaModal, setShowAbrirCajaModal] = useState(false);
-  const [baseInicialInput, setBaseInicialInput] = useState('200000');
+  const [cashFlowClasif, setCashFlowClasif] = useState('Gasto Operativo');
 
   const captureInputRef = useRef<HTMLInputElement | null>(null);
   const buscarInputRef = useRef<HTMLInputElement | null>(null);
   const verificadorInputRef = useRef<HTMLInputElement | null>(null);
 
   const cajaNombre = posConfig.nombreCaja || 'Caja 1';
+  const cajeroNombre = sesionActiva?.cajero_nombre || fallbackUser;
   const noSpinnerClass =
     '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
@@ -208,6 +225,15 @@ export default function ElianaPosPage() {
   const focusCapture = useCallback(() => {
     setTimeout(() => captureInputRef.current?.focus(), 40);
   }, []);
+
+  const toggleBrowserFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     setPosConfig(loadElianaPosConfig());
@@ -235,6 +261,9 @@ export default function ElianaPosPage() {
     setDevolucionesDia((data.devolucionesDia as DevolucionDia[]) || []);
     setCorteDepartamentos((data.corteDepartamentos as CorteDepartamento[]) || []);
     setFlujoEfectivoDetallado((data.flujoEfectivoDetallado as FlujoEfectivoRow[]) || []);
+    setConsumosInternosHoy((data.consumosInternosHoy as PosOrden[]) || []);
+    setGananciaEstimadaHoy(Number(data.gananciaEstimadaHoy || 0));
+    setMovimientosInventario((data.movimientosInventario as InventarioMovimiento[]) || []);
   }, []);
 
   const fetchPosState = useCallback(async () => {
@@ -245,14 +274,12 @@ export default function ElianaPosPage() {
       if (data.success) {
         applyPosPayload(data);
         setLanConnected(false);
-        // Sincronizar espejo local en Caja Principal para respaldo LAN
         if (posConfig.rolTerminal === 'PRINCIPAL') {
           lanSyncSnapshot(posConfig.ipCajaPrincipal, data);
         }
         return;
       }
     } catch {
-      // Fallback automático a Red Local LAN (Caja Principal :4545)
       const lanData = await lanGetState(posConfig.ipCajaPrincipal);
       if (lanData) {
         applyPosPayload(lanData);
@@ -280,7 +307,6 @@ export default function ElianaPosPage() {
       };
 
       if (!navigator.onLine) {
-        // Intentar enviar primero al servidor LAN de Caja Principal
         const lanRes = await lanPostAction(posConfig.ipCajaPrincipal, fullPayload);
         if (lanRes?.success) {
           setLanConnected(true);
@@ -332,7 +358,7 @@ export default function ElianaPosPage() {
     setOfflineQueue(remaining);
     localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
     if (synced > 0) {
-      notify('ok', `${synced} operación(es) offline sincronizada(s) a la nube.`);
+      notify('ok', `${synced} operación(es) offline sincronizada(s).`);
       fetchPosState();
     }
   }, [offlineQueue, notify, fetchPosState]);
@@ -353,12 +379,18 @@ export default function ElianaPosPage() {
     };
   }, [syncOfflineQueue, fetchPosState]);
 
+  const prodStockMap = useMemo(() => {
+    const m = new Map<string, number>();
+    productos.forEach((p) => m.set(p.id, Number(p.existencia ?? 0)));
+    return m;
+  }, [productos]);
+
   const ordenesAbiertas = useMemo(
     () => ordenes.filter((o) => o.estado === 'ABIERTA' || o.estado === 'PRECUENTA'),
     [ordenes]
   );
   const ordenesFacturadasHoy = useMemo(
-    () => ordenes.filter((o) => o.estado === 'FACTURADA'),
+    () => ordenes.filter((o) => o.estado === 'FACTURADA' && o.metodo_pago !== 'CONSUMO_INTERNO'),
     [ordenes]
   );
   const ordenActiva = useMemo(
@@ -780,6 +812,7 @@ export default function ElianaPosPage() {
 
   const totalFinalCobro = useMemo(() => {
     if (!ordenActiva) return 0;
+    if (metodoPago === 'CONSUMO_INTERNO') return Number(ordenActiva.subtotal_bruto || 0);
     return Math.max(
       0,
       Number(ordenActiva.subtotal_bruto || 0) +
@@ -787,7 +820,7 @@ export default function ElianaPosPage() {
         descuentoValor +
         propinaValor
     );
-  }, [ordenActiva, descuentoValor, propinaValor]);
+  }, [ordenActiva, descuentoValor, propinaValor, metodoPago]);
 
   const cambioCalculado = useMemo(() => {
     if (metodoPago !== 'EFECTIVO') return 0;
@@ -801,7 +834,11 @@ export default function ElianaPosPage() {
     let trf = 0;
     let cred = 0;
 
-    if (metodoPago === 'EFECTIVO') {
+    if (metodoPago === 'CONSUMO_INTERNO') {
+      if (!clienteCreditoNombre.trim()) {
+        return notify('err', 'Indica el nombre de la persona o área para el Consumo Interno.');
+      }
+    } else if (metodoPago === 'EFECTIVO') {
       ef = totalFinalCobro;
       if (pagoConEfectivo > 0 && pagoConEfectivo < totalFinalCobro) {
         return notify('err', 'El monto recibido en efectivo es menor al total.');
@@ -840,13 +877,21 @@ export default function ElianaPosPage() {
         comision_tarjeta: comisionTarjeta,
         cliente_nombre: clienteCreditoNombre.trim() || ordenActiva.cliente_nombre,
         cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono,
-        propina: propinaValor,
-        descuento: descuentoValor,
-        efectivo_recibido: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : totalFinalCobro,
+        area_consumo: areaConsumo,
+        propina: metodoPago === 'CONSUMO_INTERNO' ? 0 : propinaValor,
+        descuento: metodoPago === 'CONSUMO_INTERNO' ? 0 : descuentoValor,
+        efectivo_recibido:
+          metodoPago === 'EFECTIVO'
+            ? Math.max(pagoConEfectivo, totalFinalCobro)
+            : metodoPago === 'CONSUMO_INTERNO'
+              ? 0
+              : totalFinalCobro,
       });
 
+      const isConsumo = metodoPago === 'CONSUMO_INTERNO';
       const ticketData: ThermalTicketData = {
-        titulo: 'FACTURA DE VENTA POS',
+        titulo: isConsumo ? 'VALE DE CONSUMO INTERNO' : 'FACTURA DE VENTA POS',
+        subtitulo: isConsumo ? `SIN COBRO EN CAJA (${areaConsumo})` : undefined,
         consecutivo: ordenActiva.consecutivo,
         fecha: new Date().toLocaleString('es-CO'),
         caja: cajaNombre,
@@ -864,24 +909,27 @@ export default function ElianaPosPage() {
           notas: it.notas_comanda,
         })),
         subtotal: ordenActiva.subtotal_bruto,
-        descuento: descuentoValor,
-        propina: propinaValor,
+        descuento: isConsumo ? 0 : descuentoValor,
+        propina: isConsumo ? 0 : propinaValor,
         costoDomicilio: ordenActiva.costo_domicilio,
         total: totalFinalCobro,
-        metodoPago,
+        metodoPago: isConsumo ? 'CONSUMO INTERNO ($0 EN CAJA)' : metodoPago,
         efectivoRecibido: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : undefined,
         cambio: metodoPago === 'EFECTIVO' ? cambioCalculado : undefined,
+        footer: isConsumo ? 'Firma Beneficiario: ___________________' : undefined,
       };
 
-      const memory: LastPaymentMemory = {
-        total: totalFinalCobro,
-        pagoCon: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : totalFinalCobro,
-        cambio: cambioCalculado,
-        consecutivo: ordenActiva.consecutivo,
-        ticketData,
-      };
-      setLastPayment(memory);
-      localStorage.setItem(LAST_PAYMENT_KEY, JSON.stringify(memory));
+      if (!isConsumo) {
+        const memory: LastPaymentMemory = {
+          total: totalFinalCobro,
+          pagoCon: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : totalFinalCobro,
+          cambio: cambioCalculado,
+          consecutivo: ordenActiva.consecutivo,
+          ticketData,
+        };
+        setLastPayment(memory);
+        localStorage.setItem(LAST_PAYMENT_KEY, JSON.stringify(memory));
+      }
 
       await printThermalTicket(ticketData);
       if (ef > 0) await openCashDrawer();
@@ -890,9 +938,35 @@ export default function ElianaPosPage() {
       setOrdenActivaId(null);
       await fetchPosState();
       focusCapture();
-      notify('ok', `Factura ${ordenActiva.consecutivo} cobrada.`);
+      notify(
+        'ok',
+        isConsumo
+          ? `Consumo interno registrado (${formatMoney(totalFinalCobro)}) sin cobro en caja.`
+          : `Factura ${ordenActiva.consecutivo} cobrada.`
+      );
     } catch (e: unknown) {
-      notify('err', e instanceof Error ? e.message : 'Error cobrando orden');
+      notify('err', e instanceof Error ? e.message : 'Error procesando orden');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleAsignarCliente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ordenActiva) return;
+    setBusyAction(true);
+    try {
+      await executePosAction('ASIGNAR_CLIENTE_ORDEN', {
+        orden_id: ordenActiva.id,
+        cliente_nombre: asignarNombre.trim(),
+        cliente_telefono: asignarTel.trim(),
+      });
+      setShowAsignarClienteModal(false);
+      await fetchPosState();
+      focusCapture();
+      notify('ok', `Cliente "${asignarNombre.trim() || 'Sin asignar'}" actualizado.`);
+    } catch (err: unknown) {
+      notify('err', err instanceof Error ? err.message : 'Error asignando cliente');
     } finally {
       setBusyAction(false);
     }
@@ -954,6 +1028,8 @@ export default function ElianaPosPage() {
         tipo: cashFlowModal,
         monto,
         concepto: cashFlowConcepto.trim(),
+        clasificacion: cashFlowClasif,
+        sesion_id: sesionActiva?.id || null,
       });
       setCashFlowModal(null);
       setCashFlowMonto('');
@@ -968,28 +1044,11 @@ export default function ElianaPosPage() {
     }
   };
 
-  const handleAbrirTurnoCaja = async () => {
-    setBusyAction(true);
-    try {
-      await executePosAction('ABRIR_TURNO_CAJA', { base_inicial: Number(baseInicialInput || 200000) });
-      setShowAbrirCajaModal(false);
-      await fetchPosState();
-      notify('ok', `Turno abierto en ${cajaNombre}.`);
-    } catch (e: unknown) {
-      notify('err', e instanceof Error ? e.message : 'Error abriendo turno');
-    } finally {
-      setBusyAction(false);
-    }
-  };
-
   const handlePesarGramera = async () => {
     try {
       const kg = await readScaleWeightOnce();
-      if (kg === null) {
-        notify('err', 'Gramera no conectada o sin lectura disponible.');
-      } else {
-        notify('ok', `Gramera: ${Math.round(kg * 1000)} g (${kg.toFixed(3)} kg)`);
-      }
+      if (kg === null) notify('err', 'Gramera no conectada o sin lectura disponible.');
+      else notify('ok', `Gramera: ${Math.round(kg * 1000)} g (${kg.toFixed(3)} kg)`);
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Gramera no conectada');
     }
@@ -1020,10 +1079,12 @@ export default function ElianaPosPage() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!sesionActiva) return;
       const target = e.target as HTMLElement | null;
       const isTextArea = target?.tagName === 'TEXTAREA';
       const isAnyModalOpen =
         showCobroModal ||
+        showAsignarClienteModal ||
         showBuscarModal ||
         showVerificadorModal ||
         showVariosModal ||
@@ -1033,12 +1094,13 @@ export default function ElianaPosPage() {
         showVentasDiaModal ||
         showCreditosModal ||
         showSettingsModal ||
-        showAbrirCajaModal ||
+        showExitModal ||
         cashFlowModal !== null;
 
       if (e.key === 'Escape') {
         e.preventDefault();
         setShowCobroModal(false);
+        setShowAsignarClienteModal(false);
         setShowBuscarModal(false);
         setShowVerificadorModal(false);
         setShowVariosModal(false);
@@ -1048,7 +1110,7 @@ export default function ElianaPosPage() {
         setShowVentasDiaModal(false);
         setShowCreditosModal(false);
         setShowSettingsModal(false);
-        setShowAbrirCajaModal(false);
+        setShowExitModal(false);
         setCashFlowModal(null);
         focusCapture();
         return;
@@ -1056,8 +1118,8 @@ export default function ElianaPosPage() {
 
       if (e.key === 'F1') { e.preventDefault(); setActiveTab('VENTAS'); focusCapture(); return; }
       if (e.key === 'F2' && posConfig.habilitaMesas) { e.preventDefault(); setActiveTab('MESAS'); return; }
-      if (e.key === 'F3' && posConfig.habilitaDomicilios) { e.preventDefault(); setActiveTab('DOMICILIOS'); return; }
-      if (e.key === 'F4') { e.preventDefault(); setActiveTab('CORTE'); return; }
+      if (e.key === 'F3') { e.preventDefault(); setActiveTab('PRODUCTOS'); return; }
+      if (e.key === 'F4') { e.preventDefault(); setActiveTab('INVENTARIO'); return; }
       if (e.key === 'F5') { e.preventDefault(); handleCambiarSiguienteTicket(); return; }
       if (e.key === 'F6') {
         e.preventDefault();
@@ -1119,10 +1181,10 @@ export default function ElianaPosPage() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    activeTab, captureInput, itemsActivos, selectedItemId, ordenActiva, posConfig,
-    showCobroModal, showBuscarModal, showVerificadorModal, showVariosModal, showMayoreoModal,
-    showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal, showSettingsModal,
-    showAbrirCajaModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
+    sesionActiva, activeTab, captureInput, itemsActivos, selectedItemId, ordenActiva, posConfig,
+    showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
+    showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
+    showSettingsModal, showExitModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
     handleAnularItem, handleCambiarCantidadItem, handleCambiarSiguienteTicket,
     handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
@@ -1138,7 +1200,7 @@ export default function ElianaPosPage() {
   };
 
   const navModules = useMemo(() => {
-    const mods: Array<{ key: PosTab; fKey: string; label: string; icon: typeof ScanBarcode }> = [
+    const mods: Array<{ key: PosTab; fKey?: string; label: string; icon: typeof ScanBarcode }> = [
       { key: 'VENTAS', fKey: 'F1', label: 'Ventas', icon: ScanBarcode },
     ];
     if (posConfig.habilitaMesas) {
@@ -1152,20 +1214,51 @@ export default function ElianaPosPage() {
     if (posConfig.habilitaDomicilios) {
       mods.push({
         key: 'DOMICILIOS',
-        fKey: 'F3',
         label: `Domicilios (${ordenesDomicilio.filter((d) => d.estado !== 'FACTURADA').length})`,
         icon: Bike,
       });
     }
-    mods.push({ key: 'CORTE', fKey: 'F4', label: 'Corte de Caja', icon: Lock });
+    mods.push({ key: 'PRODUCTOS', fKey: 'F3', label: 'Productos', icon: Package });
+    mods.push({ key: 'INVENTARIO', fKey: 'F4', label: 'Inventario', icon: Boxes });
+    mods.push({ key: 'CORTE', label: 'Corte de Caja', icon: Lock });
     return mods;
   }, [posConfig.habilitaMesas, posConfig.habilitaDomicilios, mesas, ordenesDomicilio]);
 
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-zinc-100 text-zinc-900 flex flex-col overflow-hidden select-none font-sans">
+    <div className="fixed inset-0 z-[9999] w-screen h-screen bg-zinc-100 text-zinc-900 flex flex-col overflow-hidden select-none font-sans">
+      {/* Bloqueo obligatorio si no hay turno abierto */}
+      {!loading && !sesionActiva && (
+        <PosOpenShiftGate
+          cajaNombre={cajaNombre}
+          busyAction={busyAction}
+          onExitWithoutOpen={() => router.push('/')}
+          onOpenShift={async (payload) => {
+            setBusyAction(true);
+            try {
+              const res = await fetch('/api/pos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'ABRIR_TURNO_CAJA', ...payload }),
+              });
+              const data = await res.json();
+              if (!data.success) throw new Error(data.error || 'Error abriendo turno');
+              const updatedCfg = { ...posConfig, nombreCaja: payload.caja_nombre };
+              setPosConfig(updatedCfg);
+              saveElianaPosConfig(updatedCfg);
+              await fetchPosState();
+              notify('ok', `Turno abierto en ${payload.caja_nombre}.`);
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Credenciales inválidas');
+            } finally {
+              setBusyAction(false);
+            }
+          }}
+        />
+      )}
+
       {toast && (
         <div
-          className={`fixed top-14 right-4 z-50 px-4 py-2.5 rounded-lg shadow-lg border text-xs font-semibold flex items-center gap-2 ${
+          className={`fixed top-14 right-4 z-[10001] px-4 py-2.5 rounded-lg shadow-lg border text-xs font-semibold flex items-center gap-2 ${
             toast.type === 'ok' ? 'bg-white text-zinc-900 border-zinc-300' : 'bg-red-50 text-red-900 border-red-300'
           }`}
         >
@@ -1176,23 +1269,13 @@ export default function ElianaPosPage() {
 
       {/* 1. BARRA SUPERIOR WINDOWS 11 ENTERPRISE */}
       <header className="bg-white text-zinc-900 px-3 py-2 flex items-center justify-between gap-2 shrink-0 border-b border-zinc-200">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <Link
-            href="/"
-            title="Volver al Panel Administrativo"
-            className="p-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 transition"
-          >
-            <Home className="w-4 h-4" />
-          </Link>
-
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 pr-3 border-r border-zinc-200">
-            <span className="w-6 h-6 rounded-md bg-zinc-900 text-white font-bold text-xs flex items-center justify-center">
-              E
-            </span>
+            <span className="w-6 h-6 rounded-md bg-zinc-900 text-white font-bold text-xs flex items-center justify-center">E</span>
             <span className="font-bold text-sm tracking-tight text-zinc-950">Eliana POS</span>
           </div>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1 flex-wrap">
             {navModules.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
@@ -1200,20 +1283,22 @@ export default function ElianaPosPage() {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
                     active
                       ? 'bg-zinc-900 text-white border-zinc-900'
                       : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 hover:text-zinc-950'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
-                      active ? 'bg-zinc-700 text-zinc-100' : 'bg-white text-zinc-600 border border-zinc-200'
-                    }`}
-                  >
-                    {tab.fKey}
-                  </span>
+                  {tab.fKey && (
+                    <span
+                      className={`px-1 py-0.5 rounded text-[10px] font-mono font-bold ${
+                        active ? 'bg-zinc-700 text-zinc-100' : 'bg-white text-zinc-600 border border-zinc-200'
+                      }`}
+                    >
+                      {tab.fKey}
+                    </span>
+                  )}
                   <span>{tab.label}</span>
                 </button>
               );
@@ -1222,40 +1307,35 @@ export default function ElianaPosPage() {
         </div>
 
         <div className="flex items-center gap-1.5 text-xs">
-          <span className="px-2.5 py-1.5 rounded-md bg-zinc-100 border border-zinc-200 font-semibold text-zinc-800">
-            {cajaNombre}
-          </span>
+          <div className="hidden xl:flex flex-col text-right pr-2 border-r border-zinc-200 leading-tight">
+            <span className="text-[10px] text-zinc-400">Le atiende ({cajaNombre}):</span>
+            <span className="font-bold text-zinc-900">{cajeroNombre}</span>
+          </div>
 
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-semibold text-xs bg-zinc-100 text-zinc-700 border border-zinc-200">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md font-semibold text-xs bg-zinc-100 text-zinc-700 border border-zinc-200">
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-600' : lanConnected ? 'bg-blue-600' : 'bg-amber-500'}`} />
             {isOnline ? <Wifi className="w-3.5 h-3.5 text-zinc-500" /> : <WifiOff className="w-3.5 h-3.5 text-zinc-500" />}
-            {isOnline ? 'En Línea' : lanConnected ? 'LAN Local' : `Offline (${offlineQueue.length})`}
           </span>
 
           <button
             onClick={() => setShowCreditosModal(true)}
-            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1 cursor-pointer"
           >
             <UserCheck className="w-3.5 h-3.5 text-zinc-600" />
-            <span className="hidden xl:inline">Créditos</span>
+            <span className="hidden lg:inline">Créditos</span>
           </button>
 
           <button
             onClick={() => setTouchMode((v) => !v)}
-            className={`px-2.5 py-1.5 rounded-md font-semibold flex items-center gap-1.5 border cursor-pointer transition ${
-              touchMode ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-100'
+            className={`px-2.5 py-1.5 rounded-md font-semibold flex items-center gap-1 border cursor-pointer ${
+              touchMode ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-300 text-zinc-700'
             }`}
           >
             {touchMode ? <MonitorSmartphone className="w-3.5 h-3.5" /> : <Keyboard className="w-3.5 h-3.5" />}
-            <span className="hidden lg:inline">{touchMode ? 'Táctil + Teclado' : 'Solo Tabla'}</span>
           </button>
 
-          <button
-            onClick={handlePesarGramera}
-            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer"
-          >
-            <Scale className="w-3.5 h-3.5 text-zinc-600" />
-            <span className="hidden xl:inline">Gramera</span>
+          <button onClick={handlePesarGramera} title="Leer Gramera" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
+            <Scale className="w-3.5 h-3.5" />
           </button>
 
           <button
@@ -1264,46 +1344,33 @@ export default function ElianaPosPage() {
               await executePosAction('REGISTRAR_APERTURA_CAJON_SIN_VENTA', {});
               notify('ok', 'Cajón monedero abierto.');
             }}
-            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer"
-          >
-            <Unlock className="w-3.5 h-3.5 text-zinc-600" />
-            <span className="hidden xl:inline">Cajón</span>
-          </button>
-
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            title="Configuración de Negocio, Red Local y Periféricos"
+            title="Abrir Cajón"
             className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer"
           >
+            <Unlock className="w-3.5 h-3.5" />
+          </button>
+
+          <button onClick={toggleBrowserFullscreen} title="Pantalla Completa" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+
+          <button onClick={() => setShowSettingsModal(true)} title="Configuración" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
             <Settings className="w-3.5 h-3.5" />
           </button>
 
-          <button
-            onClick={fetchPosState}
-            title="Sincronizar"
-            className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer"
-          >
+          <button onClick={fetchPosState} title="Sincronizar" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => setShowExitModal(true)}
+            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-red-50 border border-zinc-300 hover:border-red-300 text-zinc-800 hover:text-red-700 font-semibold flex items-center gap-1 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Salir</span>
           </button>
         </div>
       </header>
-
-      {!sesionActiva && (
-        <div className="bg-zinc-100 border-b border-zinc-200 px-3 py-1.5 flex items-center justify-between text-xs shrink-0">
-          <div className="flex items-center gap-2 text-zinc-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
-            <span>
-              Turno cerrado en <b>{cajaNombre}</b> ({cajeroNombre}). Abre el turno para registrar la base inicial.
-            </span>
-          </div>
-          <button
-            onClick={() => setShowAbrirCajaModal(true)}
-            className="px-3 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold cursor-pointer"
-          >
-            Abrir Turno
-          </button>
-        </div>
-      )}
 
       {/* ==================== F1: VENTAS ==================== */}
       {activeTab === 'VENTAS' && (
@@ -1323,13 +1390,15 @@ export default function ElianaPosPage() {
                   className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-300 focus:border-blue-600 focus:bg-white rounded-md text-sm font-medium text-zinc-900 outline-none"
                 />
               </div>
-              <button
-                type="submit"
-                className="px-4 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
-              >
+              <button type="submit" className="px-4 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer">
                 <Plus className="w-3.5 h-3.5" />
                 ENTER - Agregar Producto
               </button>
+              {ordenActiva?.cliente_nombre && (
+                <span className="px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold">
+                  Cliente: {ordenActiva.cliente_nombre}
+                </span>
+              )}
             </form>
 
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1392,34 +1461,23 @@ export default function ElianaPosPage() {
             </div>
           </div>
 
-          {/* Pestañas de tickets abiertos */}
           <div className="bg-zinc-100 border-b border-zinc-200 px-3 pt-1.5 flex items-center gap-1 overflow-x-auto shrink-0">
             {ordenesAbiertas.map((ord) => {
               const isSelected = ordenActiva?.id === ord.id;
               return (
                 <button
                   key={ord.id}
-                  onClick={() => {
-                    setOrdenActivaId(ord.id);
-                    focusCapture();
-                  }}
+                  onClick={() => { setOrdenActivaId(ord.id); focusCapture(); }}
                   className={`px-3 py-1.5 rounded-t-md text-xs font-semibold border border-b-0 flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-                    isSelected
-                      ? 'bg-white text-zinc-950 border-zinc-300'
-                      : 'bg-zinc-200 text-zinc-600 border-transparent hover:bg-zinc-50 hover:text-zinc-900'
+                    isSelected ? 'bg-white text-zinc-950 border-zinc-300' : 'bg-zinc-200 text-zinc-600 border-transparent hover:bg-zinc-50'
                   }`}
                 >
                   <span>{getOrdenTabLabel(ord)}</span>
-                  <span className="text-[11px] font-bold tabular-nums text-zinc-900">
-                    {formatMoney(ord.gran_total)}
-                  </span>
+                  <span className="text-[11px] font-bold tabular-nums text-zinc-900">{formatMoney(ord.gran_total)}</span>
                 </button>
               );
             })}
-            <button
-              onClick={handleNuevaVentaMostrador}
-              className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
-            >
+            <button onClick={handleNuevaVentaMostrador} className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap">
               <Plus className="w-3 h-3" /> Nuevo Ticket
             </button>
           </div>
@@ -1435,86 +1493,55 @@ export default function ElianaPosPage() {
                         <th className="py-2.5 px-3">Descripción del Producto</th>
                         <th className="py-2.5 px-3 text-right w-28">Precio Venta</th>
                         <th className="py-2.5 px-3 text-center w-24">Cant.</th>
-                        <th className="py-2.5 px-3 text-right w-32 border-x border-zinc-200">Importe</th>
-                        {posConfig.habilitaComandasCocina && <th className="py-2.5 px-3 text-center w-28">Estado</th>}
-                        <th className="py-2.5 px-2 text-center w-12"></th>
+                        <th className="py-2.5 px-3 text-right w-28 border-x border-zinc-200">Importe</th>
+                        <th className="py-2.5 px-3 text-right w-20">Existencia</th>
+                        {posConfig.habilitaComandasCocina && <th className="py-2.5 px-3 text-center w-24">Estado</th>}
+                        <th className="py-2.5 px-2 text-center w-10"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-200 text-sm">
                       {itemsActivos.length === 0 ? (
                         <tr>
-                          <td colSpan={posConfig.habilitaComandasCocina ? 7 : 6} className="py-24 text-center text-zinc-400">
-                            <p className="font-semibold text-base text-zinc-600">
-                              Cuenta vacía ({getOrdenTabLabel(ordenActiva)})
-                            </p>
-                            <p className="text-xs mt-1 text-zinc-500">
-                              Escanea un código, escribe un producto arriba o selecciona en el panel táctil.
-                            </p>
+                          <td colSpan={posConfig.habilitaComandasCocina ? 8 : 7} className="py-24 text-center text-zinc-400">
+                            <p className="font-semibold text-base text-zinc-600">Cuenta vacía ({getOrdenTabLabel(ordenActiva)})</p>
+                            <p className="text-xs mt-1 text-zinc-500">Escanea un código, escribe un producto arriba o selecciona en el panel táctil.</p>
                           </td>
                         </tr>
                       ) : (
                         itemsActivos.map((it) => {
                           const isRowSel = selectedItemId === it.id;
+                          const stock = it.producto_id ? (prodStockMap.get(it.producto_id) ?? 0) : 0;
                           return (
                             <tr
                               key={it.id}
                               onClick={() => setSelectedItemId(it.id)}
-                              className={`cursor-pointer ${
-                                isRowSel ? 'bg-blue-50 border-l-4 border-l-blue-600' : 'hover:bg-zinc-50'
-                              }`}
+                              className={`cursor-pointer ${isRowSel ? 'bg-blue-50 border-l-4 border-l-blue-600' : 'hover:bg-zinc-50'}`}
                             >
-                              <td className="py-2.5 px-3 font-mono text-xs text-zinc-500 border-r border-zinc-100">
-                                {it.codigo_producto || '—'}
-                              </td>
+                              <td className="py-2.5 px-3 font-mono text-xs text-zinc-500 border-r border-zinc-100">{it.codigo_producto || '—'}</td>
                               <td className="py-2.5 px-3 font-semibold text-zinc-900">
                                 {it.nombre_producto}
-                                {it.notas_comanda && (
-                                  <span className="ml-2 text-[11px] font-normal text-zinc-500">({it.notas_comanda})</span>
-                                )}
+                                {it.notas_comanda && <span className="ml-2 text-[11px] font-normal text-zinc-500">({it.notas_comanda})</span>}
                               </td>
-                              <td className="py-2.5 px-3 text-right font-medium tabular-nums text-zinc-700">
-                                {formatMoney(it.precio_unitario)}
-                              </td>
+                              <td className="py-2.5 px-3 text-right font-medium tabular-nums text-zinc-700">{formatMoney(it.precio_unitario)}</td>
                               <td className="py-2.5 px-3">
                                 <div className="flex items-center justify-center gap-1.5">
-                                  <span className="font-bold tabular-nums text-zinc-900 min-w-[24px] text-center">
-                                    {it.cantidad}
-                                  </span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCambiarCantidadItem(it, 1);
-                                    }}
-                                    className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer"
-                                  >
+                                  <span className="font-bold tabular-nums text-zinc-900 min-w-[24px] text-center">{it.cantidad}</span>
+                                  <button onClick={(e) => { e.stopPropagation(); handleCambiarCantidadItem(it, 1); }} className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
                                     <Plus className="w-3 h-3" />
                                   </button>
                                 </div>
                               </td>
-                              <td className="py-2.5 px-3 text-right font-bold tabular-nums text-zinc-950 border-x border-zinc-100">
-                                {formatMoney(it.subtotal)}
-                              </td>
+                              <td className="py-2.5 px-3 text-right font-bold tabular-nums text-zinc-950 border-x border-zinc-100">{formatMoney(it.subtotal)}</td>
+                              <td className="py-2.5 px-3 text-right font-semibold tabular-nums text-xs text-zinc-500">{stock}</td>
                               {posConfig.habilitaComandasCocina && (
                                 <td className="py-2.5 px-3 text-center">
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                                      it.estado_comanda === 'COMANDADO'
-                                        ? 'bg-zinc-900 text-white border-zinc-900'
-                                        : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                                    }`}
-                                  >
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${it.estado_comanda === 'COMANDADO' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200'}`}>
                                     {it.estado_comanda}
                                   </span>
                                 </td>
                               )}
                               <td className="py-2.5 px-2 text-center">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAnularItem(it);
-                                  }}
-                                  className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                                >
+                                <button onClick={(e) => { e.stopPropagation(); handleAnularItem(it); }} className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 cursor-pointer">
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               </td>
@@ -1529,19 +1556,9 @@ export default function ElianaPosPage() {
                 <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 p-6">
                   <p className="font-semibold text-zinc-700">No hay cuentas abiertas</p>
                   <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={handleNuevaVentaMostrador}
-                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer"
-                    >
-                      + Abrir Venta Mostrador
-                    </button>
+                    <button onClick={handleNuevaVentaMostrador} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer">+ Abrir Venta Mostrador</button>
                     {posConfig.habilitaMesas && (
-                      <button
-                        onClick={() => setActiveTab('MESAS')}
-                        className="px-4 py-2 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 font-semibold text-xs cursor-pointer"
-                      >
-                        F2 Ver Mapa de Mesas
-                      </button>
+                      <button onClick={() => setActiveTab('MESAS')} className="px-4 py-2 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 font-semibold text-xs cursor-pointer">F2 Ver Mapa de Mesas</button>
                     )}
                   </div>
                 </div>
@@ -1552,33 +1569,18 @@ export default function ElianaPosPage() {
               <div className="w-[40%] max-w-[520px] min-w-[320px] bg-zinc-50 flex flex-col min-h-0 overflow-hidden">
                 <div className="p-2 border-b border-zinc-200 bg-white flex items-center gap-1.5 overflow-x-auto shrink-0">
                   {categoriasProductos.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setCatFiltro(c)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer border ${
-                        catFiltro === c
-                          ? 'bg-zinc-900 text-white border-zinc-900'
-                          : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'
-                      }`}
-                    >
+                    <button key={c} onClick={() => setCatFiltro(c)} className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer border ${catFiltro === c ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'}`}>
                       {c}
                     </button>
                   ))}
                 </div>
                 <div className="flex-1 overflow-y-auto p-2.5 grid grid-cols-2 xl:grid-cols-3 gap-2 content-start">
                   {productosFiltrados.map((p) => (
-                    <button
-                      key={p.id}
-                      disabled={busyAction}
-                      onClick={() => handleAgregarProducto(p, 1)}
-                      className="p-2.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:bg-zinc-100 text-left flex flex-col justify-between min-h-[76px] cursor-pointer"
-                    >
+                    <button key={p.id} disabled={busyAction} onClick={() => handleAgregarProducto(p, 1)} className="p-2.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:bg-zinc-100 text-left flex flex-col justify-between min-h-[76px] cursor-pointer">
                       <span className="font-semibold text-xs text-zinc-900 leading-snug line-clamp-2">{p.nombre}</span>
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-[10px] font-mono text-zinc-400">{p.codigo}</span>
-                        <span className="text-xs font-bold tabular-nums text-zinc-900 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
-                          {formatMoney(p.precio_total)}
-                        </span>
+                        <span className="text-xs font-bold tabular-nums text-zinc-900 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">{formatMoney(p.precio_total)}</span>
                       </div>
                     </button>
                   ))}
@@ -1593,80 +1595,59 @@ export default function ElianaPosPage() {
                 <span className="text-xs font-semibold text-zinc-700 mr-2 tabular-nums">
                   {itemsActivos.reduce((a, b) => a + Number(b.cantidad || 0), 0)} Productos en la venta actual
                 </span>
-                <button
-                  onClick={handleCambiarSiguienteTicket}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 cursor-pointer"
-                >
+                <button onClick={handleCambiarSiguienteTicket} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 cursor-pointer">
                   F5 - Cambiar
+                </button>
+                <button
+                  onClick={() => {
+                    if (!ordenActiva) return;
+                    setAsignarNombre(ordenActiva.cliente_nombre || '');
+                    setAsignarTel(ordenActiva.cliente_telefono || '');
+                    setShowAsignarClienteModal(true);
+                  }}
+                  disabled={!ordenActiva}
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-zinc-600" />
+                  Asignar Cliente / Personal
                 </button>
                 {posConfig.habilitaComandasCocina && (
                   <>
-                    <button
-                      onClick={handleEnviarComanda}
-                      disabled={!ordenActiva || busyAction}
-                      className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
-                    >
+                    <button onClick={handleEnviarComanda} disabled={!ordenActiva || busyAction} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1 cursor-pointer">
                       <ChefHat className="w-3.5 h-3.5 text-zinc-600" />
-                      F6 - Comandar Cocina
+                      F6 - Comandar
                     </button>
-                    <button
-                      onClick={handleImprimirPrecuenta}
-                      disabled={!ordenActiva || itemsActivos.length === 0 || busyAction}
-                      className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
-                    >
+                    <button onClick={handleImprimirPrecuenta} disabled={!ordenActiva || itemsActivos.length === 0 || busyAction} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1 cursor-pointer">
                       <Printer className="w-3.5 h-3.5 text-zinc-600" />
                       Precuenta
                     </button>
                   </>
                 )}
-                <button
-                  onClick={handleEliminarTicket}
-                  disabled={!ordenActiva || busyAction}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-red-50 hover:border-red-300 disabled:opacity-40 text-xs font-semibold text-red-700 cursor-pointer"
-                >
-                  Eliminar Ticket
+                <button onClick={handleEliminarTicket} disabled={!ordenActiva || busyAction} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-red-50 hover:border-red-300 disabled:opacity-40 text-xs font-semibold text-red-700 cursor-pointer">
+                  Eliminar
                 </button>
               </div>
 
               <div className="flex items-center gap-4 text-xs bg-zinc-50 border border-zinc-200 rounded-md px-3 py-1 w-fit tabular-nums">
-                <div>
-                  <span className="text-zinc-500">Último Total: </span>
-                  <span className="font-bold text-zinc-900">{formatMoney(lastPayment.total)}</span>
-                </div>
-                <div>
-                  <span className="text-zinc-500">Pagó Con: </span>
-                  <span className="font-bold text-zinc-900">{formatMoney(lastPayment.pagoCon)}</span>
-                </div>
-                <div>
-                  <span className="text-zinc-500">Cambio: </span>
-                  <span className="font-bold text-blue-700">{formatMoney(lastPayment.cambio)}</span>
-                </div>
+                <div><span className="text-zinc-500">Último Total: </span><span className="font-bold text-zinc-900">{formatMoney(lastPayment.total)}</span></div>
+                <div><span className="text-zinc-500">Pagó Con: </span><span className="font-bold text-zinc-900">{formatMoney(lastPayment.pagoCon)}</span></div>
+                <div><span className="text-zinc-500">Cambio: </span><span className="font-bold text-blue-700">{formatMoney(lastPayment.cambio)}</span></div>
               </div>
             </div>
 
             <div className="flex items-center gap-2.5">
               <div className="flex flex-col gap-1">
-                <button
-                  onClick={handleReimprimirUltimo}
-                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
-                >
+                <button onClick={handleReimprimirUltimo} className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer">
                   <Printer className="w-3.5 h-3.5 text-zinc-500" />
                   Reimprimir Último Ticket
                 </button>
-                <button
-                  onClick={() => setShowVentasDiaModal(true)}
-                  className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
-                >
+                <button onClick={() => setShowVentasDiaModal(true)} className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer">
                   <History className="w-3.5 h-3.5 text-zinc-500" />
                   Ventas y Devoluciones ({resumenDia.cantidadFacturas})
                 </button>
               </div>
 
-              <button
-                onClick={abrirModalCobro}
-                disabled={!ordenActiva || itemsActivos.length === 0 || busyAction}
-                className="px-6 py-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-base flex items-center gap-2 cursor-pointer"
-              >
+              <button onClick={abrirModalCobro} disabled={!ordenActiva || itemsActivos.length === 0 || busyAction} className="px-6 py-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-base flex items-center gap-2 cursor-pointer">
                 <CreditCard className="w-5 h-5" />
                 F12 - Cobrar
               </button>
@@ -1688,21 +1669,12 @@ export default function ElianaPosPage() {
           <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               {zonasDisponibles.map((z) => (
-                <button
-                  key={z}
-                  onClick={() => setZonaFiltro(z)}
-                  className={`px-3.5 py-2 rounded-md text-xs font-semibold cursor-pointer border ${
-                    zonaFiltro === z ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-300 text-zinc-700'
-                  }`}
-                >
+                <button key={z} onClick={() => setZonaFiltro(z)} className={`px-3.5 py-2 rounded-md text-xs font-semibold cursor-pointer border ${zonaFiltro === z ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-300 text-zinc-700'}`}>
                   {z}
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleNuevaVentaMostrador}
-              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
-            >
+            <button onClick={handleNuevaVentaMostrador} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer">
               <Plus className="w-4 h-4" /> Venta Mostrador / Para Llevar
             </button>
           </div>
@@ -1715,24 +1687,12 @@ export default function ElianaPosPage() {
                   key={m.id}
                   onClick={() => handleAbrirMesa(m)}
                   className={`p-4 rounded-lg border text-left cursor-pointer flex flex-col justify-between min-h-[120px] ${
-                    m.estado === 'PRECUENTA_IMPRESA'
-                      ? 'bg-white border-blue-500 ring-1 ring-blue-500'
-                      : ocupada
-                        ? 'bg-white border-zinc-900 ring-1 ring-zinc-900'
-                        : 'bg-white border-zinc-200 hover:border-zinc-400'
+                    m.estado === 'PRECUENTA_IMPRESA' ? 'bg-white border-blue-500 ring-1 ring-blue-500' : ocupada ? 'bg-white border-zinc-900 ring-1 ring-zinc-900' : 'bg-white border-zinc-200 hover:border-zinc-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-base text-zinc-900">{m.nombre}</span>
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
-                        m.estado === 'PRECUENTA_IMPRESA'
-                          ? 'bg-blue-50 text-blue-700 border-blue-200'
-                          : ocupada
-                            ? 'bg-zinc-900 text-white border-zinc-900'
-                            : 'bg-zinc-100 text-zinc-600 border-zinc-200'
-                      }`}
-                    >
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${m.estado === 'PRECUENTA_IMPRESA' ? 'bg-blue-50 text-blue-700 border-blue-200' : ocupada ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-600 border-zinc-200'}`}>
                       {m.estado}
                     </span>
                   </div>
@@ -1740,9 +1700,7 @@ export default function ElianaPosPage() {
                   {ocupada && m.orden_activa ? (
                     <div className="mt-2 pt-2 border-t border-zinc-200">
                       <div className="font-bold tabular-nums text-zinc-950">{formatMoney(m.orden_activa.gran_total)}</div>
-                      <div className="text-[11px] text-zinc-500">
-                        {m.orden_activa.items?.length || 0} ítems • {m.mesero_actual || cajeroNombre}
-                      </div>
+                      <div className="text-[11px] text-zinc-500">{m.orden_activa.items?.length || 0} ítems • {m.mesero_actual || cajeroNombre}</div>
                     </div>
                   ) : (
                     <div className="mt-2 text-xs text-zinc-500 font-medium">Clic para abrir</div>
@@ -1754,7 +1712,7 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {/* ==================== F3: DOMICILIOS ==================== */}
+      {/* ==================== DOMICILIOS ==================== */}
       {activeTab === 'DOMICILIOS' && posConfig.habilitaDomicilios && (
         <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4 bg-zinc-100">
           <div className="flex items-center justify-between">
@@ -1762,72 +1720,34 @@ export default function ElianaPosPage() {
               <h2 className="text-lg font-bold text-zinc-900">Despacho de Domicilios</h2>
               <p className="text-xs text-zinc-500">Pedidos separados de las ventas en punto</p>
             </div>
-            <button
-              onClick={() => setShowDomicilioModal(true)}
-              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
-            >
+            <button onClick={() => setShowDomicilioModal(true)} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer">
               <Bike className="w-4 h-4" /> + Nuevo Domicilio
             </button>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {ordenesDomicilio.map((dom) => (
               <div key={dom.id} className="bg-white rounded-lg border border-zinc-200 p-4 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-sm text-zinc-900">{dom.consecutivo}</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700">
-                      {dom.estado_domicilio || dom.estado}
-                    </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700">{dom.estado_domicilio || dom.estado}</span>
                   </div>
                   <div className="mt-2 text-xs font-semibold text-zinc-800">{dom.cliente_nombre}</div>
                   <div className="text-xs text-zinc-600">{dom.cliente_telefono}</div>
                   <div className="text-xs text-zinc-600">{dom.cliente_direccion}</div>
-                  <div className="text-xs text-zinc-500 mt-1">
-                    Repartidor: <b>{dom.domiciliario_nombre || 'Sin asignar'}</b> • Envío: {formatMoney(dom.costo_domicilio)}
-                  </div>
+                  <div className="text-xs text-zinc-500 mt-1">Repartidor: <b>{dom.domiciliario_nombre || 'Sin asignar'}</b> • Envío: {formatMoney(dom.costo_domicilio)}</div>
                 </div>
                 <div className="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
                   <span className="font-bold tabular-nums text-zinc-950">{formatMoney(dom.gran_total)}</span>
                   <div className="flex gap-1.5">
                     {dom.estado !== 'FACTURADA' && (
-                      <button
-                        onClick={() => {
-                          setOrdenActivaId(dom.id);
-                          setActiveTab('VENTAS');
-                        }}
-                        className="px-2.5 py-1 rounded bg-zinc-900 text-white text-xs font-semibold cursor-pointer"
-                      >
-                        Abrir (F1)
-                      </button>
+                      <button onClick={() => { setOrdenActivaId(dom.id); setActiveTab('VENTAS'); }} className="px-2.5 py-1 rounded bg-zinc-900 text-white text-xs font-semibold cursor-pointer">Abrir (F1)</button>
                     )}
                     {dom.estado_domicilio === 'EN_PREPARACION' && (
-                      <button
-                        onClick={async () => {
-                          await executePosAction('ACTUALIZAR_ESTADO_DOMICILIO', {
-                            orden_id: dom.id,
-                            estado_domicilio: 'EN_RUTA',
-                          });
-                          fetchPosState();
-                        }}
-                        className="px-2.5 py-1 rounded bg-white border border-zinc-300 text-zinc-800 text-xs font-semibold cursor-pointer"
-                      >
-                        En Ruta
-                      </button>
+                      <button onClick={async () => { await executePosAction('ACTUALIZAR_ESTADO_DOMICILIO', { orden_id: dom.id, estado_domicilio: 'EN_RUTA' }); fetchPosState(); }} className="px-2.5 py-1 rounded bg-white border border-zinc-300 text-zinc-800 text-xs font-semibold cursor-pointer">En Ruta</button>
                     )}
                     {dom.estado_domicilio === 'EN_RUTA' && (
-                      <button
-                        onClick={async () => {
-                          await executePosAction('ACTUALIZAR_ESTADO_DOMICILIO', {
-                            orden_id: dom.id,
-                            estado_domicilio: 'ENTREGADO',
-                          });
-                          fetchPosState();
-                        }}
-                        className="px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-semibold cursor-pointer"
-                      >
-                        Entregado
-                      </button>
+                      <button onClick={async () => { await executePosAction('ACTUALIZAR_ESTADO_DOMICILIO', { orden_id: dom.id, estado_domicilio: 'ENTREGADO' }); fetchPosState(); }} className="px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-semibold cursor-pointer">Entregado</button>
                     )}
                   </div>
                 </div>
@@ -1837,7 +1757,60 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {/* ==================== F4: CORTE MULTIDIMENSIONAL ==================== */}
+      {/* ==================== F3: PRODUCTOS ==================== */}
+      {activeTab === 'PRODUCTOS' && (
+        <PosProductsModule
+          productos={productos}
+          busyAction={busyAction}
+          onSaveProducto={async (payload) => {
+            setBusyAction(true);
+            try {
+              await executePosAction('GUARDAR_PRODUCTO_POS', payload);
+              await fetchPosState();
+              notify('ok', 'Producto guardado correctamente.');
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error guardando producto');
+            } finally {
+              setBusyAction(false);
+            }
+          }}
+          onDeleteProducto={async (id) => {
+            setBusyAction(true);
+            try {
+              await executePosAction('ELIMINAR_PRODUCTO_POS', { id });
+              await fetchPosState();
+              notify('ok', 'Producto eliminado del catálogo.');
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error eliminando producto');
+            } finally {
+              setBusyAction(false);
+            }
+          }}
+        />
+      )}
+
+      {/* ==================== F4: INVENTARIO ==================== */}
+      {activeTab === 'INVENTARIO' && (
+        <PosInventoryModule
+          productos={productos}
+          movimientos={movimientosInventario}
+          busyAction={busyAction}
+          onAjustarInventario={async (payload) => {
+            setBusyAction(true);
+            try {
+              await executePosAction('AJUSTAR_INVENTARIO_POS', payload);
+              await fetchPosState();
+              notify('ok', 'Movimiento de inventario registrado.');
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error actualizando inventario');
+            } finally {
+              setBusyAction(false);
+            }
+          }}
+        />
+      )}
+
+      {/* ==================== CORTE DE CAJA (3 COLUMNAS CONSERVADAS) ==================== */}
       {activeTab === 'CORTE' && (
         <PosCashCutView
           config={posConfig}
@@ -1851,6 +1824,8 @@ export default function ElianaPosPage() {
           devolucionesEfectivoHoy={devolucionesEfectivoHoy}
           corteDepartamentos={corteDepartamentos}
           flujoEfectivoDetallado={flujoEfectivoDetallado}
+          consumosInternosHoy={consumosInternosHoy}
+          gananciaEstimadaHoy={gananciaEstimadaHoy}
           eventosTurno={eventosTurno}
           busyAction={busyAction}
           onExecuteCierre={async (tipo, contado, obs) => {
@@ -1874,75 +1849,74 @@ export default function ElianaPosPage() {
         />
       )}
 
-      {/* ==================== MODAL F12: COBRAR (CON CRÉDITO Y COMISIÓN) ==================== */}
+      {/* ==================== MODAL F12: COBRAR O CONSUMO INTERNO ==================== */}
       {showCobroModal && ordenActiva && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-zinc-300 max-w-lg w-full p-5 space-y-4 shadow-xl">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-xl w-full p-5 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
-              <h3 className="font-bold text-base text-zinc-950">F12 — Cobrar {getOrdenTabLabel(ordenActiva)}</h3>
-              <button onClick={() => setShowCobroModal(false)} className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-500 cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>
+              <h3 className="font-bold text-base text-zinc-950">F12 — Cobrar / Cerrar {getOrdenTabLabel(ordenActiva)}</h3>
+              <button onClick={() => setShowCobroModal(false)} className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-500 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
 
             <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-4 flex items-center justify-between">
               <div>
-                <div className="text-xs text-zinc-500">Subtotal + Domicilio</div>
+                <div className="text-xs text-zinc-500">
+                  {metodoPago === 'CONSUMO_INTERNO' ? 'Valor Comercial Referencial (No entra a caja)' : 'Subtotal + Domicilio'}
+                </div>
                 <div className="font-bold text-base tabular-nums text-zinc-900">
                   {formatMoney(Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0))}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Total a Cobrar</div>
-                <div className="text-3xl font-extrabold tabular-nums text-zinc-950">{formatMoney(totalFinalCobro)}</div>
-              </div>
-            </div>
-
-            <div className={`grid ${posConfig.habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs`}>
-              {posConfig.habilitaPropinas && (
-                <div>
-                  <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
-                  <div className="flex gap-1 mb-1.5">
-                    {[0, 0.05, 0.1].map((pct) => (
-                      <button
-                        key={pct}
-                        onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))}
-                        className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-semibold text-zinc-700 cursor-pointer"
-                      >
-                        {pct * 100}%
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    type="number"
-                    value={propinaValor}
-                    onChange={(e) => setPropinaValor(Number(e.target.value || 0))}
-                    className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`}
-                  />
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">
+                  {metodoPago === 'CONSUMO_INTERNO' ? 'Cobro en Caja' : 'Total a Cobrar'}
                 </div>
-              )}
-              <div>
-                <label className="font-semibold text-zinc-700 block mb-1">Descuento Global ($)</label>
-                {posConfig.habilitaPropinas && <div className="h-[26px]" />}
-                <input
-                  type="number"
-                  value={descuentoValor}
-                  onChange={(e) => setDescuentoValor(Number(e.target.value || 0))}
-                  className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`}
-                />
+                <div className="text-3xl font-extrabold tabular-nums text-zinc-950">
+                  {metodoPago === 'CONSUMO_INTERNO' ? '$0' : formatMoney(totalFinalCobro)}
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-5 gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-              {(['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'CREDITO', 'MIXTO'] as const).map((m) => (
+            {metodoPago !== 'CONSUMO_INTERNO' && (
+              <div className={`grid ${posConfig.habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs`}>
+                {posConfig.habilitaPropinas && (
+                  <div>
+                    <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
+                    <div className="flex gap-1 mb-1.5">
+                      {[0, 0.05, 0.1].map((pct) => (
+                        <button key={pct} onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))} className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-semibold text-zinc-700 cursor-pointer">
+                          {pct * 100}%
+                        </button>
+                      ))}
+                    </div>
+                    <input type="number" value={propinaValor} onChange={(e) => setPropinaValor(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`} />
+                  </div>
+                )}
+                <div>
+                  <label className="font-semibold text-zinc-700 block mb-1">Descuento Global ($)</label>
+                  {posConfig.habilitaPropinas && <div className="h-[26px]" />}
+                  <input type="number" value={descuentoValor} onChange={(e) => setDescuentoValor(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`} />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+              {[
+                { id: 'EFECTIVO' as const, label: 'EFECTIVO' },
+                { id: 'DATAFONO' as const, label: 'DATÁFONO' },
+                { id: 'TRANSFERENCIA' as const, label: 'TRANSF.' },
+                { id: 'CREDITO' as const, label: 'CRÉDITO' },
+                { id: 'MIXTO' as const, label: 'MIXTO' },
+                { id: 'CONSUMO_INTERNO' as const, label: 'CONSUMO' },
+              ].map((m) => (
                 <button
-                  key={m}
-                  onClick={() => setMetodoPago(m)}
+                  key={m.id}
+                  onClick={() => setMetodoPago(m.id)}
                   className={`py-2 rounded-md text-[11px] font-semibold cursor-pointer ${
-                    metodoPago === m ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-950'
+                    metodoPago === m.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-950'
                   }`}
                 >
-                  {m}
+                  {m.label}
                 </button>
               ))}
             </div>
@@ -1953,28 +1927,11 @@ export default function ElianaPosPage() {
                   <span>Pagó con (Efectivo recibido):</span>
                   <span className="text-base font-bold tabular-nums text-blue-700">Cambio: {formatMoney(cambioCalculado)}</span>
                 </div>
-                <input
-                  autoFocus
-                  type="number"
-                  value={pagoConEfectivo}
-                  onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))}
-                  className={`w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-md text-xl font-bold tabular-nums text-zinc-950 outline-none ${noSpinnerClass}`}
-                />
+                <input autoFocus type="number" value={pagoConEfectivo} onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))} className={`w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-md text-xl font-bold tabular-nums text-zinc-950 outline-none ${noSpinnerClass}`} />
                 <div className="flex gap-1.5 flex-wrap">
-                  <button
-                    onClick={() => setPagoConEfectivo(totalFinalCobro)}
-                    className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold text-zinc-800 cursor-pointer"
-                  >
-                    Exacto
-                  </button>
+                  <button onClick={() => setPagoConEfectivo(totalFinalCobro)} className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold text-zinc-800 cursor-pointer">Exacto</button>
                   {[20000, 50000, 100000, 200000].map((billete) => (
-                    <button
-                      key={billete}
-                      onClick={() => setPagoConEfectivo(billete)}
-                      className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold tabular-nums text-zinc-800 cursor-pointer"
-                    >
-                      {formatMoney(billete)}
-                    </button>
+                    <button key={billete} onClick={() => setPagoConEfectivo(billete)} className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold tabular-nums text-zinc-800 cursor-pointer">{formatMoney(billete)}</button>
                   ))}
                 </div>
               </div>
@@ -1983,107 +1940,95 @@ export default function ElianaPosPage() {
             {metodoPago === 'DATAFONO' && (
               <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-xs">
                 <label className="font-semibold text-zinc-700 block mb-1">Comisión Bancaria Datáfono (opcional $)</label>
-                <input
-                  type="number"
-                  value={comisionTarjeta}
-                  onChange={(e) => setComisionTarjeta(Number(e.target.value || 0))}
-                  className={`w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`}
-                />
+                <input type="number" value={comisionTarjeta} onChange={(e) => setComisionTarjeta(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} />
               </div>
             )}
 
-            {(metodoPago === 'CREDITO' || (metodoPago === 'MIXTO' && pagoCredito > 0)) && (
+            {(metodoPago === 'CREDITO' || metodoPago === 'CONSUMO_INTERNO' || (metodoPago === 'MIXTO' && pagoCredito > 0)) && (
               <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 space-y-2 text-xs">
-                <div className="font-bold text-zinc-800">Cliente para Cargo a Crédito (Libro Mayor)</div>
+                <div className="font-bold text-zinc-800">
+                  {metodoPago === 'CONSUMO_INTERNO'
+                    ? 'Consumo Interno — Beneficiario y Área (No afecta el cuadre de caja)'
+                    : 'Cliente para Cargo a Crédito (Libro Mayor)'}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
                     value={clienteCreditoNombre}
                     onChange={(e) => setClienteCreditoNombre(e.target.value)}
-                    placeholder="Nombre completo del cliente"
+                    placeholder={metodoPago === 'CONSUMO_INTERNO' ? 'Ej. Olga (Cocina) o Dueño' : 'Nombre completo del cliente'}
                     list="clientes-credito-list"
                     className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-semibold"
                   />
                   <datalist id="clientes-credito-list">
-                    {creditosClientes.map((c) => (
-                      <option key={c.cliente_nombre} value={c.cliente_nombre} />
-                    ))}
+                    {creditosClientes.map((c) => <option key={c.cliente_nombre} value={c.cliente_nombre} />)}
                   </datalist>
-                  <input
-                    type="text"
-                    value={clienteCreditoTel}
-                    onChange={(e) => setClienteCreditoTel(e.target.value)}
-                    placeholder="Teléfono (opcional)"
-                    className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md"
-                  />
+                  {metodoPago === 'CONSUMO_INTERNO' ? (
+                    <select value={areaConsumo} onChange={(e) => setAreaConsumo(e.target.value)} className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-semibold">
+                      <option value="Personal Cocina">Personal Cocina</option>
+                      <option value="Personal Caja / Servicio">Personal Caja / Servicio</option>
+                      <option value="Dueño / Gerencia">Dueño / Gerencia</option>
+                      <option value="Cortesía / Degustación">Cortesía / Degustación</option>
+                    </select>
+                  ) : (
+                    <input type="text" value={clienteCreditoTel} onChange={(e) => setClienteCreditoTel(e.target.value)} placeholder="Teléfono (opcional)" className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md" />
+                  )}
                 </div>
               </div>
             )}
 
             {metodoPago === 'MIXTO' && (
               <div className="grid grid-cols-4 gap-2 text-xs">
-                <div>
-                  <label className="font-semibold text-zinc-700">Efectivo</label>
-                  <input type="number" value={pagoEfectivo} onChange={(e) => setPagoEfectivo(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
-                </div>
-                <div>
-                  <label className="font-semibold text-zinc-700">Datáfono</label>
-                  <input type="number" value={pagoDatafono} onChange={(e) => setPagoDatafono(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
-                </div>
-                <div>
-                  <label className="font-semibold text-zinc-700">Transf.</label>
-                  <input type="number" value={pagoTransferencia} onChange={(e) => setPagoTransferencia(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
-                </div>
-                <div>
-                  <label className="font-semibold text-zinc-700">Crédito</label>
-                  <input type="number" value={pagoCredito} onChange={(e) => setPagoCredito(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} />
-                </div>
+                <div><label className="font-semibold text-zinc-700">Efectivo</label><input type="number" value={pagoEfectivo} onChange={(e) => setPagoEfectivo(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
+                <div><label className="font-semibold text-zinc-700">Datáfono</label><input type="number" value={pagoDatafono} onChange={(e) => setPagoDatafono(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
+                <div><label className="font-semibold text-zinc-700">Transf.</label><input type="number" value={pagoTransferencia} onChange={(e) => setPagoTransferencia(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
+                <div><label className="font-semibold text-zinc-700">Crédito</label><input type="number" value={pagoCredito} onChange={(e) => setPagoCredito(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
               </div>
             )}
 
-            <button
-              onClick={handleConfirmarCobro}
-              disabled={busyAction}
-              className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer"
-            >
-              Confirmar Cobro e Imprimir Ticket
+            <button onClick={handleConfirmarCobro} disabled={busyAction} className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer">
+              {metodoPago === 'CONSUMO_INTERNO' ? 'Registrar Consumo Interno ($0 Caja)' : 'Confirmar Cobro e Imprimir Ticket'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal F11 - Mayoreo / Ajuste de Precio y Cantidad */}
+      {/* Modal Asignar Cliente / Personal */}
+      {showAsignarClienteModal && (
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
+          <form onSubmit={handleAsignarCliente} className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl text-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-zinc-900">Asignar Cliente o Personal</h3>
+              <button type="button" onClick={() => setShowAsignarClienteModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <input type="text" autoFocus value={asignarNombre} onChange={(e) => setAsignarNombre(e.target.value)} placeholder="Nombre del cliente o colaborador" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium" />
+            <input type="text" value={asignarTel} onChange={(e) => setAsignarTel(e.target.value)} placeholder="Teléfono (opcional)" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
+            <button type="submit" disabled={busyAction} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer">Guardar Asignación</button>
+          </form>
+        </div>
+      )}
+
+      {/* Modal F11 */}
       {showMayoreoModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl text-xs">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">F11 — Ajustar Precio / Cantidad</h3>
               <button onClick={() => setShowMayoreoModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-semibold text-zinc-700 block mb-1">Cantidad</label>
-                <input type="number" step="any" value={mayoreoCantidad} onChange={(e) => setMayoreoCantidad(Number(e.target.value || 1))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} />
-              </div>
-              <div>
-                <label className="font-semibold text-zinc-700 block mb-1">Precio Unitario ($)</label>
-                <input type="number" value={mayoreoPrecio} onChange={(e) => setMayoreoPrecio(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} />
-              </div>
+              <div><label className="font-semibold text-zinc-700 block mb-1">Cantidad</label><input type="number" step="any" value={mayoreoCantidad} onChange={(e) => setMayoreoCantidad(Number(e.target.value || 1))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} /></div>
+              <div><label className="font-semibold text-zinc-700 block mb-1">Precio Unitario ($)</label><input type="number" value={mayoreoPrecio} onChange={(e) => setMayoreoPrecio(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} /></div>
             </div>
-            <div>
-              <label className="font-semibold text-zinc-700 block mb-1">Nota / Observación</label>
-              <input type="text" value={mayoreoNotas} onChange={(e) => setMayoreoNotas(e.target.value)} placeholder="Ej. Término 3/4, precio mayoreo..." className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-md" />
-            </div>
-            <button onClick={handleGuardarMayoreo} disabled={busyAction} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer">
-              Aplicar Cambios
-            </button>
+            <div><label className="font-semibold text-zinc-700 block mb-1">Nota / Observación</label><input type="text" value={mayoreoNotas} onChange={(e) => setMayoreoNotas(e.target.value)} placeholder="Ej. Término 3/4, precio mayoreo..." className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-md" /></div>
+            <button onClick={handleGuardarMayoreo} disabled={busyAction} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer">Aplicar Cambios</button>
           </div>
         </div>
       )}
 
-      {/* Modal F10 - Buscar Producto */}
+      {/* Modal F10 */}
       {showBuscarModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-2xl w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">F10 — Buscador de Productos</h3>
@@ -2108,11 +2053,7 @@ export default function ElianaPosPage() {
             />
             <div className="max-h-80 overflow-y-auto divide-y divide-zinc-100 border border-zinc-200 rounded-md">
               {productosBusquedaModal.map((p, idx) => (
-                <button
-                  key={p.id}
-                  onClick={() => { handleAgregarProducto(p, 1); setShowBuscarModal(false); }}
-                  className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs cursor-pointer ${idx === buscarIndex ? 'bg-blue-50 font-semibold' : 'hover:bg-zinc-50'}`}
-                >
+                <button key={p.id} onClick={() => { handleAgregarProducto(p, 1); setShowBuscarModal(false); }} className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs cursor-pointer ${idx === buscarIndex ? 'bg-blue-50 font-semibold' : 'hover:bg-zinc-50'}`}>
                   <div><span className="font-mono text-zinc-400 mr-2">{p.codigo}</span><span className="text-zinc-900">{p.nombre}</span></div>
                   <span className="font-bold tabular-nums text-zinc-900">{formatMoney(p.precio_total)}</span>
                 </button>
@@ -2122,9 +2063,9 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {/* Modal F9 - Verificador */}
+      {/* Modal F9 */}
       {showVerificadorModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">F9 — Verificador de Precios</h3>
@@ -2143,9 +2084,9 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {/* Modal INS - Varios */}
+      {/* Modal INS */}
       {showVariosModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">INS — Agregar Artículo Varios</h3>
@@ -2161,9 +2102,9 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {/* Modal CTRL+P - Artículos Comunes */}
+      {/* Modal CTRL+P */}
       {showArtComunModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-lg w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">CTRL+P — Artículos Comunes</h3>
@@ -2181,24 +2122,30 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {/* Modal F7 / F8 */}
+      {/* Modal F7 / F8 sincronizado con Libro de Caja */}
       {cashFlowModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-zinc-900">{cashFlowModal === 'ENTRADA' ? 'F7 — Entrada de Efectivo' : 'F8 — Salida de Efectivo'}</h3>
+              <h3 className="font-bold text-base text-zinc-900">{cashFlowModal === 'ENTRADA' ? 'F7 — Entrada de Efectivo' : 'F8 — Salida a Libro de Caja'}</h3>
               <button onClick={() => setCashFlowModal(null)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
+            {cashFlowModal === 'SALIDA' && (
+              <select value={cashFlowClasif} onChange={(e) => setCashFlowClasif(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-xs font-semibold">
+                <option value="Gasto Operativo">Gasto Operativo (Servicios, Hielo, Varios)</option>
+                <option value="Costo / Insumo">Costo / Insumo (Compras de contado)</option>
+                <option value="Turno / Nómina">Turno / Nómina (Pagos a personal)</option>
+              </select>
+            )}
             <input autoFocus type="number" value={cashFlowMonto} onChange={(e) => setCashFlowMonto(e.target.value)} placeholder="Monto ($)" className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
-            <input type="text" value={cashFlowConcepto} onChange={(e) => setCashFlowConcepto(e.target.value)} placeholder="Concepto / Motivo" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
+            <input type="text" value={cashFlowConcepto} onChange={(e) => setCashFlowConcepto(e.target.value)} placeholder="Concepto / Beneficiario" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
             <button onClick={handleRegistrarCashFlow} disabled={busyAction} className="w-full py-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs cursor-pointer">
-              Registrar {cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida'}
+              Registrar {cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida en Libro de Caja'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal Ventas del Día y Devoluciones */}
       {showVentasDiaModal && (
         <PosReturnsModal
           ordenesFacturadas={ordenesFacturadasHoy}
@@ -2215,12 +2162,7 @@ export default function ElianaPosPage() {
               canal: orden.canal_venta,
               mesaNumero: orden.mesa_numero,
               clienteNombre: orden.cliente_nombre,
-              items: orden.items.map((it) => ({
-                nombre: it.nombre_producto,
-                cantidad: it.cantidad,
-                precioUnitario: it.precio_unitario,
-                subtotal: it.subtotal,
-              })),
+              items: orden.items.map((it) => ({ nombre: it.nombre_producto, cantidad: it.cantidad, precioUnitario: it.precio_unitario, subtotal: it.subtotal })),
               subtotal: orden.subtotal_bruto,
               descuento: orden.descuento,
               propina: orden.propina,
@@ -2228,7 +2170,7 @@ export default function ElianaPosPage() {
               total: orden.gran_total,
               metodoPago: orden.metodo_pago,
             });
-            notify('ok', `Copia de ${orden.consecutivo} enviada a impresora.`);
+            notify('ok', `Copia de ${orden.consecutivo} enviada.`);
           }}
           onDevolverItem={async (payload) => {
             setBusyAction(true);
@@ -2245,7 +2187,6 @@ export default function ElianaPosPage() {
         />
       )}
 
-      {/* Modal Cartera y Créditos */}
       {showCreditosModal && (
         <PosCreditsModal
           clientes={creditosClientes}
@@ -2266,7 +2207,6 @@ export default function ElianaPosPage() {
         />
       )}
 
-      {/* Modal Configuración Multi-Negocio, LAN y Periféricos */}
       {showSettingsModal && (
         <PosTerminalSettingsModal
           config={posConfig}
@@ -2276,14 +2216,28 @@ export default function ElianaPosPage() {
             saveElianaPosConfig(next);
             if (!next.habilitaMesas && activeTab === 'MESAS') setActiveTab('VENTAS');
             if (!next.habilitaDomicilios && activeTab === 'DOMICILIOS') setActiveTab('VENTAS');
-            notify('ok', 'Configuración guardada correctamente.');
+            notify('ok', 'Configuración guardada.');
           }}
         />
       )}
 
-      {/* Modal Nuevo Domicilio */}
+      {showExitModal && (
+        <PosExitConfirmModal
+          sesionActiva={sesionActiva}
+          onClose={() => setShowExitModal(false)}
+          onGoToCutAndClose={() => {
+            setShowExitModal(false);
+            setActiveTab('CORTE');
+          }}
+          onLeaveOpenAndExit={() => {
+            setShowExitModal(false);
+            router.push('/');
+          }}
+        />
+      )}
+
       {showDomicilioModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-zinc-900">Nuevo Pedido a Domicilio</h3>
@@ -2297,21 +2251,6 @@ export default function ElianaPosPage() {
               <input type="text" value={domRepartidor} onChange={(e) => setDomRepartidor(e.target.value)} placeholder="Domiciliario" className="px-3 py-2 border border-zinc-300 rounded-md text-sm" />
             </div>
             <button onClick={handleCrearDomicilio} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer">Crear Domicilio</button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Abrir Turno */}
-      {showAbrirCajaModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-200 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
-            <h3 className="font-bold text-base text-zinc-900">Abrir Turno — {cajaNombre}</h3>
-            <label className="text-xs font-semibold text-zinc-600 block">Base inicial de efectivo ($)</label>
-            <input type="number" value={baseInicialInput} onChange={(e) => setBaseInicialInput(e.target.value)} className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
-            <div className="flex gap-2">
-              <button onClick={() => setShowAbrirCajaModal(false)} className="flex-1 py-2 rounded-md border border-zinc-300 text-xs font-semibold text-zinc-700 cursor-pointer">Cancelar</button>
-              <button onClick={handleAbrirTurnoCaja} className="flex-1 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer">Abrir Turno</button>
-            </div>
           </div>
         </div>
       )}

@@ -59,6 +59,7 @@ import {
   LibroCajaUsuario,
 } from '@/services/libroCajaService';
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/dataCache';
+import { usePersistedState } from '@/lib/usePersistedState';
 
 const CACHE_KEY = 'libro_caja_menor_oct_2026';
 
@@ -177,15 +178,14 @@ export default function LibrosApoyoContent({
 
   // Estado para la vista de selección de mes a pantalla completa
   const initialDateParam = searchParams.get('fecha');
-  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(() => {
-    if (modoCajeroHermetico) return '2026-11';
-    if (initialDateParam && initialDateParam.length >= 7) return initialDateParam.slice(0, 7);
-    return null;
-  });
-  const [searchMonthQuery, setSearchMonthQuery] = useState('');
+  const [selectedMonthId, setSelectedMonthId] = usePersistedState<string | null>(
+    'caja_selected_month_id',
+    modoCajeroHermetico ? '2026-11' : (initialDateParam && initialDateParam.length >= 7 ? initialDateParam.slice(0, 7) : null)
+  );
+  const [searchMonthQuery, setSearchMonthQuery] = usePersistedState<string>('caja_search_month', '');
 
   // Mes seleccionado para el detalle (dinámico según la base de datos y períodos)
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-10');
+  const [selectedMonth, setSelectedMonth] = usePersistedState<string>('caja_selected_month', '2026-10');
 
   // Período cerrado si corresponde al mes seleccionado
   const isCerrado = isPeriodoCerrado(selectedMonthId || selectedMonth || '');
@@ -376,18 +376,18 @@ export default function LibrosApoyoContent({
   const [isSidebarOpen, setIsSidebarOpen] = useState(!modoCajeroHermetico);
 
   // Sistema de Pestañas
-  const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null); // null = Vista Previa Consolidado
+  const [openTabs, setOpenTabs] = usePersistedState<string[]>('caja_open_tabs', []);
+  const [activeTabId, setActiveTabId] = usePersistedState<string | null>('caja_active_tab_id', null); // null = Vista Previa Consolidado
 
   // Sub-vista dentro del Consolidado Mensual
-  const [consolidadoSubTab, setConsolidadoSubTab] = useState<'DIARIO' | 'CRONOLOGICO'>('DIARIO');
+  const [consolidadoSubTab, setConsolidadoSubTab] = usePersistedState<'DIARIO' | 'CRONOLOGICO'>('caja_consolidado_subtab', 'DIARIO');
 
   // Filtros en la vista Cronológica Global
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedClasificacion, setSelectedClasificacion] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState('');
-  const [selectedResponsable, setSelectedResponsable] = useState('');
-  const [selectedFechaFilter, setSelectedFechaFilter] = useState('');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('caja_search_query', '');
+  const [selectedClasificacion, setSelectedClasificacion] = usePersistedState<string>('caja_selected_clasif', '');
+  const [selectedCategoria, setSelectedCategoria] = usePersistedState<string>('caja_selected_cat', '');
+  const [selectedResponsable, setSelectedResponsable] = usePersistedState<string>('caja_selected_resp', '');
+  const [selectedFechaFilter, setSelectedFechaFilter] = usePersistedState<string>('caja_selected_fecha', '');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 35;
 
@@ -486,7 +486,7 @@ export default function LibrosApoyoContent({
       });
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'No se pudo cargar el Libro de Caja Menor');
+        throw new Error(json.error || 'No se pudo cargar el Libro de Caja');
       }
       setKpis(json.kpis);
       setDiarios(json.diarios || []);
@@ -977,7 +977,7 @@ export default function LibrosApoyoContent({
         {/* Encabezado Principal */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hojas de Libro de Caja Menor</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hojas de Libro de Caja</h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Listado de meses con registros de caja menor ordenados desde el más reciente.
             </p>
@@ -1022,7 +1022,7 @@ export default function LibrosApoyoContent({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-semibold text-slate-900 group-hover:text-orange-600 transition-colors">
-                        {m.nombre} - Libro de Caja Menor
+                        {m.nombre} - Libro de Caja
                       </h3>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
@@ -1074,7 +1074,7 @@ export default function LibrosApoyoContent({
             </div>
             <div className="min-w-0">
               <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white flex items-center gap-1.5 leading-none truncate">
-                Portal de Caja Menor • La Finca
+                Portal de Libro de Caja • La Finca
               </h1>
               <p className="text-[10px] text-slate-400 font-medium mt-1 truncate">
                 Cajero: <span className="text-orange-400 font-bold">{currentCajeroName}</span>
@@ -1242,18 +1242,18 @@ export default function LibrosApoyoContent({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* =================================================================== */}
         {/* CASO 1: VISTA PREVIA CONSOLIDADO LIBRO CAJA MENOR (activeTabId === null) */}
-        {/* Izquierda: Meses | Derecha: Lista de Hojas de Libro de Caja Menor    */}
+        {/* Izquierda: Meses | Derecha: Lista de Hojas de Libro de Caja    */}
         {/* =================================================================== */}
         {activeTabId === null ? (
           <div className="flex-1 flex flex-col min-h-0 bg-white overflow-hidden">
-            {/* Panel Principal: Lista de Hojas de Libro de Caja Menor (Ancho Completo) */}
+            {/* Panel Principal: Lista de Hojas de Libro de Caja (Ancho Completo) */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
               {/* Encabezado Principal de Hojas */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-                      Hojas de Libro de Caja Menor • {selectedMonthLabel}
+                      Hojas de Libro de Caja • {selectedMonthLabel}
                     </h1>
                     <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white font-mono text-[10px] font-bold">
                       {diariosDelMes.length} Hojas Activas
@@ -2576,7 +2576,7 @@ export default function LibrosApoyoContent({
       <Modal
         isOpen={isNewSheetModalOpen}
         onClose={() => setIsNewSheetModalOpen(false)}
-        title="Abrir Nueva Hoja Diaria de Caja Menor (Admin)"
+        title="Abrir Nueva Hoja Diaria de Libro de Caja (Admin)"
         icon={<Calendar className="w-5 h-5 text-slate-700" />}
         maxWidth="max-w-md"
       >

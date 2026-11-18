@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { invalidateVentasCache } from '@/lib/ventasCache';
 import { recalcularHojaDiaria } from '@/services/libroCajaService';
+import { validateAdminCredentials } from '@/lib/authServer';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
       { data: alertas },
       { data: creditosMovs },
       { data: devolucionesDia },
+      { data: movimientosInventario },
     ] = await Promise.all([
       supabase.from('pos_mesas').select('*').order('numero', { ascending: true }),
       supabase
@@ -83,7 +85,7 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false }),
       supabase
         .from('productos_venta')
-        .select('id, codigo, nombre, categoria, subcategoria, precio_total, precio_neto, impoconsumo, activo')
+        .select('id, codigo, nombre, categoria, subcategoria, precio_total, precio_neto, impoconsumo, activo, costo_unitario, precio_mayoreo, existencia, inv_minimo, inv_maximo')
         .eq('activo', true)
         .order('nombre', { ascending: true }),
       supabase
@@ -112,6 +114,11 @@ export async function GET(request: Request) {
         .select('*')
         .eq('fecha', fecha)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('pos_inventario_movimientos')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200),
     ]);
 
     if (errM) throw errM;
@@ -196,16 +203,29 @@ export async function GET(request: Request) {
     }
     const creditosClientes = Array.from(creditosMap.values()).sort((a, b) => b.saldo - a.saldo);
 
-    // Corte por Departamentos (Categorías)
+    // Corte por Departamentos (solo ventas comerciales, excluyendo CONSUMO_INTERNO)
+    const prodCostMap = new Map<string, number>();
+    for (const p of productos || []) {
+      prodCostMap.set(p.id, Number((p as any).costo_unitario || 0));
+    }
+
     const deptoMap = new Map<string, { categoria: string; cantidad: number; total: number }>();
-    const facturadasHoy = ordenesEnriquecidas.filter((o: any) => o.estado === 'FACTURADA' && o.fecha === fecha);
+    const facturadasHoyAll = ordenesEnriquecidas.filter((o: any) => o.estado === 'FACTURADA' && o.fecha === fecha);
+    const facturadasHoy = facturadasHoyAll.filter((o: any) => o.metodo_pago !== 'CONSUMO_INTERNO');
+    const consumosInternosHoy = facturadasHoyAll.filter((o: any) => o.metodo_pago === 'CONSUMO_INTERNO');
+
+    let gananciaEstimadaHoy = 0;
     for (const o of facturadasHoy) {
       for (const it of o.items || []) {
         if (it.estado_comanda === 'ANULADO') continue;
         const cat = it.categoria || 'General';
         const prev = deptoMap.get(cat) || { categoria: cat, cantidad: 0, total: 0 };
-        prev.cantidad += Number(it.cantidad || 0);
-        prev.total += Number(it.subtotal || 0);
+        const cant = Number(it.cantidad || 0);
+        const sub = Number(it.subtotal || 0);
+        const unitCost = it.producto_id ? (prodCostMap.get(it.producto_id) || 0) : 0;
+        gananciaEstimadaHoy += Math.max(0, sub - unitCost * cant);
+        prev.cantidad += cant;
+        prev.total += sub;
         deptoMap.set(cat, prev);
       }
     }
@@ -315,6 +335,9 @@ export async function GET(request: Request) {
       devolucionesDia: devolucionesDia || [],
       corteDepartamentos,
       flujoEfectivoDetallado,
+      consumosInternosHoy,
+      gananciaEstimadaHoy: Math.round(gananciaEstimadaHoy),
+      movimientosInventario: movimientosInventario || [],
     });
   } catch (err: any) {
     console.error('Error en GET /api/pos:', err);
@@ -333,9 +356,40 @@ export async function POST(request: Request) {
     const cajaNombre = body.caja_nombre || 'Caja 1';
     const cajeroNombre = body.cajero_nombre || 'CAJERO';
 
-    // 1. Abrir turno de caja
+    // 1. Abrir turno de caja (con validación de Usuario y Contraseña)
     if (action === 'ABRIR_TURNO_CAJA') {
-      const efectivoInicial = Number(body.efectivo_inicial || 0);
+      const efectivoInicial = Number(body.efectivo_inicial ?? body.base_inicial ?? 0);
+      const rawUser = String(body.username || body.usuario_username || '').trim();
+      const rawPass = String(body.password || body.password_pin || '').trim();
+
+      let resolvedCajeroNombre = cajeroNombre;
+      let resolvedUsername = rawUser.toLowerCase() || cajeroNombre.toLowerCase();
+
+      if (rawUser || rawPass) {
+        const { data: cajaUser } = await supabase
+          .from('libro_caja_usuarios')
+          .select('*')
+          .eq('username', rawUser.toLowerCase())
+          .eq('password_pin', rawPass)
+          .eq('activo', true)
+          .maybeSingle();
+
+        if (cajaUser) {
+          resolvedCajeroNombre = cajaUser.nombre_cajero;
+          resolvedUsername = cajaUser.username;
+        } else {
+          const adminValid = validateAdminCredentials(rawUser, rawPass);
+          if (!adminValid) {
+            return NextResponse.json(
+              { success: false, error: 'Usuario o contraseña incorrectos para abrir turno.' },
+              { status: 401 }
+            );
+          }
+          resolvedCajeroNombre = adminValid.name;
+          resolvedUsername = adminValid.username;
+        }
+      }
+
       const { data: prevSesiones } = await supabase
         .from('libro_caja_sesiones')
         .select('numero_turno')
@@ -349,8 +403,8 @@ export async function POST(request: Request) {
         .insert({
           fecha: todayStr,
           caja_nombre: cajaNombre,
-          cajero_nombre: cajeroNombre.toUpperCase(),
-          usuario_username: String(body.usuario_username || cajeroNombre).toLowerCase(),
+          cajero_nombre: resolvedCajeroNombre.toUpperCase(),
+          usuario_username: resolvedUsername,
           efectivo_inicial: efectivoInicial,
           estado: 'ABIERTA',
           numero_turno: nextTurno,
@@ -360,6 +414,7 @@ export async function POST(request: Request) {
         .single();
 
       if (error) throw error;
+      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
       return NextResponse.json({ success: true, sesion });
     }
 
@@ -632,23 +687,37 @@ export async function POST(request: Request) {
       const domNum = Math.max(0, Number(ord.costo_domicilio || 0));
       const granTotal = Math.max(0, Math.round(subtotalBruto - descNum + propNum + domNum));
 
-      let pEf = Number(pago_efectivo || 0);
-      let pDat = Number(pago_datafono || 0);
-      let pTr = Number(pago_transferencia || 0);
-      let pCred = Number(pago_credito || 0);
-      if (metodo_pago === 'EFECTIVO' && pEf === 0) pEf = granTotal;
-      if (metodo_pago === 'DATAFONO' && pDat === 0) pDat = granTotal;
-      if ((metodo_pago === 'TRANSFERENCIA' || metodo_pago === 'TRANSFERENCIA_NEQUI') && pTr === 0) pTr = granTotal;
-      if (metodo_pago === 'CREDITO' && pCred === 0) pCred = granTotal;
+      const isConsumoInterno = metodo_pago === 'CONSUMO_INTERNO';
+      const areaConsumo = String(body.area_consumo || 'Personal / Interno').trim();
 
-      const finalClienteNombre = (cliente_nombre || ord.cliente_nombre || '').trim();
-      if (pCred > 0 && !finalClienteNombre) {
-        return NextResponse.json({ success: false, error: 'Debes indicar el nombre del cliente para ventas a crédito.' }, { status: 400 });
+      let pEf = isConsumoInterno ? 0 : Number(pago_efectivo || 0);
+      let pDat = isConsumoInterno ? 0 : Number(pago_datafono || 0);
+      let pTr = isConsumoInterno ? 0 : Number(pago_transferencia || 0);
+      let pCred = isConsumoInterno ? 0 : Number(pago_credito || 0);
+      if (!isConsumoInterno) {
+        if (metodo_pago === 'EFECTIVO' && pEf === 0) pEf = granTotal;
+        if (metodo_pago === 'DATAFONO' && pDat === 0) pDat = granTotal;
+        if ((metodo_pago === 'TRANSFERENCIA' || metodo_pago === 'TRANSFERENCIA_NEQUI') && pTr === 0) pTr = granTotal;
+        if (metodo_pago === 'CREDITO' && pCred === 0) pCred = granTotal;
       }
 
-      const cambio = metodo_pago === 'EFECTIVO' && Number(efectivo_recibido) > granTotal
-        ? Math.round(Number(efectivo_recibido) - granTotal)
-        : 0;
+      const finalClienteNombre = (cliente_nombre || ord.cliente_nombre || '').trim();
+      if ((pCred > 0 || isConsumoInterno) && !finalClienteNombre) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: isConsumoInterno
+              ? 'Debes indicar el nombre de la persona o área para el consumo interno.'
+              : 'Debes indicar el nombre del cliente para ventas a crédito.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const cambio =
+        !isConsumoInterno && metodo_pago === 'EFECTIVO' && Number(efectivo_recibido) > granTotal
+          ? Math.round(Number(efectivo_recibido) - granTotal)
+          : 0;
 
       const nowIso = new Date().toISOString();
       const { data: facturada, error: errFac } = await supabase
@@ -657,18 +726,19 @@ export async function POST(request: Request) {
           subtotal_bruto: Math.round(subtotalBruto),
           descuento: descNum,
           motivo_descuento: motivo_descuento || null,
-          propina: propNum,
+          propina: isConsumoInterno ? 0 : propNum,
           gran_total: granTotal,
           metodo_pago,
           pago_efectivo: pEf,
           pago_datafono: pDat,
           pago_transferencia: pTr,
           pago_credito: pCred,
-          comision_tarjeta: Number(comision_tarjeta || 0),
-          pagado_at: pCred > 0 && pEf === 0 && pDat === 0 && pTr === 0 ? null : nowIso,
+          comision_tarjeta: isConsumoInterno ? 0 : Number(comision_tarjeta || 0),
+          pagado_at: isConsumoInterno || (pCred > 0 && pEf === 0 && pDat === 0 && pTr === 0) ? null : nowIso,
           cliente_nombre: finalClienteNombre || ord.cliente_nombre || null,
           cliente_telefono: (cliente_telefono || ord.cliente_telefono || '').trim() || null,
-          efectivo_recibido: Number(efectivo_recibido || granTotal),
+          observaciones: isConsumoInterno ? `CONSUMO INTERNO (${areaConsumo})` : ord.observaciones || null,
+          efectivo_recibido: isConsumoInterno ? 0 : Number(efectivo_recibido || granTotal),
           cambio_entregado: cambio,
           estado: 'FACTURADA',
           ...(ord.canal_venta === 'DOMICILIO' ? { estado_domicilio: 'ENTREGADO' } : {}),
@@ -728,7 +798,63 @@ export async function POST(request: Request) {
         });
       }
 
-      // Impactar ventas_detalle y ventas_diarias en tiempo real (sin depender de .txt)
+      // Descontar existencia en productos_venta y registrar movimiento
+      for (const it of itemsActivos) {
+        if (!it.producto_id) continue;
+        const { data: prodRow } = await supabase
+          .from('productos_venta')
+          .select('existencia')
+          .eq('id', it.producto_id)
+          .maybeSingle();
+        if (prodRow) {
+          const ant = Number(prodRow.existencia || 0);
+          const cant = Number(it.cantidad || 1);
+          const nueva = Math.max(0, ant - cant);
+          await supabase.from('productos_venta').update({ existencia: nueva }).eq('id', it.producto_id);
+          await supabase.from('pos_inventario_movimientos').insert({
+            fecha: todayStr,
+            producto_id: it.producto_id,
+            codigo_producto: it.codigo_producto,
+            nombre_producto: it.nombre_producto,
+            tipo: 'VENTA',
+            cantidad_delta: -cant,
+            existencia_anterior: ant,
+            existencia_nueva: nueva,
+            motivo: isConsumoInterno ? `Consumo Interno (${finalClienteNombre})` : `Venta ${ord.consecutivo}`,
+            usuario: cajeroNombre,
+          });
+        }
+      }
+
+      if (isConsumoInterno) {
+        // Consumo interno: NO suma a ventas_diarias ni al cuadre de caja; sí registra en consumos + bitácora
+        await supabase.from('pos_auditoria_eventos').insert({
+          fecha: todayStr,
+          caja_nombre: cajaNombre,
+          usuario_cajero: cajeroNombre,
+          tipo_alerta: 'CONSUMO_INTERNO_REGISTRADO',
+          nivel_riesgo: 'BAJO',
+          orden_consecutivo: ord.consecutivo,
+          mesa_numero: ord.mesa_numero,
+          valor_afectado: granTotal,
+          descripcion: `Consumo Interno valorizado en $${granTotal.toLocaleString('es-CO')} asignado a ${finalClienteNombre} (${areaConsumo}). Cobrado en caja: $0.`,
+        });
+        const consumoInserts = itemsActivos.map((it: any) => ({
+          fecha: todayStr,
+          tipo: 'CONSUMO',
+          nombre_insumo: it.nombre_producto,
+          categoria: it.categoria || 'Consumo Interno',
+          cantidad: Number(it.cantidad || 1),
+          unidad: it.unidad || 'Und',
+          costo_unitario: Number(it.precio_unitario || 0),
+          valor_total: Number(it.subtotal || 0),
+          observaciones: `Consumo POS (${ord.consecutivo}) • ${finalClienteNombre} (${areaConsumo})`,
+        }));
+        await supabase.from('registros_costeo_cocina').insert(consumoInserts);
+        return NextResponse.json({ success: true, orden: facturada, items: itemsActivos });
+      }
+
+      // Impactar ventas_detalle y ventas_diarias en tiempo real (solo ventas comerciales)
       const periodoId = `per-${todayStr.slice(0, 7)}`;
       const detalleInserts = itemsActivos.map((it: any) => ({
         periodo_id: periodoId,
@@ -788,6 +914,7 @@ export async function POST(request: Request) {
         });
       }
       invalidateVentasCache();
+      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
 
       return NextResponse.json({ success: true, orden: facturada, items: itemsActivos });
     }
@@ -943,12 +1070,15 @@ export async function POST(request: Request) {
           tipo_libro: 'CAJA_MENOR',
           caja_nombre: cajaNombre,
           responsable_caja: cajeroNombre,
+          clasificacion: body.clasificacion || 'Gasto Operativo',
           concepto: String(concepto).trim(),
-          categoria: 'Salida Rápida POS',
+          categoria: body.categoria || 'Salida Rápida POS',
+          descripcion_beneficiario: body.descripcion_beneficiario || '',
           valor_pagado: valor,
           metodo_pago: 'Efectivo',
+          sesion_id: body.sesion_id || null,
         });
-        await recalcularHojaDiaria(todayStr, cajaNombre).catch(() => {});
+        await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
       }
 
       return NextResponse.json({ success: true, tipo, monto: valor });
@@ -1124,6 +1254,112 @@ export async function POST(request: Request) {
 
       const updated = await recalcularTotalesOrden(orden_id);
       return NextResponse.json({ success: true, ...(updated || {}) });
+    }
+
+    // 15. Asignar Cliente / Personal a una orden abierta
+    if (action === 'ASIGNAR_CLIENTE_ORDEN') {
+      const { orden_id, cliente_nombre = '', cliente_telefono = '', observaciones = null } = body;
+      if (!orden_id) {
+        return NextResponse.json({ success: false, error: 'orden_id requerido' }, { status: 400 });
+      }
+      const { data: orden, error } = await supabase
+        .from('pos_ordenes')
+        .update({
+          cliente_nombre: String(cliente_nombre || '').trim() || null,
+          cliente_telefono: String(cliente_telefono || '').trim() || null,
+          ...(observaciones !== null ? { observaciones } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orden_id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ success: true, orden });
+    }
+
+    // 16. CRUD Productos desde F3 Productos del POS
+    if (action === 'GUARDAR_PRODUCTO_POS') {
+      const {
+        id,
+        codigo,
+        nombre,
+        categoria = 'General',
+        costo_unitario = 0,
+        precio_total = 0,
+        precio_mayoreo = 0,
+        existencia = 0,
+        inv_minimo = 0,
+        inv_maximo = 0,
+      } = body;
+      if (!nombre || Number(precio_total) < 0) {
+        return NextResponse.json({ success: false, error: 'Nombre y precio de venta son obligatorios' }, { status: 400 });
+      }
+      const payload = {
+        codigo: String(codigo || `P-${Date.now().toString().slice(-4)}`).trim(),
+        nombre: String(nombre).trim(),
+        categoria: String(categoria).trim() || 'General',
+        costo_unitario: Number(costo_unitario || 0),
+        precio_total: Number(precio_total || 0),
+        precio_neto: Math.round(Number(precio_total || 0) / 1.08),
+        precio_mayoreo: Number(precio_mayoreo || 0),
+        existencia: Number(existencia || 0),
+        inv_minimo: Number(inv_minimo || 0),
+        inv_maximo: Number(inv_maximo || 0),
+        activo: true,
+      };
+      const { data, error } = id
+        ? await supabase.from('productos_venta').update(payload).eq('id', id).select('*').single()
+        : await supabase.from('productos_venta').insert(payload).select('*').single();
+      if (error) throw error;
+      return NextResponse.json({ success: true, producto: data });
+    }
+
+    if (action === 'ELIMINAR_PRODUCTO_POS') {
+      const { id } = body;
+      if (!id) return NextResponse.json({ success: false, error: 'id requerido' }, { status: 400 });
+      const { error } = await supabase.from('productos_venta').update({ activo: false }).eq('id', id);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // 17. Entradas y Ajustes de Inventario desde F4 Inventario
+    if (action === 'AJUSTAR_INVENTARIO_POS') {
+      const { producto_id, tipo = 'ENTRADA', cantidad = 0, motivo = '' } = body;
+      if (!producto_id) {
+        return NextResponse.json({ success: false, error: 'producto_id requerido' }, { status: 400 });
+      }
+      const { data: prod } = await supabase
+        .from('productos_venta')
+        .select('id, codigo, nombre, existencia')
+        .eq('id', producto_id)
+        .single();
+      if (!prod) {
+        return NextResponse.json({ success: false, error: 'Producto no encontrado' }, { status: 404 });
+      }
+      const ant = Number(prod.existencia || 0);
+      const cantNum = Number(cantidad || 0);
+      const nueva = tipo === 'AJUSTE' ? Math.max(0, cantNum) : Math.max(0, ant + cantNum);
+      const delta = nueva - ant;
+
+      await supabase.from('productos_venta').update({ existencia: nueva }).eq('id', prod.id);
+      const { data: mov, error: errM } = await supabase
+        .from('pos_inventario_movimientos')
+        .insert({
+          fecha: todayStr,
+          producto_id: prod.id,
+          codigo_producto: prod.codigo,
+          nombre_producto: prod.nombre,
+          tipo: tipo === 'AJUSTE' ? 'AJUSTE' : 'ENTRADA',
+          cantidad_delta: delta,
+          existencia_anterior: ant,
+          existencia_nueva: nueva,
+          motivo: motivo || (tipo === 'AJUSTE' ? 'Ajuste físico de inventario' : 'Entrada rápida en POS'),
+          usuario: cajeroNombre,
+        })
+        .select('*')
+        .single();
+      if (errM) throw errM;
+      return NextResponse.json({ success: true, movimiento: mov, existencia_nueva: nueva });
     }
 
     return NextResponse.json({ success: false, error: 'Acción POS no reconocida' }, { status: 400 });

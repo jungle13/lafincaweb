@@ -11,7 +11,7 @@ const VIEW_TITLES: Record<string, string> = {
   '/periodos': 'Gestión de Períodos Contables',
   '/': 'Bienvenida • Inicio',
   '/costeo-diario': 'Hoja de Costeo Diario',
-  '/libros-apoyo': 'Libros de Apoyo • Libro de Caja Menor',
+  '/libros-apoyo': 'Libros de Apoyo • Libro de Caja',
   '/auditoria-cocina': 'Auditoría Cocina',
   '/recetas': 'Fichas Técnicas / Recetas',
   '/inventario-consolidado': 'Costeo e Inventario Consolidado Diario',

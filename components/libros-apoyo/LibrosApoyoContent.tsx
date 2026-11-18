@@ -486,7 +486,7 @@ export default function LibrosApoyoContent({
       });
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'No se pudo cargar el Libro de Caja Menor');
+        throw new Error(json.error || 'No se pudo cargar el Libro de Caja');
       }
       setKpis(json.kpis);
       setDiarios(json.diarios || []);
@@ -977,7 +977,7 @@ export default function LibrosApoyoContent({
         {/* Encabezado Principal */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hojas de Libro de Caja Menor</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hojas de Libro de Caja</h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Listado de meses con registros de caja menor ordenados desde el más reciente.
             </p>
@@ -1022,7 +1022,7 @@ export default function LibrosApoyoContent({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-semibold text-slate-900 group-hover:text-orange-600 transition-colors">
-                        {m.nombre} - Libro de Caja Menor
+                        {m.nombre} - Libro de Caja
                       </h3>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
@@ -1074,7 +1074,7 @@ export default function LibrosApoyoContent({
             </div>
             <div className="min-w-0">
               <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white flex items-center gap-1.5 leading-none truncate">
-                Portal de Caja Menor • La Finca
+                Portal de Libro de Caja • La Finca
               </h1>
               <p className="text-[10px] text-slate-400 font-medium mt-1 truncate">
                 Cajero: <span className="text-orange-400 font-bold">{currentCajeroName}</span>
@@ -1242,18 +1242,18 @@ export default function LibrosApoyoContent({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* =================================================================== */}
         {/* CASO 1: VISTA PREVIA CONSOLIDADO LIBRO CAJA MENOR (activeTabId === null) */}
-        {/* Izquierda: Meses | Derecha: Lista de Hojas de Libro de Caja Menor    */}
+        {/* Izquierda: Meses | Derecha: Lista de Hojas de Libro de Caja    */}
         {/* =================================================================== */}
         {activeTabId === null ? (
           <div className="flex-1 flex flex-col min-h-0 bg-white overflow-hidden">
-            {/* Panel Principal: Lista de Hojas de Libro de Caja Menor (Ancho Completo) */}
+            {/* Panel Principal: Lista de Hojas de Libro de Caja (Ancho Completo) */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
               {/* Encabezado Principal de Hojas */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-                      Hojas de Libro de Caja Menor • {selectedMonthLabel}
+                      Hojas de Libro de Caja • {selectedMonthLabel}
                     </h1>
                     <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white font-mono text-[10px] font-bold">
                       {diariosDelMes.length} Hojas Activas
@@ -2576,7 +2576,7 @@ export default function LibrosApoyoContent({
       <Modal
         isOpen={isNewSheetModalOpen}
         onClose={() => setIsNewSheetModalOpen(false)}
-        title="Abrir Nueva Hoja Diaria de Caja Menor (Admin)"
+        title="Abrir Nueva Hoja Diaria de Libro de Caja (Admin)"
         icon={<Calendar className="w-5 h-5 text-slate-700" />}
         maxWidth="max-w-md"
       >

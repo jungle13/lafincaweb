@@ -1,4 +1,4 @@
-export type PosTab = 'VENTAS' | 'MESAS' | 'DOMICILIOS' | 'CORTE';
+export type PosTab = 'VENTAS' | 'MESAS' | 'DOMICILIOS' | 'PRODUCTOS' | 'INVENTARIO' | 'CORTE';
 
 export interface PosOrdenItem {
   id: string;
@@ -31,6 +31,7 @@ export interface PosOrden {
   domiciliario_nombre: string | null;
   costo_domicilio: number;
   estado_domicilio: string | null;
+  observaciones?: string | null;
   subtotal_bruto: number;
   descuento: number;
   propina: number;
@@ -43,6 +44,7 @@ export interface PosOrden {
   comision_tarjeta?: number;
   estado: 'ABIERTA' | 'PRECUENTA' | 'FACTURADA' | 'ANULADA';
   precuenta_impresa_veces: number;
+  created_at?: string;
   items: PosOrdenItem[];
 }
 
@@ -65,17 +67,40 @@ export interface ProductoVenta {
   nombre: string;
   categoria: string;
   subcategoria?: string;
+  costo_unitario?: number;
   precio_total: number;
   precio_neto: number;
+  precio_mayoreo?: number;
+  existencia?: number;
+  inv_minimo?: number;
+  inv_maximo?: number;
+}
+
+export interface InventarioMovimiento {
+  id: string;
+  fecha: string;
+  producto_id: string;
+  codigo_producto: string | null;
+  nombre_producto: string;
+  tipo: 'ENTRADA' | 'AJUSTE' | 'VENTA' | 'DEVOLUCION';
+  cantidad_delta: number;
+  existencia_anterior: number;
+  existencia_nueva: number;
+  motivo: string | null;
+  usuario: string | null;
+  created_at: string;
 }
 
 export interface SesionCaja {
   id: string;
   caja_nombre: string;
   cajero_nombre: string;
+  usuario_username?: string;
   numero_turno: number;
   base_inicial?: number;
   efectivo_inicial?: number;
+  hora_apertura?: string;
+  hora_cierre?: string | null;
   estado: string;
 }
 

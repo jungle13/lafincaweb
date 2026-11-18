@@ -72,7 +72,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'LIBROS DE APOYO',
     items: [
-      { label: 'Libro de Caja Menor', href: '/libros-apoyo', icon: Wallet },
+      { label: 'Libro de Caja', href: '/libros-apoyo', icon: Wallet },
     ],
   },
   {

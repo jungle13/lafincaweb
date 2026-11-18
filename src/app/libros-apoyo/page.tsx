@@ -10,7 +10,7 @@ export default function LibrosApoyoPage() {
       fallback={
         <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500">
           <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
-          <span className="text-xs font-medium">Cargando Libro de Caja Menor...</span>
+          <span className="text-xs font-medium">Cargando Libro de Caja...</span>
         </div>
       }
     >

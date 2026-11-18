@@ -232,7 +232,7 @@ export default function NotificacionesPage() {
     if (tipo === 'CAJA_MENOR') {
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-          Libro de Caja Menor
+          Libro de Caja
         </span>
       );
     }
@@ -324,7 +324,7 @@ export default function NotificacionesPage() {
         >
           <option value="TODOS">Todos los módulos</option>
           <option value="FACTURA_COMPRA">Facturas de Compra</option>
-          <option value="CAJA_MENOR">Libro de Caja Menor</option>
+          <option value="CAJA_MENOR">Libro de Caja</option>
           <option value="VENTAS_DIA">Ventas del Día</option>
         </select>
       </div>
