@@ -8,9 +8,11 @@
     "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "bot": "node scripts/telegram-bot-polling.mjs",
-    "pos:icons": "npx --yes @tauri-apps/cli@^2 icon public/Logo.png --fit contain",
+    "pos:icons": "npx --yes @tauri-apps/cli@^2 icon src-tauri/icons/icon.png --fit contain",
     "pos:dev": "npx --yes @tauri-apps/cli@^2 dev",
-    "pos:build": "npx --yes @tauri-apps/cli@^2 build"
+    "pos:build": "npx --yes @tauri-apps/cli@^2 build",
+    "tauri:dev": "npx --yes @tauri-apps/cli@^2 dev",
+    "tauri:build": "npx --yes @tauri-apps/cli@^2 build"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

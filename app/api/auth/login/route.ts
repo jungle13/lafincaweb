@@ -34,11 +34,15 @@ export async function POST(req: NextRequest) {
     // 1. Validar primero contra usuarios registrados en Supabase (libro_caja_usuarios)
     try {
       const supabase = getSupabase();
-      const { data: dbUsers } = await supabase
+      const { data: dbUsers, error: dbErr } = await supabase
         .from('libro_caja_usuarios')
-        .select('username, nombre_completo, rol, rol_sistema, password_pin, password_sistema, activo')
+        .select('username, nombre_cajero, rol, rol_sistema, password_pin, password_sistema, activo')
         .ilike('username', username)
         .limit(1);
+
+      if (dbErr) {
+        console.warn('[POST /api/auth/login] Error consultando libro_caja_usuarios:', dbErr.message);
+      }
 
       const dbUser = dbUsers?.[0];
       if (dbUser && dbUser.activo !== false) {
@@ -46,7 +50,7 @@ export async function POST(req: NextRequest) {
         if (expectedPass && expectedPass === password) {
           resolvedUser = {
             username: String(dbUser.username).trim().toLowerCase(),
-            name: String(dbUser.nombre_completo || dbUser.username).trim(),
+            name: String(dbUser.nombre_cajero || dbUser.username).trim(),
             role: normalizeSystemRole(dbUser.rol_sistema || dbUser.rol, dbUser.username),
           };
         }
