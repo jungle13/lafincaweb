@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Lock, LogOut, ShieldAlert, ShieldCheck, Unlock, X } from 'lucide-react';
 import type { SesionCaja } from './types';
+import ElianaBrandLogo from '@/components/brand/ElianaBrandLogo';
 
 interface PosOpenShiftGateProps {
   cajaNombre: string;
@@ -48,16 +49,11 @@ export function PosOpenShiftGate({
         className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-6 space-y-4 shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-zinc-900 text-white font-bold text-sm flex items-center justify-center">
-              E
-            </span>
-            <div>
-              <h2 className="font-bold text-base text-zinc-950">Apertura de Turno — Eliana POS</h2>
-              <p className="text-[11px] text-zinc-500">
-                Terminal asignada: <b>{cajaNombre}</b>
-              </p>
-            </div>
+          <div className="space-y-1">
+            <ElianaBrandLogo variant="pos" theme="light" size="sm" />
+            <p className="text-[11px] text-zinc-500">
+              Apertura de Turno · Terminal: <b>{cajaNombre}</b>
+            </p>
           </div>
           <Lock className="w-5 h-5 text-zinc-400" />
         </div>

@@ -12,6 +12,7 @@ import { PeriodoProvider } from '@/context/PeriodoContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { AuthProvider } from '@/context/AuthContext';
 import AuthGuard from '@/components/auth/AuthGuard';
+import DesktopCloseGuard from '@/components/desktop/DesktopCloseGuard';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -20,8 +21,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'La Finca - Dashboard Administrativo & Control de Bodega',
-  description: 'Sistema administrativo y operativo de carnes y movimientos en tiempo real',
+  title: 'ELIANA — Plataforma de Gestión y Punto de Venta',
+  description: 'Sistema administrativo, costeo diario, inventarios y punto de venta en tiempo real',
   icons: {
     icon: '/favicon.svg',
     shortcut: '/favicon.svg',
@@ -49,6 +50,7 @@ export default function RootLayout({
         </Suspense>
         <AuthProvider>
           <AuthGuard>
+            <DesktopCloseGuard />
             <SidebarProvider>
               <PeriodoProvider>
                 <NotificationProvider>

@@ -3,12 +3,25 @@ export const CAJERO_COOKIE_NAME = 'la_finca_cajero_token';
 
 export type AuthEnforcementMode = 'audit' | 'enforce';
 
+export type SystemRole = 'ADMIN' | 'GESTOR' | 'OPERATIVO_POS';
+
 export interface VerifiedSession {
   username: string;
   name: string;
-  role: 'admin' | 'cajero';
+  role: SystemRole | 'admin' | 'cajero';
   iat: number;
   exp: number;
+}
+
+export function normalizeSystemRole(rawRole: string | undefined | null, username?: string | null): SystemRole {
+  const cleanUser = String(username || '').trim().toLowerCase();
+  const cleanRole = String(rawRole || '').trim().toUpperCase();
+  if (cleanUser === 'admin' || cleanRole === 'ADMIN') return 'ADMIN';
+  if (cleanRole === 'GESTOR' || cleanRole === 'SUPERVISOR') return 'GESTOR';
+  if (cleanRole === 'OPERATIVO_POS' || cleanRole === 'CAJERO' || cleanRole === 'MESERO') return 'OPERATIVO_POS';
+  // Compatibilidad con cuentas administrativas previas (eliana, arturo)
+  if (cleanUser === 'eliana' || cleanUser === 'arturo') return 'GESTOR';
+  return 'OPERATIVO_POS';
 }
 
 interface ServerUserRecord {
@@ -66,7 +79,7 @@ async function importHmacKey(usage: 'sign' | 'verify'): Promise<CryptoKey> {
 }
 
 export async function signAuthToken(
-  payload: { username: string; name: string; role: 'admin' | 'cajero' },
+  payload: { username: string; name: string; role: SystemRole | 'admin' | 'cajero' },
   ttlSeconds = 2592000 // 30 días
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);

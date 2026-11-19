@@ -4,10 +4,24 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Emitter, Manager, State, WindowEvent};
+
+struct OpenShiftState(Arc<AtomicBool>);
+
+#[tauri::command]
+fn set_open_shift_state(is_open: bool, state: State<'_, OpenShiftState>) {
+    state.0.store(is_open, Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn allow_close_app(window: tauri::Window, state: State<'_, OpenShiftState>) {
+    state.0.store(false, Ordering::SeqCst);
+    let _ = window.close();
+}
 
 #[derive(Clone)]
 struct LanStore {
@@ -214,7 +228,19 @@ fn read_scale_weight(port_name: String, model: Option<String>) -> Result<f64, St
 }
 
 fn main() {
+    let shift_flag = Arc::new(AtomicBool::new(false));
+    let shift_flag_for_event = shift_flag.clone();
+
     tauri::Builder::default()
+        .manage(OpenShiftState(shift_flag))
+        .on_window_event(move |window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if shift_flag_for_event.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.emit("eliana-close-requested", ());
+                }
+            }
+        })
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -231,8 +257,10 @@ fn main() {
             get_local_ip,
             print_escpos_ticket,
             open_cash_drawer,
-            read_scale_weight
+            read_scale_weight,
+            set_open_shift_state,
+            allow_close_app
         ])
         .run(tauri::generate_context!())
-        .expect("Error iniciando Eliana POS");
+        .expect("Error iniciando ELIANA POS");
 }

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 import { useAuth } from '@/context/AuthContext';
+import ElianaBrandLogo from '@/components/brand/ElianaBrandLogo';
 
 interface NavSection {
   title: string;
@@ -97,7 +98,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen, closeSidebar } = useSidebar();
   const { user } = useAuth();
-  const isAdmin = user?.username?.toLowerCase() === 'admin';
+  const isAdmin = user?.role === 'ADMIN' || user?.username?.toLowerCase() === 'admin';
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
   // Limpiar pendingHref cuando cambia la ruta
@@ -105,13 +106,13 @@ export default function Sidebar() {
     setPendingHref(null);
   }, [pathname]);
 
-  // El Portal Cajero es una interfaz totalmente hermética: no tiene sidebar
+  // El Portal Cajero es una interfaz hermética; además solo ADMIN tiene acceso al Sidebar
   const isCajeroPortal =
     pathname?.startsWith('/libros-apoyo/acceso') ||
     pathname?.startsWith('/libros-apoyo/cajero') ||
     pathname?.startsWith('/pos');
 
-  if (isCajeroPortal) return null;
+  if (isCajeroPortal || !isAdmin) return null;
 
   return (
     <>
@@ -142,19 +143,14 @@ export default function Sidebar() {
               <Menu className="w-5 h-5" />
             </button>
 
-            {/* Logo Oficial de La Finca SVG (E:\RESTAURANTE LA FINCA\SVG\Recurso 1.svg) */}
+            {/* Logo Vectorial Oficial ELIANA / ELIANA POS */}
             <Link
               href="/"
               onClick={closeSidebar}
               title="Ir a Principal"
               className="flex items-center select-none hover:opacity-90 transition-opacity"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/rf2.png"
-                alt="La Finca Choclos y Asados"
-                className="h-7 w-auto object-contain max-w-[120px]"
-              />
+              <ElianaBrandLogo variant="auto" theme="dark" size="sm" />
             </Link>
           </div>
 

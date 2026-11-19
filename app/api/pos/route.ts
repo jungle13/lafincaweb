@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { invalidateVentasCache } from '@/lib/ventasCache';
 import { recalcularHojaDiaria } from '@/services/libroCajaService';
-import { validateAdminCredentials } from '@/lib/authServer';
+import { AUTH_COOKIE_NAME, validateAdminCredentials, verifyAuthToken } from '@/lib/authServer';
 import { formatColombiaTime, getColombiaDateStr } from '@/lib/dateUtils';
 
 export const dynamic = 'force-dynamic';
@@ -367,7 +367,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { action } = body;
@@ -375,11 +375,22 @@ export async function POST(request: Request) {
     const cajaNombre = body.caja_nombre || 'Caja 1';
     const cajeroNombre = body.cajero_nombre || 'CAJERO';
 
-    // 1. Abrir turno de caja (con validación de Usuario/Contraseña + Bloqueo tras Cierre Total)
+    // 1. Abrir turno de caja (con validación estricta de doble nivel + Bloqueo tras Cierre Total)
     if (action === 'ABRIR_TURNO_CAJA') {
       const efectivoInicial = Number(body.efectivo_inicial ?? body.base_inicial ?? 0);
       const rawUser = String(body.username || body.usuario_username || '').trim();
       const rawPass = String(body.password || body.password_pin || '').trim();
+
+      if (!rawUser || !rawPass) {
+        return NextResponse.json(
+          { success: false, error: 'Debes ingresar usuario y contraseña POS para abrir turno.' },
+          { status: 400 }
+        );
+      }
+
+      // Verificar sesión principal firmada del equipo (doble nivel estricto)
+      const mainToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+      const mainSession = await verifyAuthToken(mainToken);
 
       // Verificar si la jornada de hoy ya tuvo Cierre Total (Corte Z)
       const [{ data: prevSesiones }, { data: diarioHoy }] = await Promise.all([
@@ -415,32 +426,47 @@ export async function POST(request: Request) {
         );
       }
 
-      let resolvedCajeroNombre = cajeroNombre;
-      let resolvedUsername = rawUser.toLowerCase() || cajeroNombre.toLowerCase();
+      let resolvedCajeroNombre = '';
+      let resolvedUsername = '';
 
-      if (rawUser || rawPass) {
-        const { data: cajaUser } = await supabase
-          .from('libro_caja_usuarios')
-          .select('*')
-          .eq('username', rawUser.toLowerCase())
-          .eq('password_pin', rawPass)
-          .eq('activo', true)
-          .maybeSingle();
+      const { data: dbCandidates } = await supabase
+        .from('libro_caja_usuarios')
+        .select('*')
+        .ilike('username', rawUser)
+        .eq('activo', true)
+        .limit(1);
 
-        if (cajaUser) {
-          resolvedCajeroNombre = cajaUser.nombre_cajero;
-          resolvedUsername = cajaUser.username;
-        } else {
-          const adminValid = validateAdminCredentials(rawUser, rawPass);
-          if (!adminValid) {
-            return NextResponse.json(
-              { success: false, error: 'Usuario o contraseña incorrectos para abrir turno.' },
-              { status: 401 }
-            );
-          }
-          resolvedCajeroNombre = adminValid.name;
-          resolvedUsername = adminValid.username;
+      const cajaUser = dbCandidates?.[0];
+      if (cajaUser) {
+        const expectedPosPass = String(cajaUser.pos_pin || cajaUser.password_pin || '').trim();
+        if (expectedPosPass && expectedPosPass === rawPass) {
+          resolvedCajeroNombre = cajaUser.nombre_cajero || cajaUser.nombre_completo || cajaUser.username;
+          resolvedUsername = String(cajaUser.username).trim().toLowerCase();
         }
+      }
+
+      if (!resolvedUsername) {
+        const adminValid = validateAdminCredentials(rawUser, rawPass);
+        if (!adminValid) {
+          return NextResponse.json(
+            { success: false, error: 'Usuario o contraseña POS incorrectos para abrir turno.' },
+            { status: 401 }
+          );
+        }
+        resolvedCajeroNombre = adminValid.name;
+        resolvedUsername = adminValid.username.toLowerCase();
+      }
+
+      // REGLA ESTRICTA DE DOBLE NIVEL: las credenciales POS deben pertenecer al usuario de la sesión principal
+      if (mainSession && mainSession.username.toLowerCase() !== resolvedUsername.toLowerCase()) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'SESSION_USER_MISMATCH',
+            error: `Sesión principal incorrecta: las credenciales POS corresponden a "${resolvedUsername}", pero este equipo tiene iniciada la sesión principal de "${mainSession.username}". Cierra la sesión principal, ingresa con tu usuario y luego abre tu turno en POS.`,
+          },
+          { status: 403 }
+        );
       }
 
       const nextTurno = Number(prevSesiones?.[0]?.numero_turno || 0) + 1;
@@ -1022,6 +1048,10 @@ export async function POST(request: Request) {
       const diferenciaEfectivo = Math.round(Number(efectivo_contado) - efectivoEsperado);
 
       const nowCierreIso = new Date().toISOString();
+      const duracionMinutos = sesion?.hora_apertura
+        ? Math.max(0, Math.round((new Date(nowCierreIso).getTime() - new Date(sesion.hora_apertura).getTime()) / 60000))
+        : 0;
+
       if (sesion?.id) {
         await supabase
           .from('libro_caja_sesiones')
@@ -1035,6 +1065,7 @@ export async function POST(request: Request) {
             estado: isTotal ? 'CERRADA_TOTAL' : 'CERRADA_PARCIAL',
             tipo_cierre: isTotal ? 'TOTAL' : 'PARCIAL',
             hora_cierre: nowCierreIso,
+            duracion_minutos: duracionMinutos,
             observaciones: observaciones || null,
           })
           .eq('id', sesion.id);
@@ -1047,6 +1078,7 @@ export async function POST(request: Request) {
           estado: isTotal ? 'CERRADA_TOTAL' : 'CERRADA_PARCIAL',
           tipo_cierre: isTotal ? 'TOTAL' : 'PARCIAL',
           hora_cierre: nowCierreIso,
+          duracion_minutos: duracionMinutos,
         })
         .eq('fecha', todayStr)
         .eq('caja_nombre', cajaNombre)

@@ -101,6 +101,7 @@ export interface SesionCaja {
   efectivo_inicial?: number;
   hora_apertura?: string;
   hora_cierre?: string | null;
+  duracion_minutos?: number | null;
   estado: string;
 }
 

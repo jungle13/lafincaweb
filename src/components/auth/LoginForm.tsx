@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { User, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import ElianaBrandLogo from '@/components/brand/ElianaBrandLogo';
+import { DEFAULT_EMPRESA_CONFIG, type EmpresaConfig, isTauriDesktop } from '@/lib/empresaConfig';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -12,6 +14,18 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [empresa, setEmpresa] = useState<EmpresaConfig>(DEFAULT_EMPRESA_CONFIG);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    setIsDesktop(isTauriDesktop());
+    fetch('/api/empresa', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.empresa) setEmpresa(d.empresa);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,34 +45,36 @@ export default function LoginForm() {
       return;
     }
 
-    // Redirigir siempre a la página de bienvenida (Inicio)
     router.replace('/');
   };
 
+  const showCompanyName =
+    empresa.nombre_comercial &&
+    empresa.nombre_comercial.toUpperCase() !== 'ELIANA' &&
+    empresa.nombre_comercial.toUpperCase() !== 'ELIANA POS';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs px-4 select-none">
-      {/* Container principal con el azul oscuro del sidebar (#050811) */}
-      <div className="w-full max-w-sm bg-[#050811] border border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-2xl animate-fade-in text-white">
-        {/* Cabecera con Logo Oficial de La Finca */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs px-4 select-none">
+      <div className="w-full max-w-sm bg-[#0B1120] border border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-2xl animate-fade-in text-white">
+        {/* Cabecera con Logo Vectorial ELIANA / ELIANA POS */}
         <div className="flex flex-col items-center justify-center mb-6 text-center">
           <div className="mb-4 flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/rf2.png"
-              alt="La Finca Choclos y Asados"
-              className="w-48 sm:w-52 h-auto max-h-16 object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
-            />
+            <ElianaBrandLogo variant={isDesktop ? 'pos' : 'web'} theme="dark" size="lg" />
           </div>
 
-          <h1 className="text-lg font-bold text-white tracking-tight leading-tight">
-            Sistema de Seguimiento de Costeo
+          <h1 className="text-sm font-semibold text-slate-200 tracking-tight leading-tight">
+            {isDesktop ? 'Plataforma de Punto de Venta y Operación' : empresa.subtitulo || 'Sistema de Gestión y Costeo'}
           </h1>
-          <p className="text-xs font-semibold text-slate-300 mt-1.5 leading-normal">
-            La Finca Choclos y Asados
-          </p>
-          <p className="text-[12px] text-orange-400 font-medium mt-0.5 tracking-wide">
-            Eliana Garces
-          </p>
+          {showCompanyName && (
+            <p className="text-xs font-semibold text-blue-400 mt-1.5 leading-normal">
+              {empresa.nombre_comercial}
+            </p>
+          )}
+          {empresa.propietario && (
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5 tracking-wide">
+              {empresa.propietario}
+            </p>
+          )}
         </div>
 
         {/* Formulario de Login */}
@@ -73,10 +89,10 @@ export default function LoginForm() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ej: admin, eliana o arturo"
+                placeholder="Ingresa tu usuario"
                 autoFocus
                 disabled={loading}
-                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-900/90 border border-slate-700/80 rounded-xl outline-none focus:bg-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-white placeholder-slate-500 transition"
+                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-900/90 border border-slate-700/80 rounded-xl outline-none focus:bg-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-white placeholder-slate-500 transition"
               />
             </div>
           </div>
@@ -93,7 +109,7 @@ export default function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 disabled={loading}
-                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-900/90 border border-slate-700/80 rounded-xl outline-none focus:bg-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-white placeholder-slate-500 transition"
+                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-900/90 border border-slate-700/80 rounded-xl outline-none focus:bg-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-white placeholder-slate-500 transition"
               />
             </div>
           </div>
@@ -109,7 +125,7 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <span>{loading ? 'Ingresando...' : 'Ingresar al Sistema'}</span>
               <ArrowRight className="w-4 h-4" />

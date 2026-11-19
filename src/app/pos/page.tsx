@@ -8,6 +8,7 @@ import {
   Bike,
   Boxes,
   ChefHat,
+  Clock,
   CreditCard,
   Delete,
   DollarSign,
@@ -27,6 +28,7 @@ import {
   ScanBarcode,
   Search,
   Settings,
+  ShieldAlert,
   Tag,
   Trash2,
   Unlock,
@@ -63,6 +65,8 @@ import PosTerminalSettingsModal from '@/components/pos/PosTerminalSettingsModal'
 import PosProductsModule from '@/components/pos/PosProductsModule';
 import PosInventoryModule from '@/components/pos/PosInventoryModule';
 import { PosExitConfirmModal, PosOpenShiftGate } from '@/components/pos/PosShiftGateModal';
+import ElianaBrandLogo from '@/components/brand/ElianaBrandLogo';
+import { formatDurationHMS, isTauriDesktop } from '@/lib/empresaConfig';
 import type {
   CierreResumen,
   ClienteCreditoResumen,
@@ -139,6 +143,8 @@ export default function ElianaPosPage() {
   const [jornadaCerradaTotal, setJornadaCerradaTotal] = useState(false);
   const [shiftError, setShiftError] = useState<string | null>(null);
   const [offlineQueue, setOfflineQueue] = useState<OfflineOp[]>([]);
+  const [forceCloseMode, setForceCloseMode] = useState(false);
+  const [shiftNowMs, setShiftNowMs] = useState<number>(() => Date.now());
 
   // Navegación / selección
   const [zonaFiltro, setZonaFiltro] = useState('Todas');
@@ -1228,14 +1234,53 @@ export default function ElianaPosPage() {
     return mods;
   }, [posConfig.habilitaMesas, posConfig.habilitaDomicilios, mesas, ordenesDomicilio]);
 
+  // Leer parámetros ?tab=CORTE&forceClose=1 cuando se intercepta el cierre del aplicativo
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'CORTE') {
+      setActiveTab('CORTE');
+    }
+    if (params.get('forceClose') === '1') {
+      setForceCloseMode(true);
+      setActiveTab('CORTE');
+    }
+  }, []);
+
+  // Sincronizar bandera de turno abierto con Tauri Rust (DesktopCloseGuard)
+  useEffect(() => {
+    if (loading) return;
+    const isOpen = Boolean(sesionActiva && sesionActiva.estado === 'ABIERTA');
+    window.dispatchEvent(new CustomEvent('eliana-shift-state-changed', { detail: { isOpen } }));
+    // Si venía de un intento de cierre obligatorio del aplicativo y ya cerró la caja, cerrar limpiamente
+    if (forceCloseMode && !isOpen) {
+      if (isTauriDesktop()) {
+        const tauri = (window as unknown as {
+          __TAURI__?: { core?: { invoke?: (cmd: string) => Promise<unknown> } };
+        }).__TAURI__;
+        if (tauri?.core?.invoke) {
+          void tauri.core.invoke('allow_close_app');
+        }
+      } else {
+        setForceCloseMode(false);
+        router.push('/');
+      }
+    }
+  }, [loading, sesionActiva, forceCloseMode, router]);
+
+  // Temporizador en vivo del turno abierto (HH:MM:SS)
+  useEffect(() => {
+    if (!sesionActiva?.hora_apertura) return;
+    setShiftNowMs(Date.now());
+    const t = setInterval(() => setShiftNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [sesionActiva?.hora_apertura]);
+
   // Acceso 100% hermético: nunca renderiza la interfaz del POS hasta validar turno abierto
   if (loading) {
     return (
       <div className="fixed inset-0 z-[10000] w-screen h-screen bg-zinc-100 flex flex-col items-center justify-center gap-3 select-none">
-        <span className="w-10 h-10 rounded-xl bg-zinc-900 text-white font-bold text-lg flex items-center justify-center">
-          E
-        </span>
-        <div className="text-sm font-bold text-zinc-900">Eliana POS</div>
+        <ElianaBrandLogo variant="pos" theme="light" size="md" />
         <div className="text-xs text-zinc-500">Verificando estado del turno...</div>
       </div>
     );
@@ -1273,8 +1318,68 @@ export default function ElianaPosPage() {
     );
   }
 
+  // Bloqueo de doble nivel si otro usuario dejó turno abierto en este equipo y el actual no es ADMIN
+  const isDifferentShiftOwner =
+    Boolean(sesionActiva.usuario_username) &&
+    Boolean(user?.username) &&
+    sesionActiva.usuario_username!.toLowerCase() !== user!.username.toLowerCase() &&
+    user?.role !== 'ADMIN' &&
+    user?.username?.toLowerCase() !== 'admin';
+
+  if (isDifferentShiftOwner) {
+    return (
+      <div className="fixed inset-0 z-[10000] w-screen h-screen bg-zinc-100 flex items-center justify-center p-4 select-none">
+        <div className="bg-white rounded-xl border border-red-200 max-w-md w-full p-6 space-y-4 shadow-xl">
+          <div className="flex items-center gap-3 text-red-700">
+            <ShieldAlert className="w-6 h-6 shrink-0" />
+            <div>
+              <h2 className="font-bold text-base">Turno abierto por otro usuario</h2>
+              <p className="text-xs text-zinc-500">Control estricto de sesión por cajero</p>
+            </div>
+          </div>
+          <p className="text-xs text-zinc-700 leading-relaxed">
+            En esta terminal (<b>{cajaNombre}</b>) existe un turno de caja abierto a nombre de{' '}
+            <b>{sesionActiva.cajero_nombre}</b> (usuario <b>{sesionActiva.usuario_username}</b>), pero tu sesión principal actual es <b>{user?.username}</b>.
+          </p>
+          <p className="text-xs text-zinc-600 leading-relaxed">
+            Para evitar mezcla de turnos, <b>{sesionActiva.cajero_nombre}</b> debe ingresar con su sesión principal y realizar Cierre Parcial (X) o Total (Z) antes de que puedas abrir tu turno.
+          </p>
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold cursor-pointer"
+            >
+              Volver al Inicio
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const shiftElapsedHMS = formatDurationHMS(sesionActiva.hora_apertura, shiftNowMs);
+
   return (
     <div className="fixed inset-0 z-[9999] w-screen h-screen bg-zinc-100 text-zinc-900 flex flex-col overflow-hidden select-none font-sans">
+
+      {forceCloseMode && (
+        <div className="bg-amber-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0" />
+            <span>
+              Tienes un turno de caja abierto en <b>{cajaNombre}</b>. Realiza el arqueo y presiona <b>Cierre Parcial (X)</b> o <b>Cierre Total (Z)</b> para cerrar el aplicativo de forma segura.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForceCloseMode(false)}
+            className="px-2.5 py-1 rounded bg-white/15 hover:bg-white/25 text-[11px] font-bold cursor-pointer shrink-0"
+          >
+            Seguir trabajando
+          </button>
+        </div>
+      )}
 
       {toast && (
         <div
@@ -1291,8 +1396,7 @@ export default function ElianaPosPage() {
       <header className="bg-white text-zinc-900 px-3 py-2 flex items-center justify-between gap-2 shrink-0 border-b border-zinc-200">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 pr-3 border-r border-zinc-200">
-            <span className="w-6 h-6 rounded-md bg-zinc-900 text-white font-bold text-xs flex items-center justify-center">E</span>
-            <span className="font-bold text-sm tracking-tight text-zinc-950">Eliana POS</span>
+            <ElianaBrandLogo variant="pos" theme="light" size="sm" />
           </div>
 
           <nav className="flex items-center gap-1 flex-wrap">
@@ -1331,6 +1435,14 @@ export default function ElianaPosPage() {
             <span className="text-[10px] text-zinc-400">Le atiende ({cajaNombre}):</span>
             <span className="font-bold text-zinc-900">{cajeroNombre}</span>
           </div>
+
+          <span
+            title="Tiempo transcurrido desde la apertura de este turno"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-mono font-bold text-xs bg-emerald-50 text-emerald-800 border border-emerald-200"
+          >
+            <Clock className="w-3.5 h-3.5 text-emerald-600" />
+            {shiftElapsedHMS}
+          </span>
 
           <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md font-semibold text-xs bg-zinc-100 text-zinc-700 border border-zinc-200">
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-600' : lanConnected ? 'bg-blue-600' : 'bg-amber-500'}`} />

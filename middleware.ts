@@ -11,6 +11,7 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth/login',
   '/api/auth/logout',
   '/api/auth/me',
+  '/api/empresa',
   '/api/telegram/webhook',
 ];
 
@@ -42,8 +43,14 @@ export async function middleware(req: NextRequest) {
   const adminToken = req.cookies.get(AUTH_COOKIE_NAME)?.value;
   const adminSession = await verifyAuthToken(adminToken);
 
-  // Admin autenticado tiene acceso completo a todas las APIs
-  if (adminSession && adminSession.role === 'admin') {
+  // Usuario con sesión principal válida (ADMIN, GESTOR, OPERATIVO_POS o legacy admin)
+  if (
+    adminSession &&
+    (adminSession.role === 'ADMIN' ||
+      adminSession.role === 'GESTOR' ||
+      adminSession.role === 'OPERATIVO_POS' ||
+      adminSession.role === 'admin')
+  ) {
     return NextResponse.next();
   }
 

@@ -1,10 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { SystemRole } from '@/lib/authServer';
 
 export interface AuthUser {
   username: string;
   name: string;
+  role: SystemRole;
 }
 
 interface AuthContextType {
@@ -15,7 +17,17 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-const STORAGE_KEY = 'la_finca_auth_session';
+const STORAGE_KEY = 'eliana_auth_session';
+
+function resolveClientRole(rawRole: unknown, username?: string): SystemRole {
+  const cleanUser = String(username || '').trim().toLowerCase();
+  const cleanRole = String(rawRole || '').trim().toUpperCase();
+  if (cleanUser === 'admin' || cleanRole === 'ADMIN') return 'ADMIN';
+  if (cleanRole === 'GESTOR' || cleanRole === 'SUPERVISOR') return 'GESTOR';
+  if (cleanRole === 'OPERATIVO_POS' || cleanRole === 'CAJERO' || cleanRole === 'MESERO') return 'OPERATIVO_POS';
+  if (cleanUser === 'eliana' || cleanUser === 'arturo') return 'GESTOR';
+  return 'OPERATIVO_POS';
+}
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -40,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const authUser: AuthUser = {
               username: data.user.username,
               name: data.user.name,
+              role: resolveClientRole(data.user.role, data.user.username),
             };
             setUser(authUser);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
@@ -49,15 +62,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (active) {
           setUser(null);
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem('la_finca_auth_session');
         }
       } catch {
-        // Fallback temporal en caso de error de red transitorio
         try {
-          const stored = localStorage.getItem(STORAGE_KEY);
+          const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('la_finca_auth_session');
           if (active && stored) {
             const parsed = JSON.parse(stored);
             if (parsed?.username && parsed?.name) {
-              setUser({ username: parsed.username, name: parsed.name });
+              setUser({
+                username: parsed.username,
+                name: parsed.name,
+                role: resolveClientRole(parsed.role, parsed.username),
+              });
             }
           }
         } catch {
@@ -88,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const authUser: AuthUser = {
           username: data.user.username,
           name: data.user.name,
+          role: resolveClientRole(data.user.role, data.user.username),
         };
         setUser(authUser);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
@@ -104,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('la_finca_auth_session');
       document.cookie = 'la_finca_session=; path=/; max-age=0; SameSite=Lax';
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {
@@ -127,9 +146,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 }
