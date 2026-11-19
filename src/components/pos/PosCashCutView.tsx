@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Printer } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
+import { formatColombiaTime, getColombiaDateStr } from '@/lib/dateUtils';
 import type { ElianaPosConfig } from '@/lib/posConfig';
 import { printThermalTicket } from '@/lib/posHardwareBridge';
 import type {
@@ -123,7 +124,7 @@ export default function PosCashCutView({
       XLSX.utils.book_append_sheet(wb, wsConsumos, 'Consumos Internos');
     }
 
-    const fechaHoy = new Date().toISOString().slice(0, 10);
+    const fechaHoy = getColombiaDateStr();
     XLSX.writeFile(wb, `Corte_Caja_${cajaNombre.replace(/\s+/g, '_')}_${fechaHoy}.xlsx`);
   };
 
@@ -131,8 +132,8 @@ export default function PosCashCutView({
     await printThermalTicket({
       titulo: modoCorte === 'CAJERO_X' ? 'CORTE DE CAJERO (X)' : 'CORTE DEL DÍA (Z)',
       subtitulo: `${cajaNombre} • Turno #${sesionActiva?.numero_turno || 1}`,
-      consecutivo: `CORTE-${new Date().toISOString().slice(0, 10)}`,
-      fecha: new Date().toLocaleString('es-CO'),
+      consecutivo: `CORTE-${getColombiaDateStr()}`,
+      fecha: new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
       caja: cajaNombre,
       cajero: cajeroNombre,
       canal: 'MOSTRADOR_LLEVAR',
@@ -173,7 +174,7 @@ export default function PosCashCutView({
             <p className="text-xs text-zinc-500">
               Turno #{sesionActiva?.numero_turno || 1} • Cajero: {sesionActiva?.cajero_nombre || cajeroNombre}
               {sesionActiva?.hora_apertura
-                ? ` • Apertura: ${new Date(sesionActiva.hora_apertura).toLocaleTimeString('es-CO')}`
+                ? ` • Apertura: ${formatColombiaTime(sesionActiva.hora_apertura)}`
                 : ''}
             </p>
           </div>

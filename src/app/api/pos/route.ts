@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { invalidateVentasCache } from '@/lib/ventasCache';
 import { recalcularHojaDiaria } from '@/services/libroCajaService';
 import { validateAdminCredentials } from '@/lib/authServer';
+import { formatColombiaTime, getColombiaDateStr } from '@/lib/dateUtils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,7 +64,7 @@ async function recalcularTotalesOrden(ordenId: string) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const fecha = searchParams.get('fecha') || new Date().toISOString().slice(0, 10);
+    const fecha = searchParams.get('fecha') || getColombiaDateStr();
     const cajaNombre = searchParams.get('caja') || 'Caja 1';
 
     const [
@@ -76,6 +77,7 @@ export async function GET(request: Request) {
       { data: creditosMovs },
       { data: devolucionesDia },
       { data: movimientosInventario },
+      { data: diarioHoy },
     ] = await Promise.all([
       supabase.from('pos_mesas').select('*').order('numero', { ascending: true }),
       supabase
@@ -119,6 +121,12 @@ export async function GET(request: Request) {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(200),
+      supabase
+        .from('libro_caja_diario')
+        .select('estado')
+        .eq('fecha', fecha)
+        .eq('tipo_libro', 'CAJA_MENOR')
+        .maybeSingle(),
     ]);
 
     if (errM) throw errM;
@@ -248,21 +256,23 @@ export async function GET(request: Request) {
       .filter((d: any) => d.metodo_reembolso === 'EFECTIVO')
       .reduce((acc: number, d: any) => acc + Number(d.valor_devuelto || 0), 0);
 
-    // Flujo cronológico de efectivo para Excel
+    // Flujo cronológico de efectivo para Excel (en hora oficial Colombia)
     const flujoRaw: Array<{ ts: string; hora: string; movimiento: string; monto: number }> = [];
     if (sesionActiva) {
+      const openTs = sesionActiva.hora_apertura || sesionActiva.created_at || `${fecha}T12:00:00Z`;
       flujoRaw.push({
-        ts: sesionActiva.created_at || `${fecha}T06:00:00`,
-        hora: new Date(sesionActiva.created_at || `${fecha}T06:00:00`).toLocaleTimeString('es-CO'),
+        ts: openTs,
+        hora: formatColombiaTime(openTs),
         movimiento: `Base Inicial (${cajaNombre})`,
         monto: Number(sesionActiva.base_inicial || sesionActiva.efectivo_inicial || 0),
       });
     }
     for (const o of facturadasHoy) {
       if (Number(o.pago_efectivo || 0) > 0) {
+        const ts = o.closed_at || o.created_at;
         flujoRaw.push({
-          ts: o.closed_at || o.created_at,
-          hora: new Date(o.closed_at || o.created_at).toLocaleTimeString('es-CO'),
+          ts,
+          hora: formatColombiaTime(ts),
           movimiento: `Venta ${o.consecutivo}`,
           monto: Number(o.pago_efectivo),
         });
@@ -272,7 +282,7 @@ export async function GET(request: Request) {
       if (m.fecha === fecha && m.tipo === 'ABONO' && m.metodo_pago === 'EFECTIVO') {
         flujoRaw.push({
           ts: m.created_at,
-          hora: new Date(m.created_at).toLocaleTimeString('es-CO'),
+          hora: formatColombiaTime(m.created_at),
           movimiento: `Abono Crédito (${m.cliente_nombre})`,
           monto: Number(m.monto || 0),
         });
@@ -282,17 +292,18 @@ export async function GET(request: Request) {
       if (a.tipo_alerta === 'ENTRADA_EFECTIVO_CAJA') {
         flujoRaw.push({
           ts: a.created_at,
-          hora: new Date(a.created_at).toLocaleTimeString('es-CO'),
+          hora: formatColombiaTime(a.created_at),
           movimiento: a.descripcion || 'Entrada de efectivo',
           monto: Number(a.valor_afectado || 0),
         });
       }
     }
     for (const s of salidasCaja || []) {
+      const ts = s.created_at || `${fecha}T17:00:00Z`;
       flujoRaw.push({
-        ts: s.created_at || `${fecha}T12:00:00`,
-        hora: new Date(s.created_at || `${fecha}T12:00:00`).toLocaleTimeString('es-CO'),
-        movimiento: `Salida: ${s.concepto || 'Caja Menor'}`,
+        ts,
+        hora: formatColombiaTime(ts),
+        movimiento: `Salida: ${s.concepto || 'Libro de Caja'}`,
         monto: -Number(s.valor_pagado || 0),
       });
     }
@@ -300,7 +311,7 @@ export async function GET(request: Request) {
       if (d.metodo_reembolso === 'EFECTIVO') {
         flujoRaw.push({
           ts: d.created_at,
-          hora: new Date(d.created_at).toLocaleTimeString('es-CO'),
+          hora: formatColombiaTime(d.created_at),
           movimiento: `Devolución ${d.orden_consecutivo}: ${d.nombre_producto}`,
           monto: -Number(d.valor_devuelto || 0),
         });
@@ -318,6 +329,13 @@ export async function GET(request: Request) {
       };
     });
 
+    const ultimaSesionCaja = (sesiones || []).find(
+      (s: any) => (s.caja_nombre || 'Caja 1').toLowerCase() === cajaNombre.toLowerCase()
+    );
+    const jornadaCerradaTotal =
+      !sesionActiva &&
+      (diarioHoy?.estado === 'CERRADA' || ultimaSesionCaja?.estado === 'CERRADA_TOTAL');
+
     return NextResponse.json({
       success: true,
       fecha,
@@ -326,6 +344,7 @@ export async function GET(request: Request) {
       productos: productos || [],
       sesiones: sesiones || [],
       sesionActiva,
+      jornadaCerradaTotal,
       salidasDiaCaja,
       abonosEfectivoHoy,
       entradasEfectivoHoy,
@@ -352,15 +371,49 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { action } = body;
-    const todayStr = body.fecha || new Date().toISOString().slice(0, 10);
+    const todayStr = body.fecha || getColombiaDateStr();
     const cajaNombre = body.caja_nombre || 'Caja 1';
     const cajeroNombre = body.cajero_nombre || 'CAJERO';
 
-    // 1. Abrir turno de caja (con validación de Usuario y Contraseña)
+    // 1. Abrir turno de caja (con validación de Usuario/Contraseña + Bloqueo tras Cierre Total)
     if (action === 'ABRIR_TURNO_CAJA') {
       const efectivoInicial = Number(body.efectivo_inicial ?? body.base_inicial ?? 0);
       const rawUser = String(body.username || body.usuario_username || '').trim();
       const rawPass = String(body.password || body.password_pin || '').trim();
+
+      // Verificar si la jornada de hoy ya tuvo Cierre Total (Corte Z)
+      const [{ data: prevSesiones }, { data: diarioHoy }] = await Promise.all([
+        supabase
+          .from('libro_caja_sesiones')
+          .select('*')
+          .eq('fecha', todayStr)
+          .order('numero_turno', { ascending: false }),
+        supabase
+          .from('libro_caja_diario')
+          .select('estado')
+          .eq('fecha', todayStr)
+          .eq('tipo_libro', 'CAJA_MENOR')
+          .maybeSingle(),
+      ]);
+
+      const sesionesCaja = (prevSesiones || []).filter(
+        (s: any) => (s.caja_nombre || 'Caja 1').toLowerCase() === cajaNombre.toLowerCase()
+      );
+      const abiertaActual = sesionesCaja.find((s: any) => s.estado === 'ABIERTA');
+      if (abiertaActual) {
+        return NextResponse.json({ success: true, sesion: abiertaActual });
+      }
+      const ultimaCaja = sesionesCaja[0];
+      if (diarioHoy?.estado === 'CERRADA' || ultimaCaja?.estado === 'CERRADA_TOTAL') {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'La caja ya realizó su Cierre Total del Día (Corte Z) hoy. Para abrir un nuevo turno hoy, un Administrador debe autorizar "Reabrir (Admin)" en Libro de Caja.',
+          },
+          { status: 403 }
+        );
+      }
 
       let resolvedCajeroNombre = cajeroNombre;
       let resolvedUsername = rawUser.toLowerCase() || cajeroNombre.toLowerCase();
@@ -390,12 +443,6 @@ export async function POST(request: Request) {
         }
       }
 
-      const { data: prevSesiones } = await supabase
-        .from('libro_caja_sesiones')
-        .select('numero_turno')
-        .eq('fecha', todayStr)
-        .order('numero_turno', { ascending: false })
-        .limit(1);
       const nextTurno = Number(prevSesiones?.[0]?.numero_turno || 0) + 1;
 
       const { data: sesion, error } = await supabase
@@ -974,6 +1021,7 @@ export async function POST(request: Request) {
       );
       const diferenciaEfectivo = Math.round(Number(efectivo_contado) - efectivoEsperado);
 
+      const nowCierreIso = new Date().toISOString();
       if (sesion?.id) {
         await supabase
           .from('libro_caja_sesiones')
@@ -986,13 +1034,25 @@ export async function POST(request: Request) {
             diferencia_cuadre: diferenciaEfectivo,
             estado: isTotal ? 'CERRADA_TOTAL' : 'CERRADA_PARCIAL',
             tipo_cierre: isTotal ? 'TOTAL' : 'PARCIAL',
-            hora_cierre: new Date().toISOString(),
+            hora_cierre: nowCierreIso,
             observaciones: observaciones || null,
           })
           .eq('id', sesion.id);
-
-        await recalcularHojaDiaria(todayStr, 'CAJA_MENOR');
       }
+
+      // Asegurar que no queden otras sesiones ABIERTA en la misma caja hoy
+      await supabase
+        .from('libro_caja_sesiones')
+        .update({
+          estado: isTotal ? 'CERRADA_TOTAL' : 'CERRADA_PARCIAL',
+          tipo_cierre: isTotal ? 'TOTAL' : 'PARCIAL',
+          hora_cierre: nowCierreIso,
+        })
+        .eq('fecha', todayStr)
+        .eq('caja_nombre', cajaNombre)
+        .eq('estado', 'ABIERTA');
+
+      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR');
 
       if (Math.abs(diferenciaEfectivo) > 2000) {
         await supabase.from('pos_auditoria_eventos').insert({

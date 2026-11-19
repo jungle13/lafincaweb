@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Lock, LogOut, ShieldCheck, Unlock, X } from 'lucide-react';
+import { Lock, LogOut, ShieldAlert, ShieldCheck, Unlock, X } from 'lucide-react';
 import type { SesionCaja } from './types';
 
 interface PosOpenShiftGateProps {
   cajaNombre: string;
+  jornadaCerradaTotal: boolean;
+  errorMsg?: string | null;
   busyAction: boolean;
   onOpenShift: (payload: {
     username: string;
@@ -18,31 +20,32 @@ interface PosOpenShiftGateProps {
 
 export function PosOpenShiftGate({
   cajaNombre,
+  jornadaCerradaTotal,
+  errorMsg,
   busyAction,
   onOpenShift,
   onExitWithoutOpen,
 }: PosOpenShiftGateProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [caja, setCaja] = useState(cajaNombre);
   const [baseInicial, setBaseInicial] = useState('200000');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) return;
+    if (jornadaCerradaTotal || !username.trim() || !password.trim()) return;
     await onOpenShift({
       username: username.trim(),
       password: password.trim(),
-      caja_nombre: caja,
+      caja_nombre: cajaNombre,
       efectivo_inicial: Number(baseInicial || 0),
     });
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[10000] w-screen h-screen bg-zinc-100 flex items-center justify-center p-4 select-none">
       <form
         onSubmit={handleSubmit}
-        className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-6 space-y-4 shadow-2xl"
+        className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-6 space-y-4 shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
           <div className="flex items-center gap-2.5">
@@ -52,52 +55,56 @@ export function PosOpenShiftGate({
             <div>
               <h2 className="font-bold text-base text-zinc-950">Apertura de Turno — Eliana POS</h2>
               <p className="text-[11px] text-zinc-500">
-                No hay turno abierto. Ingresa tus credenciales y el fondo inicial de caja.
+                Terminal asignada: <b>{cajaNombre}</b>
               </p>
             </div>
           </div>
           <Lock className="w-5 h-5 text-zinc-400" />
         </div>
 
-        <div className="space-y-3 text-xs">
-          <div>
-            <label className="font-semibold text-zinc-700 block mb-1">Usuario de Cajero / Admin</label>
-            <input
-              autoFocus
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Ej. johanna o admin"
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600"
-            />
-          </div>
-
-          <div>
-            <label className="font-semibold text-zinc-700 block mb-1">Contraseña / PIN</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-semibold text-zinc-700 block mb-1">Terminal / Caja</label>
-              <select
-                value={caja}
-                onChange={(e) => setCaja(e.target.value)}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-md text-xs font-semibold bg-white"
-              >
-                <option value="Caja 1">Caja 1</option>
-                <option value="Caja 2">Caja 2</option>
-                <option value="Caja Principal">Caja Principal</option>
-              </select>
+        {jornadaCerradaTotal ? (
+          <div className="p-3.5 rounded-lg bg-zinc-50 border border-zinc-300 text-xs space-y-1.5 text-zinc-700">
+            <div className="flex items-center gap-1.5 font-bold text-zinc-950">
+              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+              Jornada del día cerrada totalmente (Corte Z)
             </div>
+            <p className="leading-relaxed">
+              Esta caja ya realizó su arqueo y cierre total del día. No es posible abrir un nuevo turno hoy salvo que un Administrador autorice <b>Reabrir (Admin)</b> desde el módulo <b>Libro de Caja</b>.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3 text-xs">
+            {errorMsg && (
+              <div className="p-2.5 rounded-md bg-red-50 border border-red-200 text-red-800 font-semibold">
+                {errorMsg}
+              </div>
+            )}
+
+            <div>
+              <label className="font-semibold text-zinc-700 block mb-1">Usuario de cajero</label>
+              <input
+                autoFocus
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Ingresa tu usuario"
+                className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600"
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold text-zinc-700 block mb-1">Contraseña</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-medium outline-none focus:border-blue-600"
+              />
+            </div>
+
             <div>
               <label className="font-semibold text-zinc-700 block mb-1">Monto Inicial en Caja ($)</label>
               <input
@@ -110,7 +117,7 @@ export function PosOpenShiftGate({
               />
             </div>
           </div>
-        </div>
+        )}
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-200">
           <button
@@ -120,14 +127,16 @@ export function PosOpenShiftGate({
           >
             Salir al Panel
           </button>
-          <button
-            type="submit"
-            disabled={busyAction}
-            className="px-5 py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-          >
-            <Unlock className="w-3.5 h-3.5" />
-            Abrir Turno e Iniciar Caja
-          </button>
+          {!jornadaCerradaTotal && (
+            <button
+              type="submit"
+              disabled={busyAction}
+              className="px-5 py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              Abrir Turno e Iniciar Caja
+            </button>
+          )}
         </div>
       </form>
     </div>

@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { formatMoney } from '@/lib/formatters';
+import { getColombiaDateStr } from '@/lib/dateUtils';
 import {
   DEFAULT_ELIANA_POS_CONFIG,
   loadElianaPosConfig,
@@ -135,6 +136,8 @@ export default function ElianaPosPage() {
   const [consumosInternosHoy, setConsumosInternosHoy] = useState<PosOrden[]>([]);
   const [gananciaEstimadaHoy, setGananciaEstimadaHoy] = useState(0);
   const [movimientosInventario, setMovimientosInventario] = useState<InventarioMovimiento[]>([]);
+  const [jornadaCerradaTotal, setJornadaCerradaTotal] = useState(false);
+  const [shiftError, setShiftError] = useState<string | null>(null);
   const [offlineQueue, setOfflineQueue] = useState<OfflineOp[]>([]);
 
   // Navegación / selección
@@ -264,10 +267,11 @@ export default function ElianaPosPage() {
     setConsumosInternosHoy((data.consumosInternosHoy as PosOrden[]) || []);
     setGananciaEstimadaHoy(Number(data.gananciaEstimadaHoy || 0));
     setMovimientosInventario((data.movimientosInventario as InventarioMovimiento[]) || []);
+    setJornadaCerradaTotal(Boolean(data.jornadaCerradaTotal));
   }, []);
 
   const fetchPosState = useCallback(async () => {
-    const fechaHoy = new Date().toISOString().slice(0, 10);
+    const fechaHoy = getColombiaDateStr();
     try {
       const res = await fetch(`/api/pos?fecha=${fechaHoy}&caja=${encodeURIComponent(cajaNombre)}`);
       const data = await res.json();
@@ -1224,37 +1228,53 @@ export default function ElianaPosPage() {
     return mods;
   }, [posConfig.habilitaMesas, posConfig.habilitaDomicilios, mesas, ordenesDomicilio]);
 
+  // Acceso 100% hermético: nunca renderiza la interfaz del POS hasta validar turno abierto
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-[10000] w-screen h-screen bg-zinc-100 flex flex-col items-center justify-center gap-3 select-none">
+        <span className="w-10 h-10 rounded-xl bg-zinc-900 text-white font-bold text-lg flex items-center justify-center">
+          E
+        </span>
+        <div className="text-sm font-bold text-zinc-900">Eliana POS</div>
+        <div className="text-xs text-zinc-500">Verificando estado del turno...</div>
+      </div>
+    );
+  }
+
+  if (!sesionActiva) {
+    return (
+      <PosOpenShiftGate
+        cajaNombre={cajaNombre}
+        jornadaCerradaTotal={jornadaCerradaTotal}
+        errorMsg={shiftError}
+        busyAction={busyAction}
+        onExitWithoutOpen={() => router.push('/')}
+        onOpenShift={async (payload) => {
+          setBusyAction(true);
+          setShiftError(null);
+          try {
+            const res = await fetch('/api/pos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'ABRIR_TURNO_CAJA', ...payload }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Error abriendo turno');
+            await fetchPosState();
+            notify('ok', `Turno abierto en ${payload.caja_nombre}.`);
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Credenciales inválidas';
+            setShiftError(msg);
+          } finally {
+            setBusyAction(false);
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[9999] w-screen h-screen bg-zinc-100 text-zinc-900 flex flex-col overflow-hidden select-none font-sans">
-      {/* Bloqueo obligatorio si no hay turno abierto */}
-      {!loading && !sesionActiva && (
-        <PosOpenShiftGate
-          cajaNombre={cajaNombre}
-          busyAction={busyAction}
-          onExitWithoutOpen={() => router.push('/')}
-          onOpenShift={async (payload) => {
-            setBusyAction(true);
-            try {
-              const res = await fetch('/api/pos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'ABRIR_TURNO_CAJA', ...payload }),
-              });
-              const data = await res.json();
-              if (!data.success) throw new Error(data.error || 'Error abriendo turno');
-              const updatedCfg = { ...posConfig, nombreCaja: payload.caja_nombre };
-              setPosConfig(updatedCfg);
-              saveElianaPosConfig(updatedCfg);
-              await fetchPosState();
-              notify('ok', `Turno abierto en ${payload.caja_nombre}.`);
-            } catch (e: unknown) {
-              notify('err', e instanceof Error ? e.message : 'Credenciales inválidas');
-            } finally {
-              setBusyAction(false);
-            }
-          }}
-        />
-      )}
 
       {toast && (
         <div
