@@ -155,11 +155,17 @@ export default function ElianaPosPage() {
   const [catFiltro, setCatFiltro] = useState('TODAS');
   const [navZone, setNavZone] = useState<'SEARCH' | 'CATEGORIES' | 'PRODUCTS' | 'TICKET'>('SEARCH');
   const [focusedProductIndex, setFocusedProductIndex] = useState(0);
+  const [mesasNavZone, setMesasNavZone] = useState<'NONE' | 'ZONES' | 'TABLES' | 'MOSTRADOR'>('NONE');
+  const [focusedMesaIndex, setFocusedMesaIndex] = useState(0);
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const productCardRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const categoryBtnRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const ticketRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const nuevoTicketBtnRef = useRef<HTMLButtonElement | null>(null);
+  const ventaMostradorBtnRef = useRef<HTMLButtonElement | null>(null);
+  const zonaBtnRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const mesaCardRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const [lastPayment, setLastPayment] = useState<LastPaymentMemory>({
     total: 0,
@@ -1139,6 +1145,13 @@ export default function ElianaPosPage() {
   }, [itemsActivos.length, navZone]);
 
   useEffect(() => {
+    setFocusedMesaIndex((prev) => {
+      if (mesasFiltradas.length === 0) return 0;
+      return Math.min(prev, mesasFiltradas.length - 1);
+    });
+  }, [mesasFiltradas.length]);
+
+  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!sesionActiva) return;
       const target = e.target as HTMLElement | null;
@@ -1180,7 +1193,18 @@ export default function ElianaPosPage() {
       }
 
       if (e.key === 'F1') { e.preventDefault(); setActiveTab('VENTAS'); setNavZone('SEARCH'); focusCapture(); return; }
-      if (e.key === 'F2' && posConfig.habilitaMesas) { e.preventDefault(); setActiveTab('MESAS'); return; }
+      if (e.key === 'F2' && e.shiftKey && posConfig.habilitaDomicilios) {
+        e.preventDefault();
+        setActiveTab('DOMICILIOS');
+        return;
+      }
+      if (e.key === 'F2' && !e.shiftKey && posConfig.habilitaMesas) {
+        e.preventDefault();
+        setActiveTab('MESAS');
+        setMesasNavZone('NONE');
+        setFocusedMesaIndex(0);
+        return;
+      }
       if (e.key === 'F3') { e.preventDefault(); setActiveTab('PRODUCTOS'); return; }
       if (e.key === 'F4') { e.preventDefault(); setActiveTab('INVENTARIO'); return; }
       if (e.key === 'F5') { e.preventDefault(); handleCambiarSiguienteTicket(); return; }
@@ -1215,7 +1239,130 @@ export default function ElianaPosPage() {
       if (e.key === 'Insert' && !isAnyModalOpen) { e.preventDefault(); setShowVariosModal(true); return; }
       if (e.ctrlKey && e.key.toLowerCase() === 'p') { e.preventDefault(); setShowArtComunModal(true); return; }
 
+      // Atajo fácil para Asignar Cliente / Personal: Alt+C o Ctrl+B
+      if (
+        !isAnyModalOpen &&
+        ordenActiva &&
+        ((e.altKey && e.key.toLowerCase() === 'c') || (e.ctrlKey && e.key.toLowerCase() === 'b'))
+      ) {
+        e.preventDefault();
+        setAsignarNombre(ordenActiva.cliente_nombre || '');
+        setAsignarTel(ordenActiva.cliente_telefono || '');
+        setShowAsignarClienteModal(true);
+        return;
+      }
+
+      // Navegación por teclado exclusiva en módulo F2: MESAS
+      if (activeTab === 'MESAS' && posConfig.habilitaMesas && !isAnyModalOpen && !isTextArea && !isOtherInput) {
+        const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
+        const mesaCols = w >= 1280 ? 6 : w >= 768 ? 5 : w >= 640 ? 4 : 2;
+        const zonaIdx = Math.max(0, zonasDisponibles.indexOf(zonaFiltro));
+
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          if (mesasNavZone !== 'MOSTRADOR') {
+            setMesasNavZone('MOSTRADOR');
+            ventaMostradorBtnRef.current?.focus();
+          } else {
+            setMesasNavZone('NONE');
+            ventaMostradorBtnRef.current?.blur();
+          }
+          return;
+        }
+        if (e.key === 'Enter' && mesasNavZone === 'MOSTRADOR') {
+          e.preventDefault();
+          handleNuevaVentaMostrador();
+          return;
+        }
+        if (e.key === 'Enter' && mesasNavZone === 'TABLES') {
+          const m = mesasFiltradas[focusedMesaIndex];
+          if (m) {
+            e.preventDefault();
+            void handleAbrirMesa(m);
+          }
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (mesasNavZone === 'NONE' || mesasNavZone === 'MOSTRADOR') {
+            ventaMostradorBtnRef.current?.blur();
+            setMesasNavZone('ZONES');
+            zonaBtnRefs.current[zonaIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+          } else if (mesasNavZone === 'ZONES' && mesasFiltradas.length > 0) {
+            setMesasNavZone('TABLES');
+            setFocusedMesaIndex(0);
+            mesaCardRefs.current[0]?.scrollIntoView({ block: 'nearest' });
+          } else if (mesasNavZone === 'TABLES' && mesasFiltradas.length > 0) {
+            const nextIdx = Math.min(mesasFiltradas.length - 1, focusedMesaIndex + mesaCols);
+            setFocusedMesaIndex(nextIdx);
+            mesaCardRefs.current[nextIdx]?.scrollIntoView({ block: 'nearest' });
+          }
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (mesasNavZone === 'TABLES') {
+            if (focusedMesaIndex < mesaCols) {
+              setMesasNavZone('ZONES');
+              zonaBtnRefs.current[zonaIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+            } else {
+              const prevIdx = focusedMesaIndex - mesaCols;
+              setFocusedMesaIndex(prevIdx);
+              mesaCardRefs.current[prevIdx]?.scrollIntoView({ block: 'nearest' });
+            }
+          }
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          if (mesasNavZone === 'ZONES' && zonasDisponibles.length > 0) {
+            e.preventDefault();
+            const nextZ = Math.min(zonasDisponibles.length - 1, zonaIdx + 1);
+            setZonaFiltro(zonasDisponibles[nextZ]);
+            setFocusedMesaIndex(0);
+            zonaBtnRefs.current[nextZ]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+            return;
+          }
+          if (mesasNavZone === 'TABLES' && mesasFiltradas.length > 0) {
+            e.preventDefault();
+            const nextIdx = Math.min(mesasFiltradas.length - 1, focusedMesaIndex + 1);
+            setFocusedMesaIndex(nextIdx);
+            mesaCardRefs.current[nextIdx]?.scrollIntoView({ block: 'nearest' });
+            return;
+          }
+        }
+        if (e.key === 'ArrowLeft') {
+          if (mesasNavZone === 'ZONES' && zonasDisponibles.length > 0) {
+            e.preventDefault();
+            const prevZ = Math.max(0, zonaIdx - 1);
+            setZonaFiltro(zonasDisponibles[prevZ]);
+            setFocusedMesaIndex(0);
+            zonaBtnRefs.current[prevZ]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+            return;
+          }
+          if (mesasNavZone === 'TABLES' && mesasFiltradas.length > 0) {
+            e.preventDefault();
+            const prevIdx = Math.max(0, focusedMesaIndex - 1);
+            setFocusedMesaIndex(prevIdx);
+            mesaCardRefs.current[prevIdx]?.scrollIntoView({ block: 'nearest' });
+            return;
+          }
+        }
+        return;
+      }
+
       if (isAnyModalOpen || isTextArea || isOtherInput || activeTab !== 'VENTAS') return;
+
+      // TAB una sola vez en F1 Ventas posiciona en "+ Nuevo Ticket" (Enter crea nuevo ticket)
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (document.activeElement !== nuevoTicketBtnRef.current) {
+          nuevoTicketBtnRef.current?.focus();
+        } else {
+          setNavZone('SEARCH');
+          focusCapture();
+        }
+        return;
+      }
 
       const isTypingInCapture = target === captureInputRef.current;
       const inputEl = captureInputRef.current;
@@ -1408,11 +1555,12 @@ export default function ElianaPosPage() {
   }, [
     sesionActiva, activeTab, captureInput, itemsActivos, selectedItemId, ordenActiva, posConfig,
     navZone, focusedProductIndex, categoriasProductos, catFiltro, productosFiltrados, touchMode,
+    mesasNavZone, focusedMesaIndex, zonasDisponibles, zonaFiltro, mesasFiltradas,
     showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
     showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
     showSettingsModal, showExitModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
-    handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem, handleCambiarSiguienteTicket,
-    handleEnviarComanda, handleNuevaVentaMostrador,
+    handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem,
+    handleCambiarSiguienteTicket, handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
 
   const handleCaptureSubmit = (e: React.FormEvent) => {
@@ -1440,6 +1588,7 @@ export default function ElianaPosPage() {
     if (posConfig.habilitaDomicilios) {
       mods.push({
         key: 'DOMICILIOS',
+        fKey: 'Shift+F2',
         label: `Domicilios (${ordenesDomicilio.filter((d) => d.estado !== 'FACTURADA').length})`,
         icon: Bike,
       });
@@ -1826,7 +1975,11 @@ export default function ElianaPosPage() {
                 </button>
               );
             })}
-            <button onClick={handleNuevaVentaMostrador} className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap">
+            <button
+              ref={nuevoTicketBtnRef}
+              onClick={handleNuevaVentaMostrador}
+              className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
               <Plus className="w-3 h-3" /> Nuevo Ticket
             </button>
           </div>
@@ -2008,10 +2161,13 @@ export default function ElianaPosPage() {
                     setShowAsignarClienteModal(true);
                   }}
                   disabled={!ordenActiva}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
                 >
                   <UserPlus className="w-3.5 h-3.5 text-zinc-600" />
-                  Asignar Cliente / Personal
+                  <span>Asignar Cliente / Personal</span>
+                  <span className="px-1 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-mono font-semibold text-zinc-600">
+                    ALT+C
+                  </span>
                 </button>
                 {posConfig.habilitaComandasCocina && (
                   <>
@@ -2070,26 +2226,65 @@ export default function ElianaPosPage() {
         <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-zinc-100">
           <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
-              {zonasDisponibles.map((z) => (
-                <button key={z} onClick={() => setZonaFiltro(z)} className={`px-3.5 py-2 rounded-md text-xs font-semibold cursor-pointer border ${zonaFiltro === z ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-300 text-zinc-700'}`}>
-                  {z}
-                </button>
-              ))}
+              {zonasDisponibles.map((z, zIdx) => {
+                const isZoneActive = zonaFiltro === z;
+                const isZoneFocused = mesasNavZone === 'ZONES' && isZoneActive;
+                return (
+                  <button
+                    key={z}
+                    ref={(el) => {
+                      zonaBtnRefs.current[zIdx] = el;
+                    }}
+                    onClick={() => {
+                      setZonaFiltro(z);
+                      setFocusedMesaIndex(0);
+                      setMesasNavZone('ZONES');
+                    }}
+                    className={`px-3.5 py-2 rounded-md text-xs font-semibold cursor-pointer border transition-all ${
+                      isZoneActive
+                        ? isZoneFocused
+                          ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-400 ring-offset-1 shadow-sm'
+                          : 'bg-zinc-900 text-white border-zinc-900'
+                        : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+                    }`}
+                  >
+                    {z}
+                  </button>
+                );
+              })}
             </div>
-            <button onClick={handleNuevaVentaMostrador} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer">
+            <button
+              ref={ventaMostradorBtnRef}
+              onClick={handleNuevaVentaMostrador}
+              className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            >
               <Plus className="w-4 h-4" /> Venta Mostrador / Para Llevar
             </button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3">
-            {mesasFiltradas.map((m) => {
+            {mesasFiltradas.map((m, mIdx) => {
               const ocupada = m.estado !== 'LIBRE';
+              const isMesaFocused = mesasNavZone === 'TABLES' && focusedMesaIndex === mIdx;
               return (
                 <button
                   key={m.id}
-                  onClick={() => handleAbrirMesa(m)}
-                  className={`p-4 rounded-lg border text-left cursor-pointer flex flex-col justify-between min-h-[120px] ${
-                    m.estado === 'PRECUENTA_IMPRESA' ? 'bg-white border-blue-500 ring-1 ring-blue-500' : ocupada ? 'bg-white border-zinc-900 ring-1 ring-zinc-900' : 'bg-white border-zinc-200 hover:border-zinc-400'
+                  ref={(el) => {
+                    mesaCardRefs.current[mIdx] = el;
+                  }}
+                  onClick={() => {
+                    setFocusedMesaIndex(mIdx);
+                    setMesasNavZone('TABLES');
+                    void handleAbrirMesa(m);
+                  }}
+                  className={`p-4 rounded-lg border text-left cursor-pointer flex flex-col justify-between min-h-[120px] transition-all ${
+                    isMesaFocused
+                      ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-500 shadow-sm'
+                      : m.estado === 'PRECUENTA_IMPRESA'
+                        ? 'bg-white border-blue-500 ring-1 ring-blue-500'
+                        : ocupada
+                          ? 'bg-white border-zinc-900 ring-1 ring-zinc-900'
+                          : 'bg-white border-zinc-200 hover:border-zinc-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
