@@ -24,6 +24,7 @@ const VIEW_TITLES: Record<string, string> = {
   '/proveedores': 'Proveedores y Pagos',
   '/productos-venta': 'Productos de Venta',
   '/operarios': 'Gestión de Operarios',
+  '/admin-pos': 'Administración del Punto POS',
   '/chat-bot': 'Historial Telegram Bot • Asistente IA',
 };
 

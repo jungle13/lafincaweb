@@ -56,6 +56,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'INVENTARIO & BODEGA',
     items: [
       { label: 'Eliana POS (Caja)', href: '/pos', icon: Store },
+      { label: 'Administración POS', href: '/admin-pos', icon: Building2, adminOnly: true },
       { label: 'Entradas por Compra', href: '/compras', icon: ShoppingCart },
       { label: 'Proveedores y Pagos', href: '/proveedores', icon: Building2 },
       { label: 'Salidas por Venta', href: '/ventas', icon: TrendingUp },

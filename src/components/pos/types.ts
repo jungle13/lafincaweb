@@ -88,6 +88,28 @@ export interface ProductoVenta {
   existencia?: number;
   inv_minimo?: number;
   inv_maximo?: number;
+  controla_inventario?: boolean;
+}
+
+export interface PosCategoria {
+  id: string;
+  nombre: string;
+  es_inventariable: boolean;
+  orden?: number;
+}
+
+export interface PosZona {
+  id: string;
+  nombre: string;
+  orden?: number;
+}
+
+export interface PosCliente {
+  id: string;
+  nombre: string;
+  telefono?: string;
+  direccion?: string;
+  barrio?: string;
 }
 
 export interface InventarioMovimiento {

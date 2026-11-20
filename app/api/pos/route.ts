@@ -79,6 +79,9 @@ export async function GET(request: Request) {
       { data: movimientosInventario },
       { data: diarioHoy },
       { data: operariosRows },
+      { data: categoriasRows },
+      { data: zonasRows },
+      { data: clientesRows },
     ] = await Promise.all([
       supabase.from('pos_mesas').select('*').order('numero', { ascending: true }),
       supabase
@@ -88,7 +91,7 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false }),
       supabase
         .from('productos_venta')
-        .select('id, codigo, nombre, categoria, subcategoria, precio_total, precio_neto, impoconsumo, activo, costo_unitario, precio_mayoreo, existencia, inv_minimo, inv_maximo')
+        .select('id, codigo, nombre, categoria, subcategoria, precio_total, precio_neto, impoconsumo, activo, costo_unitario, precio_mayoreo, existencia, inv_minimo, inv_maximo, controla_inventario')
         .eq('activo', true)
         .order('nombre', { ascending: true }),
       supabase
@@ -134,6 +137,9 @@ export async function GET(request: Request) {
         .neq('username', 'admin')
         .eq('activo', true)
         .order('nombre_cajero', { ascending: true }),
+      supabase.from('pos_categorias').select('id, nombre, es_inventariable, orden').eq('activa', true).order('orden', { ascending: true }),
+      supabase.from('pos_zonas').select('id, nombre, orden').eq('activa', true).order('orden', { ascending: true }),
+      supabase.from('pos_clientes').select('id, nombre, telefono, direccion, barrio').eq('activo', true).order('nombre', { ascending: true }),
     ]);
 
     if (errM) throw errM;
@@ -365,6 +371,9 @@ export async function GET(request: Request) {
       gananciaEstimadaHoy: Math.round(gananciaEstimadaHoy),
       movimientosInventario: movimientosInventario || [],
       operarios: operariosRows || [],
+      categorias: categoriasRows || [],
+      zonas: zonasRows || [],
+      clientes: clientesRows || [],
     });
   } catch (err: any) {
     console.error('Error en GET /api/pos:', err);
@@ -1499,8 +1508,113 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, totalDevuelto });
     }
 
-    // 16. CRUD Productos desde F3 Productos del POS
+    // 15E. Cambiar canal de una orden abierta (Mostrador -> Mesa o Domicilio, conservando insumos)
+    if (action === 'CAMBIAR_CANAL_ORDEN') {
+      const {
+        orden_id,
+        canal_venta,
+        mesa_numero = null,
+        cliente_nombre = null,
+        cliente_telefono = null,
+        cliente_direccion = null,
+        costo_domicilio = 0,
+        domiciliario_nombre = null,
+      } = body;
+      if (!orden_id || !canal_venta) {
+        return NextResponse.json({ success: false, error: 'orden_id y canal_venta requeridos' }, { status: 400 });
+      }
+
+      const { data: ordActual } = await supabase.from('pos_ordenes').select('*').eq('id', orden_id).single();
+      if (!ordActual) {
+        return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 });
+      }
+
+      if (canal_venta === 'SALON_MESA') {
+        if (!mesa_numero) {
+          return NextResponse.json({ success: false, error: 'Debes seleccionar una mesa' }, { status: 400 });
+        }
+        const { data: mesaDestino } = await supabase
+          .from('pos_mesas')
+          .select('*')
+          .eq('numero', mesa_numero)
+          .maybeSingle();
+        if (mesaDestino && mesaDestino.estado !== 'LIBRE' && mesaDestino.orden_activa_id !== orden_id) {
+          return NextResponse.json({ success: false, error: `La mesa ${mesa_numero} ya está ocupada.` }, { status: 400 });
+        }
+
+        // Liberar mesa anterior si tenía una diferente
+        if (ordActual.mesa_numero && ordActual.mesa_numero !== mesa_numero) {
+          await supabase
+            .from('pos_mesas')
+            .update({ estado: 'LIBRE', orden_activa_id: null, mesero_actual: null, abierta_at: null })
+            .eq('numero', ordActual.mesa_numero);
+        }
+
+        await supabase
+          .from('pos_ordenes')
+          .update({
+            canal_venta: 'SALON_MESA',
+            mesa_numero,
+            costo_domicilio: 0,
+            estado_domicilio: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', orden_id);
+
+        await supabase
+          .from('pos_mesas')
+          .update({
+            estado: 'OCUPADA',
+            orden_activa_id: orden_id,
+            mesero_actual: ordActual.mesero_nombre || cajeroNombre,
+            abierta_at: ordActual.created_at || new Date().toISOString(),
+          })
+          .eq('numero', mesa_numero);
+
+        const updated = await recalcularTotalesOrden(orden_id);
+        return NextResponse.json({ success: true, ...(updated || {}) });
+      }
+
+      if (canal_venta === 'DOMICILIO') {
+        if (ordActual.mesa_numero) {
+          await supabase
+            .from('pos_mesas')
+            .update({ estado: 'LIBRE', orden_activa_id: null, mesero_actual: null, abierta_at: null })
+            .eq('numero', ordActual.mesa_numero);
+        }
+
+        await supabase
+          .from('pos_ordenes')
+          .update({
+            canal_venta: 'DOMICILIO',
+            mesa_numero: null,
+            cliente_nombre: String(cliente_nombre || '').trim() || ordActual.cliente_nombre,
+            cliente_telefono: String(cliente_telefono || '').trim() || ordActual.cliente_telefono,
+            cliente_direccion: String(cliente_direccion || '').trim() || ordActual.cliente_direccion,
+            costo_domicilio: Number(costo_domicilio || 0),
+            domiciliario_nombre: String(domiciliario_nombre || '').trim() || 'Domiciliario 1',
+            estado_domicilio: 'RECIBIDO',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', orden_id);
+
+        const updated = await recalcularTotalesOrden(orden_id);
+        return NextResponse.json({ success: true, ...(updated || {}) });
+      }
+
+      return NextResponse.json({ success: false, error: 'Canal destino no soportado' }, { status: 400 });
+    }
+
+    // 16. CRUD Productos desde F3 Productos del POS (Bloqueado para OPERATIVO_POS)
     if (action === 'GUARDAR_PRODUCTO_POS') {
+      const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+      const session = await verifyAuthToken(token);
+      if (session && String(session.role).toUpperCase() === 'OPERATIVO_POS') {
+        return NextResponse.json(
+          { success: false, error: 'No tienes permisos para crear o editar productos.' },
+          { status: 403 }
+        );
+      }
       const {
         id,
         codigo,
@@ -1512,14 +1626,16 @@ export async function POST(request: NextRequest) {
         existencia = 0,
         inv_minimo = 0,
         inv_maximo = 0,
+        controla_inventario,
       } = body;
       if (!nombre || Number(precio_total) < 0) {
         return NextResponse.json({ success: false, error: 'Nombre y precio de venta son obligatorios' }, { status: 400 });
       }
+      const catUpper = String(categoria).trim().toUpperCase() || 'GENERAL';
       const payload = {
         codigo: String(codigo || `P-${Date.now().toString().slice(-4)}`).trim(),
         nombre: String(nombre).trim(),
-        categoria: String(categoria).trim() || 'General',
+        categoria: catUpper,
         costo_unitario: Number(costo_unitario || 0),
         precio_total: Number(precio_total || 0),
         precio_neto: Math.round(Number(precio_total || 0) / 1.08),
@@ -1527,6 +1643,9 @@ export async function POST(request: NextRequest) {
         existencia: Number(existencia || 0),
         inv_minimo: Number(inv_minimo || 0),
         inv_maximo: Number(inv_maximo || 0),
+        controla_inventario: typeof controla_inventario === 'boolean'
+          ? controla_inventario
+          : ['BEBIDAS', 'DESECHABLES', 'INSUMOS'].includes(catUpper),
         activo: true,
       };
       const { data, error } = id
@@ -1537,6 +1656,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'ELIMINAR_PRODUCTO_POS') {
+      const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+      const session = await verifyAuthToken(token);
+      if (session && String(session.role).toUpperCase() === 'OPERATIVO_POS') {
+        return NextResponse.json(
+          { success: false, error: 'No tienes permisos para eliminar productos.' },
+          { status: 403 }
+        );
+      }
       const { id } = body;
       if (!id) return NextResponse.json({ success: false, error: 'id requerido' }, { status: 400 });
       const { error } = await supabase.from('productos_venta').update({ activo: false }).eq('id', id);
@@ -1544,7 +1671,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // 17. Entradas y Ajustes de Inventario desde F4 Inventario
+    // 17. Entradas, Mermas y Conteo Físico de Inventario desde F4 Inventario
     if (action === 'AJUSTAR_INVENTARIO_POS') {
       const { producto_id, tipo = 'ENTRADA', cantidad = 0, motivo = '' } = body;
       if (!producto_id) {
@@ -1560,7 +1687,12 @@ export async function POST(request: NextRequest) {
       }
       const ant = Number(prod.existencia || 0);
       const cantNum = Number(cantidad || 0);
-      const nueva = tipo === 'AJUSTE' ? Math.max(0, cantNum) : Math.max(0, ant + cantNum);
+      const nueva =
+        tipo === 'AJUSTE'
+          ? Math.max(0, cantNum)
+          : tipo === 'MERMA'
+            ? Math.max(0, ant - Math.abs(cantNum))
+            : Math.max(0, ant + Math.abs(cantNum));
       const delta = nueva - ant;
 
       await supabase.from('productos_venta').update({ existencia: nueva }).eq('id', prod.id);
@@ -1575,7 +1707,13 @@ export async function POST(request: NextRequest) {
           cantidad_delta: delta,
           existencia_anterior: ant,
           existencia_nueva: nueva,
-          motivo: motivo || (tipo === 'AJUSTE' ? 'Ajuste físico de inventario' : 'Entrada rápida en POS'),
+          motivo:
+            motivo ||
+            (tipo === 'AJUSTE'
+              ? 'Conteo físico de inventario'
+              : tipo === 'MERMA'
+                ? 'Merma / Daño registrado en POS'
+                : 'Entrada de surtido en POS'),
           usuario: cajeroNombre,
         })
         .select('*')

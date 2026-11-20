@@ -168,6 +168,15 @@ const ALL_MODULES: QuickModule[] = [
     roles: ['ADMIN'],
   },
   {
+    title: 'Administración POS',
+    description: 'Gestión de meseros, domiciliarios, cocineros, zonas, mesas, clientes y categorías.',
+    href: '/admin-pos',
+    icon: Settings2,
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-600',
+    roles: ['ADMIN'],
+  },
+  {
     title: 'CRM Clientes B2B',
     description: 'Gestión de clientes corporativos, cotizaciones y cartera.',
     href: '/crm',

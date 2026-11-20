@@ -10,7 +10,14 @@ function getSupabase() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-const VALID_CARGOS = ['Personal Cocina', 'Personal Caja / Servicio', 'Dueño / Gerencia'] as const;
+const VALID_CARGOS = [
+  'Mesero',
+  'Domiciliario',
+  'Cocinero',
+  'Personal Cocina',
+  'Personal Caja / Servicio',
+  'Dueño / Gerencia',
+] as const;
 
 async function authorizeManager(req: NextRequest) {
   const token = req.cookies.get(AUTH_COOKIE_NAME)?.value;

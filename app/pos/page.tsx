@@ -20,6 +20,7 @@ import {
   Maximize2,
   Minus,
   MonitorSmartphone,
+  MoreVertical,
   Package,
   Pencil,
   Percent,
@@ -80,6 +81,7 @@ import type {
   FlujoEfectivoRow,
   InventarioMovimiento,
   OperarioPos,
+  PosCategoria,
   PosMesa,
   PosOrden,
   PosOrdenItem,
@@ -119,6 +121,7 @@ export default function ElianaPosPage() {
   const router = useRouter();
   const { user } = useAuth();
   const fallbackUser = user?.name || user?.username || 'Cajero Principal';
+  const canEditProducts = user?.role !== 'OPERATIVO_POS';
 
   const [posConfig, setPosConfig] = useState<ElianaPosConfig>(DEFAULT_ELIANA_POS_CONFIG);
   const [activeTab, setActiveTab] = useState<PosTab>('VENTAS');
@@ -230,6 +233,10 @@ export default function ElianaPosPage() {
   const [showExitModal, setShowExitModal] = useState(false);
   const [showCancelarTicketModal, setShowCancelarTicketModal] = useState(false);
   const [operarios, setOperarios] = useState<OperarioPos[]>([]);
+  const [categorias, setCategorias] = useState<PosCategoria[]>([]);
+  const [showMoreToolsMenu, setShowMoreToolsMenu] = useState(false);
+  const [showAsignarMesaModal, setShowAsignarMesaModal] = useState(false);
+  const [domModoConversion, setDomModoConversion] = useState(false);
   const [showAsignarMeseroModal, setShowAsignarMeseroModal] = useState(false);
   const [focusedMeseroIdx, setFocusedMeseroIdx] = useState(0);
   const [showReenviarComandaModal, setShowReenviarComandaModal] = useState(false);
@@ -306,6 +313,7 @@ export default function ElianaPosPage() {
     setGananciaEstimadaHoy(Number(data.gananciaEstimadaHoy || 0));
     setMovimientosInventario((data.movimientosInventario as InventarioMovimiento[]) || []);
     if (Array.isArray(data.operarios)) setOperarios(data.operarios as OperarioPos[]);
+    if (Array.isArray(data.categorias)) setCategorias(data.categorias as PosCategoria[]);
     setJornadaCerradaTotal(Boolean(data.jornadaCerradaTotal));
   }, []);
 
@@ -1119,26 +1127,48 @@ export default function ElianaPosPage() {
     }
     setBusyAction(true);
     try {
-      const res = await executePosAction('ABRIR_O_AGREGAR_ORDEN', {
-        canal_venta: 'DOMICILIO',
-        cliente_nombre: domNombre.trim(),
-        cliente_telefono: domTelefono.trim(),
-        cliente_direccion: domDireccion.trim(),
-        costo_domicilio: domCostoEnvio,
-        domiciliario_nombre: domRepartidor,
-        items: [],
-      });
-      setShowDomicilioModal(false);
-      setDomNombre('');
-      setDomTelefono('');
-      setDomDireccion('');
-      await fetchPosState();
-      if (res.orden?.id) {
-        setOrdenActivaId(res.orden.id);
-        setActiveTab('VENTAS');
+      if (domModoConversion && ordenActiva) {
+        await executePosAction('CAMBIAR_CANAL_ORDEN', {
+          orden_id: ordenActiva.id,
+          canal_venta: 'DOMICILIO',
+          cliente_nombre: domNombre.trim(),
+          cliente_telefono: domTelefono.trim(),
+          cliente_direccion: domDireccion.trim(),
+          costo_domicilio: domCostoEnvio,
+          domiciliario_nombre: domRepartidor,
+        });
+        setShowDomicilioModal(false);
+        setDomModoConversion(false);
+        setDomNombre('');
+        setDomTelefono('');
+        setDomDireccion('');
+        setDomDistanciaInfo('');
+        await fetchPosState();
+        focusCapture();
+        notify('ok', 'Ticket convertido a Domicilio conservando sus productos.');
+      } else {
+        const res = await executePosAction('ABRIR_O_AGREGAR_ORDEN', {
+          canal_venta: 'DOMICILIO',
+          cliente_nombre: domNombre.trim(),
+          cliente_telefono: domTelefono.trim(),
+          cliente_direccion: domDireccion.trim(),
+          costo_domicilio: domCostoEnvio,
+          domiciliario_nombre: domRepartidor,
+          items: [],
+        });
+        setShowDomicilioModal(false);
+        setDomNombre('');
+        setDomTelefono('');
+        setDomDireccion('');
+        setDomDistanciaInfo('');
+        await fetchPosState();
+        if (res.orden?.id) {
+          setOrdenActivaId(res.orden.id);
+          setActiveTab('VENTAS');
+        }
+        focusCapture();
+        notify('ok', 'Domicilio creado.');
       }
-      focusCapture();
-      notify('ok', 'Domicilio creado.');
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error creando domicilio');
     } finally {
@@ -1259,6 +1289,7 @@ export default function ElianaPosPage() {
         showExitModal ||
         showCancelarTicketModal ||
         showAsignarMeseroModal ||
+        showAsignarMesaModal ||
         showReenviarComandaModal ||
         notaItemTarget !== null ||
         cashFlowModal !== null;
@@ -1273,12 +1304,15 @@ export default function ElianaPosPage() {
         setShowMayoreoModal(false);
         setShowArtComunModal(false);
         setShowDomicilioModal(false);
+        setDomModoConversion(false);
         setShowVentasDiaModal(false);
         setShowCreditosModal(false);
         setShowSettingsModal(false);
         setShowExitModal(false);
         setShowCancelarTicketModal(false);
         setShowAsignarMeseroModal(false);
+        setShowAsignarMesaModal(false);
+        setShowMoreToolsMenu(false);
         setShowReenviarComandaModal(false);
         setNotaItemTarget(null);
         setCashFlowModal(null);
@@ -1503,10 +1537,7 @@ export default function ElianaPosPage() {
         setTimeout(() => buscarInputRef.current?.focus(), 60);
         return;
       }
-      if (e.key === 'F11') { e.preventDefault(); handleAbrirMayoreo(); return; }
       if (e.key === 'F12') { e.preventDefault(); abrirModalCobro(); return; }
-      if (e.key === 'Insert' && !isAnyModalOpen) { e.preventDefault(); setShowVariosModal(true); return; }
-      if (e.ctrlKey && e.key.toLowerCase() === 'p') { e.preventDefault(); setShowArtComunModal(true); return; }
 
       // Atajo fácil para Asignar Cliente / Personal: Alt+C o Ctrl+B
       if (
@@ -1527,6 +1558,22 @@ export default function ElianaPosPage() {
         const curIdx = operarios.findIndex((o) => o.nombre_cajero === ordenActiva.mesero_nombre);
         setFocusedMeseroIdx(curIdx >= 0 ? curIdx : 0);
         setShowAsignarMeseroModal(true);
+        return;
+      }
+
+      // Atajo rápido: Alt+S (Asignar Mesa) / Alt+D (Pasar a Domicilio)
+      if (!isAnyModalOpen && ordenActiva && e.altKey && e.key.toLowerCase() === 's' && posConfig.habilitaMesas) {
+        e.preventDefault();
+        setShowAsignarMesaModal(true);
+        return;
+      }
+      if (!isAnyModalOpen && ordenActiva && e.altKey && e.key.toLowerCase() === 'd' && posConfig.habilitaDomicilios) {
+        e.preventDefault();
+        setDomNombre(ordenActiva.cliente_nombre || '');
+        setDomTelefono(ordenActiva.cliente_telefono || '');
+        setDomDireccion(ordenActiva.cliente_direccion || '');
+        setDomModoConversion(true);
+        setShowDomicilioModal(true);
         return;
       }
 
@@ -2104,44 +2151,29 @@ export default function ElianaPosPage() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex items-center gap-2 text-xs relative">
           <div className="hidden xl:flex flex-col text-right pr-2 border-r border-zinc-200 leading-tight">
-            <span className="text-[10px] text-zinc-400">Le atiende ({cajaNombre}):</span>
+            <span className="text-[10px] text-zinc-400 flex items-center justify-end gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : lanConnected ? 'bg-blue-500' : 'bg-amber-500'}`} />
+              {cajaNombre}
+            </span>
             <span className="font-bold text-zinc-900">{cajeroNombre}</span>
           </div>
 
           <span
             title="Tiempo transcurrido desde la apertura de este turno"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-mono font-bold text-xs bg-emerald-50 text-emerald-800 border border-emerald-200"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono font-bold text-xs bg-emerald-50 text-emerald-800 border border-emerald-200"
           >
             <Clock className="w-3.5 h-3.5 text-emerald-600" />
             {shiftElapsedHMS}
           </span>
 
-          <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md font-semibold text-xs bg-zinc-100 text-zinc-700 border border-zinc-200">
-            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-600' : lanConnected ? 'bg-blue-600' : 'bg-amber-500'}`} />
-            {isOnline ? <Wifi className="w-3.5 h-3.5 text-zinc-500" /> : <WifiOff className="w-3.5 h-3.5 text-zinc-500" />}
-          </span>
-
           <button
             onClick={() => setShowCreditosModal(true)}
-            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold flex items-center gap-1 cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 font-semibold flex items-center gap-1.5 cursor-pointer"
           >
-            <UserCheck className="w-3.5 h-3.5 text-zinc-600" />
+            <UserCheck className="w-4 h-4 text-zinc-600" />
             <span className="hidden lg:inline">Créditos</span>
-          </button>
-
-          <button
-            onClick={() => setTouchMode((v) => !v)}
-            className={`px-2.5 py-1.5 rounded-md font-semibold flex items-center gap-1 border cursor-pointer ${
-              touchMode ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-300 text-zinc-700'
-            }`}
-          >
-            {touchMode ? <MonitorSmartphone className="w-3.5 h-3.5" /> : <Keyboard className="w-3.5 h-3.5" />}
-          </button>
-
-          <button onClick={handlePesarGramera} title="Leer Gramera" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
-            <Scale className="w-3.5 h-3.5" />
           </button>
 
           <button
@@ -2150,29 +2182,69 @@ export default function ElianaPosPage() {
               await executePosAction('REGISTRAR_APERTURA_CAJON_SIN_VENTA', {});
               notify('ok', 'Cajón monedero abierto.');
             }}
-            title="Abrir Cajón"
-            className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer"
+            title="Abrir Caja Registradora"
+            className="px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 font-semibold flex items-center gap-1.5 cursor-pointer"
           >
-            <Unlock className="w-3.5 h-3.5" />
+            <Unlock className="w-4 h-4 text-zinc-700" />
+            <span className="hidden lg:inline">Cajón</span>
           </button>
 
-          <button onClick={toggleBrowserFullscreen} title="Pantalla Completa" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-
-          <button onClick={() => setShowSettingsModal(true)} title="Configuración" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-
-          <button onClick={fetchPosState} title="Sincronizar" className="p-1.5 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer">
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowMoreToolsMenu((v) => !v)}
+              title="Más herramientas (Gramera, Panel táctil, Pantalla completa, Configuración)"
+              className="p-2 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-700 cursor-pointer"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            {showMoreToolsMenu && (
+              <div className="absolute right-0 mt-1.5 w-52 bg-white border border-zinc-200 rounded-xl shadow-xl py-1.5 z-[10002]">
+                <button
+                  type="button"
+                  onClick={() => { setShowMoreToolsMenu(false); setTouchMode((v) => !v); }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-100 flex items-center gap-2 cursor-pointer"
+                >
+                  {touchMode ? <MonitorSmartphone className="w-4 h-4" /> : <Keyboard className="w-4 h-4" />}
+                  {touchMode ? 'Ocultar panel derecho' : 'Mostrar panel derecho'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMoreToolsMenu(false); void handlePesarGramera(); }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-100 flex items-center gap-2 cursor-pointer"
+                >
+                  <Scale className="w-4 h-4" /> Leer Gramera
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMoreToolsMenu(false); toggleBrowserFullscreen(); }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-100 flex items-center gap-2 cursor-pointer"
+                >
+                  <Maximize2 className="w-4 h-4" /> Pantalla Completa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMoreToolsMenu(false); void fetchPosState(); }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-100 flex items-center gap-2 cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sincronizar Datos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMoreToolsMenu(false); setShowSettingsModal(true); }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-100 flex items-center gap-2 cursor-pointer border-t border-zinc-100 mt-1 pt-2"
+                >
+                  <Settings className="w-4 h-4" /> Configuración Terminal
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={() => setShowExitModal(true)}
-            className="px-2.5 py-1.5 rounded-md bg-white hover:bg-red-50 border border-zinc-300 hover:border-red-300 text-zinc-800 hover:text-red-700 font-semibold flex items-center gap-1 cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-white hover:bg-red-50 border border-zinc-300 hover:border-red-300 text-zinc-800 hover:text-red-700 font-semibold flex items-center gap-1 cursor-pointer"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-4 h-4" />
             <span>Salir</span>
           </button>
         </div>
@@ -2210,8 +2282,6 @@ export default function ElianaPosPage() {
 
             <div className="flex items-center gap-1.5 flex-wrap">
               {[
-                { key: 'INS', label: 'Varios', icon: Tag, onClick: () => setShowVariosModal(true), disabled: false },
-                { key: 'CTRL+P', label: 'Art. Común', icon: Flame, onClick: () => setShowArtComunModal(true), disabled: false },
                 {
                   key: 'F10',
                   label: 'Buscar',
@@ -2224,7 +2294,6 @@ export default function ElianaPosPage() {
                   },
                   disabled: false,
                 },
-                { key: 'F11', label: 'Mayoreo / Desc.', icon: Percent, onClick: handleAbrirMayoreo, disabled: !selectedItemId },
                 { key: 'F7', label: 'Entradas', icon: ArrowDownCircle, onClick: () => setCashFlowModal('ENTRADA'), disabled: false },
                 { key: 'F8', label: 'Salidas', icon: ArrowUpCircle, onClick: () => setCashFlowModal('SALIDA'), disabled: false },
                 {
@@ -2330,9 +2399,39 @@ export default function ElianaPosPage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-sm font-extrabold tabular-nums">
-                      {formatMoney(ordenActiva.gran_total)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {posConfig.habilitaMesas && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAsignarMesaModal(true)}
+                          className="px-2.5 py-1 rounded-lg bg-white/90 hover:bg-white border border-black/15 text-xs font-bold text-zinc-900 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Utensils className="w-3.5 h-3.5 text-sky-700" />
+                          <span>{ordenActiva.mesa_numero ? 'Cambiar Mesa' : 'Asignar Mesa'}</span>
+                          <span className="text-[10px] font-mono text-zinc-500">ALT+S</span>
+                        </button>
+                      )}
+                      {posConfig.habilitaDomicilios && ordenActiva.canal_venta !== 'DOMICILIO' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDomNombre(ordenActiva.cliente_nombre || '');
+                            setDomTelefono(ordenActiva.cliente_telefono || '');
+                            setDomDireccion(ordenActiva.cliente_direccion || '');
+                            setDomModoConversion(true);
+                            setShowDomicilioModal(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white/90 hover:bg-white border border-black/15 text-xs font-bold text-zinc-900 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Bike className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Pasar a Domicilio</span>
+                          <span className="text-[10px] font-mono text-zinc-500">ALT+D</span>
+                        </button>
+                      )}
+                      <span className="text-sm font-extrabold tabular-nums pl-1">
+                        {formatMoney(ordenActiva.gran_total)}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex-1 overflow-y-auto">
@@ -2739,6 +2838,8 @@ export default function ElianaPosPage() {
       {activeTab === 'PRODUCTOS' && (
         <PosProductsModule
           productos={productos}
+          categorias={categorias}
+          canEditProducts={canEditProducts}
           busyAction={busyAction}
           onSaveProducto={async (payload) => {
             setBusyAction(true);
@@ -3584,15 +3685,72 @@ export default function ElianaPosPage() {
         </div>
       )}
 
+      {/* Modal Asignar / Cambiar Mesa a Ticket Abierto (Alt+S) */}
+      {showAsignarMesaModal && ordenActiva && (
+        <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-300 max-w-2xl w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-zinc-950">Asignar Mesa a {getOrdenTabLabel(ordenActiva)}</h3>
+                <p className="text-xs text-zinc-500">Todos los productos ya agregados se moverán a la mesa elegida.</p>
+              </div>
+              <button type="button" onClick={() => setShowAsignarMesaModal(false)} className="p-1.5 text-zinc-400 hover:text-zinc-700 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-80 overflow-y-auto">
+              {mesas.map((m) => {
+                const libre = m.estado === 'LIBRE' || m.orden_activa_id === ordenActiva.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={!libre || busyAction}
+                    onClick={async () => {
+                      setBusyAction(true);
+                      try {
+                        await executePosAction('CAMBIAR_CANAL_ORDEN', {
+                          orden_id: ordenActiva.id,
+                          canal_venta: 'SALON_MESA',
+                          mesa_numero: m.numero,
+                        });
+                        setShowAsignarMesaModal(false);
+                        await fetchPosState();
+                        focusCapture();
+                        notify('ok', `Ticket asignado a ${m.nombre}.`);
+                      } catch (err: unknown) {
+                        notify('err', err instanceof Error ? err.message : 'Error asignando mesa');
+                      } finally {
+                        setBusyAction(false);
+                      }
+                    }}
+                    className={`p-3 rounded-xl border text-left transition ${
+                      libre
+                        ? 'bg-sky-50/70 hover:bg-sky-100 border-sky-300 text-sky-950 cursor-pointer'
+                        : 'bg-zinc-100 border-zinc-200 text-zinc-400 opacity-60 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="font-bold text-sm">{m.nombre}</div>
+                    <div className="text-[11px]">{m.zona} · {libre ? 'Disponible' : 'Ocupada'}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDomicilioModal && (
         <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-zinc-300 max-w-lg w-full p-5 space-y-3.5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-2.5">
               <div>
-                <h3 className="font-bold text-base text-zinc-900">Nuevo Pedido a Domicilio</h3>
+                <h3 className="font-bold text-base text-zinc-900">
+                  {domModoConversion ? 'Pasar Ticket a Domicilio' : 'Nuevo Pedido a Domicilio'}
+                </h3>
                 <p className="text-[11px] text-zinc-500">Origen: Av. Pasoancho con 72 esquina, Cali</p>
               </div>
-              <button onClick={() => setShowDomicilioModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowDomicilioModal(false); setDomModoConversion(false); }} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
