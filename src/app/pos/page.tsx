@@ -224,6 +224,7 @@ export default function ElianaPosPage() {
   const [showCreditosModal, setShowCreditosModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [showCancelarTicketModal, setShowCancelarTicketModal] = useState(false);
 
   const [cashFlowModal, setCashFlowModal] = useState<'ENTRADA' | 'SALIDA' | null>(null);
   const [cashFlowMonto, setCashFlowMonto] = useState('');
@@ -736,24 +737,31 @@ export default function ElianaPosPage() {
     [ordenActiva, handleAnularItem, handleAgregarProducto, executePosAction, fetchPosState, notify]
   );
 
-  const handleEliminarTicket = async () => {
+  const handleConfirmarCancelarTicket = useCallback(async () => {
     if (!ordenActiva) return;
-    if (!window.confirm(`¿Cancelar el ticket ${ordenActiva.consecutivo}?`)) return;
     setBusyAction(true);
     try {
       await executePosAction('ANULAR_ORDEN_COMPLETA', {
         orden_id: ordenActiva.id,
         motivo: 'Ticket cancelado en caja',
       });
+      setShowCancelarTicketModal(false);
       setOrdenActivaId(null);
+      setSelectedItemId(null);
+      setNavZone('SEARCH');
       await fetchPosState();
       focusCapture();
-      notify('ok', `Ticket ${ordenActiva.consecutivo} cancelado.`);
+      notify('ok', `Ticket ${getOrdenTabLabel(ordenActiva)} cancelado.`);
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error cancelando ticket');
     } finally {
       setBusyAction(false);
     }
+  }, [ordenActiva, executePosAction, fetchPosState, focusCapture, notify]);
+
+  const handleEliminarTicket = () => {
+    if (!ordenActiva) return;
+    setShowCancelarTicketModal(true);
   };
 
   const handleEnviarComanda = useCallback(async () => {
@@ -1108,17 +1116,28 @@ export default function ElianaPosPage() {
     }
   };
 
+  const handleCambiarTicketDireccion = useCallback(
+    (delta: 1 | -1) => {
+      if (ordenesAbiertas.length <= 1) {
+        notify('ok', 'Solo hay una cuenta abierta actualmente.');
+        return;
+      }
+      const idx = ordenesAbiertas.findIndex((o) => o.id === ordenActiva?.id);
+      const baseIdx = idx < 0 ? 0 : idx;
+      const nextIdx = (baseIdx + delta + ordenesAbiertas.length) % ordenesAbiertas.length;
+      const next = ordenesAbiertas[nextIdx];
+      setOrdenActivaId(next.id);
+      setSelectedItemId(null);
+      setActiveTab('VENTAS');
+      setNavZone('SEARCH');
+      focusCapture();
+    },
+    [ordenesAbiertas, ordenActiva, focusCapture, notify]
+  );
+
   const handleCambiarSiguienteTicket = useCallback(() => {
-    if (ordenesAbiertas.length <= 1) {
-      notify('ok', 'Solo hay una cuenta abierta actualmente.');
-      return;
-    }
-    const idx = ordenesAbiertas.findIndex((o) => o.id === ordenActiva?.id);
-    const next = ordenesAbiertas[(idx + 1) % ordenesAbiertas.length];
-    setOrdenActivaId(next.id);
-    setActiveTab('VENTAS');
-    focusCapture();
-  }, [ordenesAbiertas, ordenActiva, focusCapture, notify]);
+    handleCambiarTicketDireccion(1);
+  }, [handleCambiarTicketDireccion]);
 
   useBarcodeScanner((barcode) => {
     const match = productos.find((p) => (p.codigo || '').toLowerCase() === barcode.toLowerCase());
@@ -1170,6 +1189,7 @@ export default function ElianaPosPage() {
         showCreditosModal ||
         showSettingsModal ||
         showExitModal ||
+        showCancelarTicketModal ||
         cashFlowModal !== null;
 
       if (e.key === 'Escape') {
@@ -1186,6 +1206,7 @@ export default function ElianaPosPage() {
         setShowCreditosModal(false);
         setShowSettingsModal(false);
         setShowExitModal(false);
+        setShowCancelarTicketModal(false);
         setCashFlowModal(null);
         setNavZone('SEARCH');
         focusCapture();
@@ -1397,6 +1418,22 @@ export default function ElianaPosPage() {
         return;
       }
 
+      // Shift + Flecha Derecha / Izquierda: moverse entre tickets abiertos
+      if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        e.preventDefault();
+        handleCambiarTicketDireccion(e.key === 'ArrowRight' ? 1 : -1);
+        return;
+      }
+
+      // Shift + Supr (Delete): cancelar ticket abierto con confirmación
+      if (e.shiftKey && e.key === 'Delete') {
+        if (ordenActiva) {
+          e.preventDefault();
+          setShowCancelarTicketModal(true);
+        }
+        return;
+      }
+
       // Controles de cantidad y eliminación sobre el ítem seleccionado del ticket
       if (e.key === 'Delete' && (!isTypingInCapture || captureInput === '')) {
         const selected = itemsActivos.find((i) => i.id === selectedItemId);
@@ -1558,9 +1595,9 @@ export default function ElianaPosPage() {
     mesasNavZone, focusedMesaIndex, zonasDisponibles, zonaFiltro, mesasFiltradas,
     showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
     showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
-    showSettingsModal, showExitModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
+    showSettingsModal, showExitModal, showCancelarTicketModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
     handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem,
-    handleCambiarSiguienteTicket, handleEnviarComanda, handleNuevaVentaMostrador,
+    handleCambiarSiguienteTicket, handleCambiarTicketDireccion, handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
 
   const handleCaptureSubmit = (e: React.FormEvent) => {
@@ -2181,8 +2218,11 @@ export default function ElianaPosPage() {
                     </button>
                   </>
                 )}
-                <button onClick={handleEliminarTicket} disabled={!ordenActiva || busyAction} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-red-50 hover:border-red-300 disabled:opacity-40 text-xs font-semibold text-red-700 cursor-pointer">
-                  Eliminar
+                <button onClick={handleEliminarTicket} disabled={!ordenActiva || busyAction} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-red-50 hover:border-red-300 disabled:opacity-40 text-xs font-semibold text-red-700 flex items-center gap-1.5 cursor-pointer">
+                  <span>Eliminar</span>
+                  <span className="px-1 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] font-mono font-semibold text-red-600">
+                    SHIFT+DEL
+                  </span>
                 </button>
               </div>
 
@@ -2602,6 +2642,56 @@ export default function ElianaPosPage() {
             <input type="text" value={asignarTel} onChange={(e) => setAsignarTel(e.target.value)} placeholder="Teléfono (opcional)" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
             <button type="submit" disabled={busyAction} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer">Guardar Asignación</button>
           </form>
+        </div>
+      )}
+
+      {/* Modal Confirmación Cancelar Ticket (Shift + Supr) */}
+      {showCancelarTicketModal && ordenActiva && (
+        <div className="fixed inset-0 z-[10000] bg-zinc-950/50 backdrop-blur-[1px] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-base text-zinc-950">Cancelar Ticket</h3>
+                <p className="text-xs text-zinc-600 mt-1 leading-relaxed">
+                  ¿Desea cancelar el ticket <b className="text-zinc-950">{getOrdenTabLabel(ordenActiva)}</b> por monto de{' '}
+                  <b className="text-red-700 tabular-nums">{formatMoney(ordenActiva.gran_total)}</b>?
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelarTicketModal(false);
+                  focusCapture();
+                }}
+                className="p-1 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={busyAction}
+                onClick={() => {
+                  setShowCancelarTicketModal(false);
+                  focusCapture();
+                }}
+                className="px-4 py-2 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                autoFocus
+                disabled={busyAction}
+                onClick={() => void handleConfirmarCancelarTicket()}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-400"
+              >
+                {busyAction ? 'Cancelando...' : 'Aceptar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
