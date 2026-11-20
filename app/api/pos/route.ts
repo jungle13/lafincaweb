@@ -1154,7 +1154,7 @@ export async function POST(request: NextRequest) {
       const periodoId = `per-${todayStr.slice(0, 7)}`;
 
       if (isEntrada) {
-        await supabase.from('pos_auditoria_eventos').insert({
+        const { error: errEnt } = await supabase.from('pos_auditoria_eventos').insert({
           fecha: todayStr,
           caja_nombre: cajaNombre,
           usuario_cajero: cajeroNombre,
@@ -1163,21 +1163,32 @@ export async function POST(request: NextRequest) {
           valor_afectado: valor,
           descripcion: `Entrada de efectivo (+$${valor.toLocaleString('es-CO')}) en ${cajaNombre}: ${String(concepto).trim()} (${cajeroNombre}).`,
         });
+        if (errEnt) throw errEnt;
       } else {
-        await supabase.from('libro_caja_registros').insert({
+        const diaMes = Number(todayStr.split('-')[2] || 1);
+        const { count: regCount } = await supabase
+          .from('libro_caja_registros')
+          .select('*', { count: 'exact', head: true })
+          .eq('fecha', todayStr)
+          .eq('tipo_libro', 'CAJA_MENOR');
+
+        const { error: errSal } = await supabase.from('libro_caja_registros').insert({
           fecha: todayStr,
+          dia_mes: diaMes,
+          orden_item: (regCount || 0) + 1,
           periodo_id: periodoId,
           tipo_libro: 'CAJA_MENOR',
           caja_nombre: cajaNombre,
           responsable_caja: cajeroNombre,
+          usuario_registro: cajeroNombre,
           clasificacion: body.clasificacion || 'Gasto Operativo',
           concepto: String(concepto).trim(),
           categoria: body.categoria || 'Salida Rápida POS',
           descripcion_beneficiario: body.descripcion_beneficiario || '',
           valor_pagado: valor,
-          metodo_pago: 'Efectivo',
           sesion_id: body.sesion_id || null,
         });
+        if (errSal) throw errSal;
         await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
       }
 

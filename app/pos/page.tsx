@@ -231,6 +231,15 @@ export default function ElianaPosPage() {
   const [showCancelarTicketModal, setShowCancelarTicketModal] = useState(false);
   const [operarios, setOperarios] = useState<OperarioPos[]>([]);
   const [showAsignarMeseroModal, setShowAsignarMeseroModal] = useState(false);
+  const [focusedMeseroIdx, setFocusedMeseroIdx] = useState(0);
+  const [showReenviarComandaModal, setShowReenviarComandaModal] = useState(false);
+  const [reenviarComandaFocusBtn, setReenviarComandaFocusBtn] = useState<'CANCEL' | 'CONFIRM'>('CONFIRM');
+  const [cobroFocusSection, setCobroFocusSection] = useState<
+    'PROPINA' | 'METODO' | 'EFECTIVO_INPUT' | 'BILLETES' | 'CONSUMO_AREA' | 'CONSUMO_PERSONA' | 'CONFIRMAR'
+  >('EFECTIVO_INPUT');
+  const [cobroBilleteIdx, setCobroBilleteIdx] = useState(0);
+  const [domDistanciaInfo, setDomDistanciaInfo] = useState<string>('');
+  const [calcDomLoading, setCalcDomLoading] = useState(false);
   const [notaItemTarget, setNotaItemTarget] = useState<PosOrdenItem | null>(null);
   const [notaItemText, setNotaItemText] = useState('');
   const [consumoNota, setConsumoNota] = useState('');
@@ -774,49 +783,91 @@ export default function ElianaPosPage() {
     setShowCancelarTicketModal(true);
   };
 
-  const handleEnviarComanda = useCallback(async () => {
-    if (!ordenActiva) return;
-    const pendientes = itemsActivos.filter((i) => i.estado_comanda === 'PENDIENTE');
-    if (pendientes.length === 0) {
-      notify('ok', 'No hay artículos pendientes por comandar.');
-      return;
-    }
-    setBusyAction(true);
-    try {
-      const res = await executePosAction('ENVIAR_COMANDA', { orden_id: ordenActiva.id });
-      const porEstacion = (res.porEstacion || {}) as Record<string, PosOrdenItem[]>;
-      for (const [est, its] of Object.entries(porEstacion)) {
-        if (its.length > 0) {
-          await printThermalTicket({
-            titulo: `COMANDA - ${est}`,
-            consecutivo: ordenActiva.consecutivo,
-            fecha: new Date().toLocaleString('es-CO'),
-            caja: cajaNombre,
-            cajero: cajeroNombre,
-            canal: ordenActiva.canal_venta,
-            mesaNumero: ordenActiva.mesa_numero,
-            clienteNombre: ordenActiva.cliente_nombre,
-            items: its.map((x) => ({
-              nombre: x.nombre_producto,
-              cantidad: x.cantidad,
-              precioUnitario: x.precio_unitario,
-              subtotal: x.subtotal,
-              notas: x.notas_comanda,
-            })),
-            subtotal: its.reduce((a, b) => a + Number(b.subtotal || 0), 0),
-            total: its.reduce((a, b) => a + Number(b.subtotal || 0), 0),
-          });
+  const handleEnviarComanda = useCallback(
+    async (forceResend = false) => {
+      if (!ordenActiva) return;
+      const pendientes = itemsActivos.filter((i) => i.estado_comanda === 'PENDIENTE');
+      if (pendientes.length === 0 && !forceResend) {
+        if (itemsActivos.length === 0) {
+          notify('err', 'No hay productos en este ticket para enviar a cocina.');
+          return;
         }
+        setReenviarComandaFocusBtn('CONFIRM');
+        setShowReenviarComandaModal(true);
+        return;
       }
-      await fetchPosState();
-      focusCapture();
-      notify('ok', `Comanda enviada (${pendientes.length} ítems).`);
-    } catch (e: unknown) {
-      notify('err', e instanceof Error ? e.message : 'Error enviando comanda');
-    } finally {
-      setBusyAction(false);
-    }
-  }, [ordenActiva, itemsActivos, cajaNombre, cajeroNombre, executePosAction, fetchPosState, focusCapture, notify]);
+      setBusyAction(true);
+      try {
+        if (pendientes.length > 0) {
+          const res = await executePosAction('ENVIAR_COMANDA', { orden_id: ordenActiva.id });
+          const porEstacion = (res.porEstacion || {}) as Record<string, PosOrdenItem[]>;
+          for (const [est, its] of Object.entries(porEstacion)) {
+            if (its.length > 0) {
+              await printThermalTicket({
+                titulo: `COMANDA - ${est}`,
+                consecutivo: ordenActiva.consecutivo,
+                fecha: new Date().toLocaleString('es-CO'),
+                caja: cajaNombre,
+                cajero: cajeroNombre,
+                canal: ordenActiva.canal_venta,
+                mesaNumero: ordenActiva.mesa_numero,
+                clienteNombre: ordenActiva.cliente_nombre,
+                items: its.map((x) => ({
+                  nombre: x.nombre_producto,
+                  cantidad: x.cantidad,
+                  precioUnitario: x.precio_unitario,
+                  subtotal: x.subtotal,
+                  notas: x.notas_comanda,
+                })),
+                subtotal: its.reduce((a, b) => a + Number(b.subtotal || 0), 0),
+                total: its.reduce((a, b) => a + Number(b.subtotal || 0), 0),
+              });
+            }
+          }
+          await fetchPosState();
+          focusCapture();
+          notify('ok', `Comanda enviada (${pendientes.length} ítems).`);
+        } else {
+          // Reenvío completo de comanda ya enviada
+          const porEst: Record<string, PosOrdenItem[]> = {};
+          for (const it of itemsActivos) {
+            const est = it.estacion_comanda || 'COCINA_PARRILLA';
+            if (!porEst[est]) porEst[est] = [];
+            porEst[est].push(it);
+          }
+          for (const [est, its] of Object.entries(porEst)) {
+            await printThermalTicket({
+              titulo: `REENVÍO COMANDA - ${est}`,
+              consecutivo: ordenActiva.consecutivo,
+              fecha: new Date().toLocaleString('es-CO'),
+              caja: cajaNombre,
+              cajero: cajeroNombre,
+              canal: ordenActiva.canal_venta,
+              mesaNumero: ordenActiva.mesa_numero,
+              clienteNombre: ordenActiva.cliente_nombre,
+              items: its.map((x) => ({
+                nombre: x.nombre_producto,
+                cantidad: x.cantidad,
+                precioUnitario: x.precio_unitario,
+                subtotal: x.subtotal,
+                notas: x.notas_comanda,
+              })),
+              subtotal: its.reduce((a, b) => a + Number(b.subtotal || 0), 0),
+              total: its.reduce((a, b) => a + Number(b.subtotal || 0), 0),
+            });
+          }
+          setShowReenviarComandaModal(false);
+          focusCapture();
+          notify('ok', `Comanda reenviada a cocina (${itemsActivos.length} ítems).`);
+        }
+      } catch (e: unknown) {
+        notify('err', e instanceof Error ? e.message : 'Error enviando comanda');
+      } finally {
+        setBusyAction(false);
+      }
+    },
+    [ordenActiva, itemsActivos, cajaNombre, cajeroNombre, executePosAction, fetchPosState, focusCapture, notify]
+  );
 
   const handleImprimirPrecuenta = async () => {
     if (!ordenActiva) return;
@@ -1208,6 +1259,7 @@ export default function ElianaPosPage() {
         showExitModal ||
         showCancelarTicketModal ||
         showAsignarMeseroModal ||
+        showReenviarComandaModal ||
         notaItemTarget !== null ||
         cashFlowModal !== null;
 
@@ -1227,10 +1279,175 @@ export default function ElianaPosPage() {
         setShowExitModal(false);
         setShowCancelarTicketModal(false);
         setShowAsignarMeseroModal(false);
+        setShowReenviarComandaModal(false);
         setNotaItemTarget(null);
         setCashFlowModal(null);
         setNavZone('SEARCH');
         focusCapture();
+        return;
+      }
+
+      // Navegación por teclado dentro del modal Reenviar Comanda
+      if (showReenviarComandaModal) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
+          e.preventDefault();
+          setReenviarComandaFocusBtn((p) => (p === 'CONFIRM' ? 'CANCEL' : 'CONFIRM'));
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (reenviarComandaFocusBtn === 'CONFIRM') {
+            void handleEnviarComanda(true);
+          } else {
+            setShowReenviarComandaModal(false);
+            focusCapture();
+          }
+          return;
+        }
+        return;
+      }
+
+      // Navegación por teclado dentro del modal Asignar Personal / Mesero (Alt+M)
+      if (showAsignarMeseroModal && operarios.length > 0) {
+        const cols = typeof window !== 'undefined' && window.innerWidth >= 640 ? 3 : 2;
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setFocusedMeseroIdx((i) => Math.min(operarios.length - 1, i + 1));
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setFocusedMeseroIdx((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setFocusedMeseroIdx((i) => Math.min(operarios.length - 1, i + cols));
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setFocusedMeseroIdx((i) => Math.max(0, i - cols));
+          return;
+        }
+        if (e.key === 'Enter' && ordenActiva) {
+          const op = operarios[focusedMeseroIdx];
+          if (op) {
+            e.preventDefault();
+            setBusyAction(true);
+            void executePosAction('ASIGNAR_MESERO_ORDEN', {
+              orden_id: ordenActiva.id,
+              mesero_nombre: op.nombre_cajero,
+            })
+              .then(async () => {
+                setShowAsignarMeseroModal(false);
+                await fetchPosState();
+                focusCapture();
+                notify('ok', `Personal asignado: ${op.nombre_cajero}`);
+              })
+              .catch((err: unknown) => {
+                notify('err', err instanceof Error ? err.message : 'Error asignando personal');
+              })
+              .finally(() => setBusyAction(false));
+          }
+          return;
+        }
+        return;
+      }
+
+      // Navegación por teclado dentro del modal F12 Cobrar
+      if (showCobroModal && ordenActiva) {
+        const metodosOrder: Array<'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO' | 'CONSUMO_INTERNO'> = [
+          'EFECTIVO',
+          'DATAFONO',
+          'TRANSFERENCIA',
+          'CREDITO',
+          'MIXTO',
+          'CONSUMO_INTERNO',
+        ];
+        const areasOrder: Array<'Personal Cocina' | 'Personal Caja / Servicio' | 'Dueño / Gerencia' | 'Cortesía / Degustación'> = [
+          'Personal Cocina',
+          'Personal Caja / Servicio',
+          'Dueño / Gerencia',
+          'Cortesía / Degustación',
+        ];
+        const billetesList = [totalFinalCobro, 2000, 5000, 10000, 20000, 50000, 100000, 200000];
+        const sectionsForMetodo: Array<typeof cobroFocusSection> =
+          metodoPago === 'EFECTIVO'
+            ? [...(posConfig.habilitaPropinas ? (['PROPINA'] as const) : []), 'METODO', 'EFECTIVO_INPUT', 'BILLETES', 'CONFIRMAR']
+            : metodoPago === 'CONSUMO_INTERNO'
+              ? ['METODO', 'CONSUMO_AREA', ...(areaConsumo !== 'Cortesía / Degustación' ? (['CONSUMO_PERSONA'] as const) : []), 'CONFIRMAR']
+              : [...(posConfig.habilitaPropinas ? (['PROPINA'] as const) : []), 'METODO', 'CONFIRMAR'];
+
+        if (e.ctrlKey && e.key === 'Enter') {
+          e.preventDefault();
+          void handleConfirmarCobro();
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const cur = sectionsForMetodo.indexOf(cobroFocusSection);
+          const nextSec = sectionsForMetodo[Math.min(sectionsForMetodo.length - 1, cur < 0 ? 0 : cur + 1)];
+          setCobroFocusSection(nextSec);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const cur = sectionsForMetodo.indexOf(cobroFocusSection);
+          const prevSec = sectionsForMetodo[Math.max(0, cur < 0 ? 0 : cur - 1)];
+          setCobroFocusSection(prevSec);
+          return;
+        }
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          const dir = e.key === 'ArrowRight' ? 1 : -1;
+          if (cobroFocusSection === 'METODO') {
+            e.preventDefault();
+            const cur = metodosOrder.indexOf(metodoPago);
+            const nextM = metodosOrder[(cur + dir + metodosOrder.length) % metodosOrder.length];
+            setMetodoPago(nextM);
+            return;
+          }
+          if (cobroFocusSection === 'PROPINA') {
+            e.preventDefault();
+            const pcts = [0, 0.05, 0.1];
+            const curVal = propinaValor;
+            const curIdx = pcts.findIndex((p) => Math.round(ordenActiva.subtotal_bruto * p) === curVal);
+            const nextPct = pcts[((curIdx < 0 ? 0 : curIdx) + dir + pcts.length) % pcts.length];
+            setPropinaValor(Math.round(ordenActiva.subtotal_bruto * nextPct));
+            return;
+          }
+          if (cobroFocusSection === 'BILLETES') {
+            e.preventDefault();
+            const nextIdx = (cobroBilleteIdx + dir + billetesList.length) % billetesList.length;
+            setCobroBilleteIdx(nextIdx);
+            setPagoConEfectivo(billetesList[nextIdx]);
+            return;
+          }
+          if (cobroFocusSection === 'CONSUMO_AREA') {
+            e.preventDefault();
+            const curA = areasOrder.indexOf(areaConsumo as typeof areasOrder[number]);
+            const nextA = areasOrder[((curA < 0 ? 0 : curA) + dir + areasOrder.length) % areasOrder.length];
+            setAreaConsumo(nextA);
+            setClienteCreditoNombre('');
+            setConsumoNota('');
+            return;
+          }
+          if (cobroFocusSection === 'CONSUMO_PERSONA') {
+            const opsArea = operarios.filter((op) => op.cargo_area === areaConsumo);
+            if (opsArea.length > 0) {
+              e.preventDefault();
+              const curP = opsArea.findIndex((op) => op.nombre_cajero === clienteCreditoNombre);
+              const nextP = opsArea[((curP < 0 ? 0 : curP) + dir + opsArea.length) % opsArea.length];
+              setClienteCreditoNombre(nextP.nombre_cajero);
+              return;
+            }
+          }
+        }
+        if (e.key === 'Enter' && cobroFocusSection === 'CONFIRMAR') {
+          e.preventDefault();
+          void handleConfirmarCobro();
+          return;
+        }
         return;
       }
 
@@ -1248,12 +1465,22 @@ export default function ElianaPosPage() {
         return;
       }
       if (e.key === 'F3') { e.preventDefault(); setActiveTab('PRODUCTOS'); return; }
-      if (e.key === 'F4') { e.preventDefault(); setActiveTab('INVENTARIO'); return; }
+      if (e.key === 'F4' && e.shiftKey) {
+        e.preventDefault();
+        setActiveTab('CORTE');
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        setActiveTab('CORTE');
+        return;
+      }
+      if (e.key === 'F4' && !e.shiftKey) { e.preventDefault(); setActiveTab('INVENTARIO'); return; }
       if (e.key === 'F5') { e.preventDefault(); setActiveTab('VENTAS_DIA'); return; }
       if (e.key === 'F6') {
         e.preventDefault();
-        if (posConfig.habilitaComandasCocina && ordenActiva && itemsActivos.some((i) => i.estado_comanda === 'PENDIENTE')) {
-          handleEnviarComanda();
+        if (posConfig.habilitaComandasCocina && ordenActiva && itemsActivos.length > 0) {
+          void handleEnviarComanda(false);
         } else {
           handleNuevaVentaMostrador();
         }
@@ -1297,6 +1524,8 @@ export default function ElianaPosPage() {
       // Atajo fácil para Asignar Personal / Mesero: Alt+M
       if (!isAnyModalOpen && ordenActiva && e.altKey && e.key.toLowerCase() === 'm') {
         e.preventDefault();
+        const curIdx = operarios.findIndex((o) => o.nombre_cajero === ordenActiva.mesero_nombre);
+        setFocusedMeseroIdx(curIdx >= 0 ? curIdx : 0);
         setShowAsignarMeseroModal(true);
         return;
       }
@@ -1634,8 +1863,11 @@ export default function ElianaPosPage() {
     mesasNavZone, focusedMesaIndex, zonasDisponibles, zonaFiltro, mesasFiltradas,
     showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
     showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
-    showSettingsModal, showExitModal, showCancelarTicketModal, showAsignarMeseroModal, notaItemTarget, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
-    handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem,
+    showSettingsModal, showExitModal, showCancelarTicketModal, showAsignarMeseroModal, showReenviarComandaModal,
+    reenviarComandaFocusBtn, focusedMeseroIdx, operarios, cobroFocusSection, cobroBilleteIdx, metodoPago,
+    propinaValor, pagoConEfectivo, areaConsumo, clienteCreditoNombre, totalFinalCobro,
+    notaItemTarget, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo, executePosAction, fetchPosState, notify,
+    handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem, handleConfirmarCobro,
     handleCambiarSiguienteTicket, handleCambiarTicketDireccion, handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
 
@@ -1672,7 +1904,7 @@ export default function ElianaPosPage() {
     mods.push({ key: 'PRODUCTOS', fKey: 'F3', label: 'Productos', icon: Package });
     mods.push({ key: 'INVENTARIO', fKey: 'F4', label: 'Inventario', icon: Boxes });
     mods.push({ key: 'VENTAS_DIA', fKey: 'F5', label: 'Ventas / Dev.', icon: Receipt });
-    mods.push({ key: 'CORTE', label: 'Corte de Caja', icon: Lock });
+    mods.push({ key: 'CORTE', fKey: 'Shift+F4', label: 'Corte de Caja', icon: Lock });
     return mods;
   }, [posConfig.habilitaMesas, posConfig.habilitaDomicilios, mesas, ordenesDomicilio]);
 
@@ -2308,6 +2540,8 @@ export default function ElianaPosPage() {
                 <button
                   onClick={() => {
                     if (!ordenActiva) return;
+                    const curIdx = operarios.findIndex((o) => o.nombre_cajero === ordenActiva.mesero_nombre);
+                    setFocusedMeseroIdx(curIdx >= 0 ? curIdx : 0);
                     setShowAsignarMeseroModal(true);
                   }}
                   disabled={!ordenActiva}
@@ -2321,7 +2555,7 @@ export default function ElianaPosPage() {
                 </button>
                 {posConfig.habilitaComandasCocina && (
                   <>
-                    <button onClick={handleEnviarComanda} disabled={!ordenActiva || busyAction} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1 cursor-pointer">
+                    <button onClick={() => void handleEnviarComanda(false)} disabled={!ordenActiva || busyAction} className="px-2.5 py-1.5 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-bold text-zinc-700 flex items-center gap-1 cursor-pointer">
                       <ChefHat className="w-3.5 h-3.5 text-zinc-600" />
                       F6 - Comandar
                     </button>
@@ -2347,16 +2581,10 @@ export default function ElianaPosPage() {
             </div>
 
             <div className="flex items-center gap-2.5">
-              <div className="flex flex-col gap-1">
-                <button onClick={handleReimprimirUltimo} className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer">
-                  <Printer className="w-3.5 h-3.5 text-zinc-500" />
-                  Reimprimir Último Ticket
-                </button>
-                <button onClick={() => setActiveTab('VENTAS_DIA')} className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-bold text-zinc-700 flex items-center gap-1.5 cursor-pointer">
-                  <History className="w-4 h-4 text-zinc-500" />
-                  F5 - Ventas y Devoluciones ({resumenDia.cantidadFacturas})
-                </button>
-              </div>
+              <button onClick={handleReimprimirUltimo} className="px-3.5 py-2.5 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-bold text-zinc-700 flex items-center gap-1.5 cursor-pointer">
+                <Printer className="w-4 h-4 text-zinc-500" />
+                Reimprimir Último Ticket
+              </button>
 
               <button onClick={abrirModalCobro} disabled={!ordenActiva || itemsActivos.length === 0 || busyAction} className="px-6 py-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-base flex items-center gap-2 cursor-pointer">
                 <CreditCard className="w-5 h-5" />
@@ -2628,13 +2856,13 @@ export default function ElianaPosPage() {
             </div>
 
             {metodoPago !== 'CONSUMO_INTERNO' && (
-              <div className={`grid ${posConfig.habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs`}>
+              <div className={`grid ${posConfig.habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs p-2 rounded-xl transition ${cobroFocusSection === 'PROPINA' ? 'ring-2 ring-blue-500 bg-blue-50/40' : ''}`}>
                 {posConfig.habilitaPropinas && (
                   <div>
                     <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
                     <div className="flex gap-1 mb-1.5">
                       {[0, 0.05, 0.1].map((pct) => (
-                        <button key={pct} onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))} className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-semibold text-zinc-700 cursor-pointer">
+                        <button key={pct} onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))} className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-bold text-zinc-700 cursor-pointer">
                           {pct * 100}%
                         </button>
                       ))}
@@ -2644,13 +2872,13 @@ export default function ElianaPosPage() {
                 )}
                 <div>
                   <label className="font-semibold text-zinc-700 block mb-1">Descuento Global ($)</label>
-                  {posConfig.habilitaPropinas && <div className="h-[26px]" />}
+                  {posConfig.habilitaPropinas && <div className="h-[30px]" />}
                   <input type="number" value={descuentoValor} onChange={(e) => setDescuentoValor(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`} />
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+            <div className={`grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1.5 rounded-xl border transition ${cobroFocusSection === 'METODO' ? 'ring-2 ring-blue-500 border-blue-400' : 'border-zinc-200'}`}>
               {[
                 { id: 'EFECTIVO' as const, label: 'EFECTIVO' },
                 { id: 'DATAFONO' as const, label: 'DATÁFONO' },
@@ -2662,7 +2890,7 @@ export default function ElianaPosPage() {
                 <button
                   key={m.id}
                   onClick={() => setMetodoPago(m.id)}
-                  className={`py-2 rounded-md text-[11px] font-semibold cursor-pointer ${
+                  className={`py-2.5 rounded-lg text-xs font-bold cursor-pointer ${
                     metodoPago === m.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-950'
                   }`}
                 >
@@ -2672,16 +2900,16 @@ export default function ElianaPosPage() {
             </div>
 
             {metodoPago === 'EFECTIVO' && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5 space-y-2.5">
+              <div className={`bg-zinc-50 border rounded-xl p-3.5 space-y-2.5 transition ${cobroFocusSection === 'EFECTIVO_INPUT' || cobroFocusSection === 'BILLETES' ? 'border-blue-400 ring-2 ring-blue-500/40' : 'border-zinc-200'}`}>
                 <div className="flex items-center justify-between text-xs font-semibold text-zinc-700">
                   <span>Pagó con (Efectivo recibido):</span>
                   <span className="text-base font-bold tabular-nums text-blue-700">Cambio: {formatMoney(cambioCalculado)}</span>
                 </div>
                 <input autoFocus type="number" value={pagoConEfectivo} onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))} className={`w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-md text-xl font-bold tabular-nums text-zinc-950 outline-none ${noSpinnerClass}`} />
-                <div className="flex gap-1.5 flex-wrap">
-                  <button onClick={() => setPagoConEfectivo(totalFinalCobro)} className="px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-bold text-zinc-800 cursor-pointer">Exacto</button>
-                  {[10000, 20000, 50000, 100000, 200000].map((billete) => (
-                    <button key={billete} onClick={() => setPagoConEfectivo(billete)} className="px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-bold tabular-nums text-zinc-800 cursor-pointer">{formatMoney(billete)}</button>
+                <div className={`flex gap-1.5 flex-wrap p-1 rounded-lg ${cobroFocusSection === 'BILLETES' ? 'ring-2 ring-blue-500 bg-blue-50/60' : ''}`}>
+                  <button onClick={() => { setCobroBilleteIdx(0); setPagoConEfectivo(totalFinalCobro); }} className={`px-3.5 py-2 rounded-lg border text-xs font-bold cursor-pointer ${cobroFocusSection === 'BILLETES' && cobroBilleteIdx === 0 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'}`}>Exacto</button>
+                  {[2000, 5000, 10000, 20000, 50000, 100000, 200000].map((billete, bIdx) => (
+                    <button key={billete} onClick={() => { setCobroBilleteIdx(bIdx + 1); setPagoConEfectivo(billete); }} className={`px-3.5 py-2 rounded-lg border text-xs font-bold tabular-nums cursor-pointer ${cobroFocusSection === 'BILLETES' && cobroBilleteIdx === bIdx + 1 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'}`}>{formatMoney(billete)}</button>
                   ))}
                 </div>
               </div>
@@ -2807,8 +3035,8 @@ export default function ElianaPosPage() {
               </div>
             )}
 
-            <button onClick={handleConfirmarCobro} disabled={busyAction} className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer">
-              {metodoPago === 'CONSUMO_INTERNO' ? 'Registrar Consumo Interno ($0 Caja)' : 'Confirmar Cobro e Imprimir Ticket'}
+            <button onClick={handleConfirmarCobro} disabled={busyAction} className={`w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer transition ${cobroFocusSection === 'CONFIRMAR' ? 'ring-4 ring-blue-300' : ''}`}>
+              {metodoPago === 'CONSUMO_INTERNO' ? 'Registrar Consumo Interno ($0 Caja)' : 'Confirmar Cobro e Imprimir Ticket (Ctrl+Enter)'}
             </button>
           </div>
         </div>
@@ -2995,22 +3223,44 @@ export default function ElianaPosPage() {
 
       {/* Modal F7 / F8 sincronizado con Libro de Caja */}
       {cashFlowModal && (
-        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-zinc-300 max-w-sm w-full p-5 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-300 max-w-md w-full p-5 space-y-3.5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-2.5">
               <h3 className="font-bold text-base text-zinc-900">{cashFlowModal === 'ENTRADA' ? 'F7 — Entrada de Efectivo' : 'F8 — Salida a Libro de Caja'}</h3>
               <button onClick={() => setCashFlowModal(null)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
             {cashFlowModal === 'SALIDA' && (
-              <select value={cashFlowClasif} onChange={(e) => setCashFlowClasif(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-xs font-semibold">
-                <option value="Gasto Operativo">Gasto Operativo (Servicios, Hielo, Varios)</option>
-                <option value="Costo / Insumo">Costo / Insumo (Compras de contado)</option>
-                <option value="Turno / Nómina">Turno / Nómina (Pagos a personal)</option>
-              </select>
+              <div className="space-y-1.5">
+                <div className="text-xs font-bold text-zinc-600">Clasificación de la Salida:</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'Gasto Operativo', sub: 'Servicios, Hielo, Varios' },
+                    { id: 'Costo / Insumo', sub: 'Compras de contado' },
+                    { id: 'Turno / Nómina', sub: 'Pagos a personal' },
+                  ].map((opt) => {
+                    const active = cashFlowClasif === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setCashFlowClasif(opt.id)}
+                        className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
+                          active
+                            ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs'
+                            : 'bg-zinc-50 text-zinc-800 border-zinc-300 hover:bg-zinc-100'
+                        }`}
+                      >
+                        <div className="font-bold text-xs">{opt.id}</div>
+                        <div className={`text-[10px] mt-0.5 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{opt.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
-            <input autoFocus type="number" value={cashFlowMonto} onChange={(e) => setCashFlowMonto(e.target.value)} placeholder="Monto ($)" className={`w-full px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
-            <input type="text" value={cashFlowConcepto} onChange={(e) => setCashFlowConcepto(e.target.value)} placeholder="Concepto / Beneficiario" className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
-            <button onClick={handleRegistrarCashFlow} disabled={busyAction} className="w-full py-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs cursor-pointer">
+            <input autoFocus type="number" value={cashFlowMonto} onChange={(e) => setCashFlowMonto(e.target.value)} placeholder="Monto ($)" className={`w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-base font-bold ${noSpinnerClass}`} />
+            <input type="text" value={cashFlowConcepto} onChange={(e) => setCashFlowConcepto(e.target.value)} placeholder="Concepto / Beneficiario" className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm" />
+            <button onClick={handleRegistrarCashFlow} disabled={busyAction} className="w-full py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs cursor-pointer">
               Registrar {cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida en Libro de Caja'}
             </button>
           </div>
@@ -3099,9 +3349,10 @@ export default function ElianaPosPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto">
-              {operarios.map((op) => {
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto p-1">
+              {operarios.map((op, opIdx) => {
                 const selected = ordenActiva.mesero_nombre === op.nombre_cajero;
+                const isKeyFocused = focusedMeseroIdx === opIdx;
                 return (
                   <button
                     key={op.id}
@@ -3128,7 +3379,7 @@ export default function ElianaPosPage() {
                       selected
                         ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
                         : 'bg-zinc-50 text-zinc-900 border-zinc-300 hover:bg-sky-50 hover:border-sky-400'
-                    }`}
+                    } ${isKeyFocused ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}
                   >
                     <div className="font-bold text-sm truncate">{op.nombre_cajero}</div>
                     <div className={`text-[11px] truncate mt-0.5 ${selected ? 'text-sky-100' : 'text-zinc-500'}`}>
@@ -3277,21 +3528,157 @@ export default function ElianaPosPage() {
         />
       )}
 
+      {/* Modal Confirmación Reenviar Comanda a Cocina (F6) */}
+      {showReenviarComandaModal && ordenActiva && (
+        <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-300 max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-base text-zinc-950">Comanda ya enviada anteriormente</h3>
+                <p className="text-xs text-zinc-600 mt-1.5 leading-relaxed">
+                  Ya enviaste la comanda de este ticket (<b className="text-zinc-900">{getOrdenTabLabel(ordenActiva)}</b>). ¿Estás seguro de que deseas enviar nuevamente la comanda de este ticket a cocina?
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowReenviarComandaModal(false);
+                  focusCapture();
+                }}
+                className="p-1 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={busyAction}
+                onClick={() => {
+                  setShowReenviarComandaModal(false);
+                  focusCapture();
+                }}
+                className={`px-4 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition ${
+                  reenviarComandaFocusBtn === 'CANCEL'
+                    ? 'bg-zinc-900 text-white border-zinc-900 ring-2 ring-blue-400'
+                    : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-100'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={busyAction}
+                onClick={() => void handleEnviarComanda(true)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer transition ${
+                  reenviarComandaFocusBtn === 'CONFIRM'
+                    ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                    : 'bg-blue-600/90 hover:bg-blue-700 text-white'
+                }`}
+              >
+                Sí, enviar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDomicilioModal && (
-        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-zinc-300 max-w-md w-full p-5 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-zinc-900">Nuevo Pedido a Domicilio</h3>
+        <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-300 max-w-lg w-full p-5 space-y-3.5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-2.5">
+              <div>
+                <h3 className="font-bold text-base text-zinc-900">Nuevo Pedido a Domicilio</h3>
+                <p className="text-[11px] text-zinc-500">Origen: Av. Pasoancho con 72 esquina, Cali</p>
+              </div>
               <button onClick={() => setShowDomicilioModal(false)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
-            <input type="text" placeholder="Nombre del cliente" value={domNombre} onChange={(e) => setDomNombre(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
-            <input type="text" placeholder="Teléfono / WhatsApp" value={domTelefono} onChange={(e) => setDomTelefono(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
-            <input type="text" placeholder="Dirección completa" value={domDireccion} onChange={(e) => setDomDireccion(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm" />
-            <div className="grid grid-cols-2 gap-2">
-              <input type="number" value={domCostoEnvio} onChange={(e) => setDomCostoEnvio(Number(e.target.value || 0))} placeholder="Valor domicilio" className={`px-3 py-2 border border-zinc-300 rounded-md text-sm font-bold ${noSpinnerClass}`} />
-              <input type="text" value={domRepartidor} onChange={(e) => setDomRepartidor(e.target.value)} placeholder="Domiciliario" className="px-3 py-2 border border-zinc-300 rounded-md text-sm" />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <input type="text" placeholder="Nombre del cliente" value={domNombre} onChange={(e) => setDomNombre(e.target.value)} className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm" />
+              <input type="text" placeholder="Teléfono / WhatsApp" value={domTelefono} onChange={(e) => setDomTelefono(e.target.value)} className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm" />
             </div>
-            <button onClick={handleCrearDomicilio} className="w-full py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer">Crear Domicilio</button>
+
+            <div className="space-y-1.5">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Dirección completa en Cali (Ej: Cra 80 # 14-20)"
+                  value={domDireccion}
+                  onChange={(e) => setDomDireccion(e.target.value)}
+                  className="flex-1 px-3 py-2.5 border border-zinc-300 rounded-xl text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={calcDomLoading || domDireccion.trim().length < 4}
+                  onClick={async () => {
+                    setCalcDomLoading(true);
+                    setDomDistanciaInfo('');
+                    try {
+                      const res = await fetch('/api/pos/distancia-domicilio', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ direccion: domDireccion }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok || !data?.success) {
+                        setDomDistanciaInfo(data?.error || 'No se pudo calcular distancia.');
+                      } else {
+                        setDomCostoEnvio(Number(data.tarifaSugerida || 4000));
+                        setDomDistanciaInfo(
+                          `${data.distanciaKm} km · ~${data.duracionMin} min · Sugerido: ${formatMoney(data.tarifaSugerida)}`
+                        );
+                      }
+                    } catch {
+                      setDomDistanciaInfo('Error calculando distancia.');
+                    } finally {
+                      setCalcDomLoading(false);
+                    }
+                  }}
+                  className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold whitespace-nowrap cursor-pointer"
+                >
+                  {calcDomLoading ? 'Calculando...' : 'Calcular Distancia'}
+                </button>
+              </div>
+              {domDistanciaInfo && (
+                <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+                  {domDistanciaInfo}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 mb-1">Valor Domicilio ($)</label>
+              <input type="number" value={domCostoEnvio} onChange={(e) => setDomCostoEnvio(Number(e.target.value || 0))} placeholder="Valor domicilio" className={`w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm font-bold ${noSpinnerClass}`} />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 mb-1.5">Seleccionar Domiciliario:</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['Domiciliario 1', 'Domiciliario 2', 'Domiciliario 3'] as const).map((rep) => {
+                  const active = domRepartidor === rep;
+                  return (
+                    <button
+                      key={rep}
+                      type="button"
+                      onClick={() => setDomRepartidor(rep)}
+                      className={`py-3 px-2 rounded-xl border text-xs font-bold text-center cursor-pointer transition ${
+                        active
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-zinc-50 text-zinc-800 border-zinc-300 hover:bg-blue-50'
+                      }`}
+                    >
+                      {rep}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button onClick={handleCrearDomicilio} className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer">
+              Crear Domicilio
+            </button>
           </div>
         </div>
       )}

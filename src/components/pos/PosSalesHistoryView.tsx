@@ -321,59 +321,44 @@ export default function PosSalesHistoryView({
               </button>
             ))}
 
-            <span className="h-4 w-px bg-zinc-200 mx-1" />
+            <span className="h-5 w-px bg-zinc-200 mx-1" />
 
-            {(['TODOS', 'EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'CREDITO', 'MIXTO'] as const).map((mp) => (
-              <button
-                key={mp}
-                type="button"
-                onClick={() => setMetodoFilter(mp)}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer border ${
-                  metodoFilter === mp
-                    ? 'bg-blue-50 text-blue-800 border-blue-400'
-                    : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
-                }`}
-              >
-                {mp === 'TODOS' ? 'Pago: Todos' : mp}
-              </button>
-            ))}
+            <select
+              value={metodoFilter}
+              onChange={(e) => setMetodoFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-300 bg-blue-50/70 text-blue-950 outline-none focus:border-blue-500 cursor-pointer"
+            >
+              <option value="TODOS">Pago: Todos</option>
+              <option value="EFECTIVO">Pago: Efectivo</option>
+              <option value="DATAFONO">Pago: Datáfono</option>
+              <option value="TRANSFERENCIA">Pago: Transferencia</option>
+              <option value="CREDITO">Pago: Crédito</option>
+              <option value="MIXTO">Pago: Mixto</option>
+            </select>
 
-            <span className="h-4 w-px bg-zinc-200 mx-1" />
+            <select
+              value={meseroFilter}
+              onChange={(e) => setMeseroFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold border border-emerald-300 bg-emerald-50/70 text-emerald-950 outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              {meserosUnicos.map((ms) => (
+                <option key={ms} value={ms}>
+                  {ms === 'TODOS' ? 'Mesero: Todos' : `Mesero: ${ms}`}
+                </option>
+              ))}
+            </select>
 
-            {meserosUnicos.slice(0, 8).map((ms) => (
-              <button
-                key={ms}
-                type="button"
-                onClick={() => setMeseroFilter(ms)}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer border ${
-                  meseroFilter === ms
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-400'
-                    : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
-                }`}
-              >
-                {ms === 'TODOS' ? 'Mesero: Todos' : ms}
-              </button>
-            ))}
-
-            {mesasUnicas.length > 2 && (
-              <>
-                <span className="h-4 w-px bg-zinc-200 mx-1" />
-                {mesasUnicas.slice(0, 10).map((mc) => (
-                  <button
-                    key={mc}
-                    type="button"
-                    onClick={() => setMesaFilter(mc)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer border ${
-                      mesaFilter === mc
-                        ? 'bg-sky-50 text-sky-800 border-sky-400'
-                        : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
-                    }`}
-                  >
-                    {mc === 'TODOS' ? 'Mesa/Canal: Todos' : mc}
-                  </button>
-                ))}
-              </>
-            )}
+            <select
+              value={mesaFilter}
+              onChange={(e) => setMesaFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold border border-sky-300 bg-sky-50/70 text-sky-950 outline-none focus:border-sky-500 cursor-pointer"
+            >
+              {mesasUnicas.map((mc) => (
+                <option key={mc} value={mc}>
+                  {mc === 'TODOS' ? 'Mesa / Canal: Todos' : mc}
+                </option>
+              ))}
+            </select>
           </div>
         )}
       </div>
