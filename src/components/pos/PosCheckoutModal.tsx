@@ -45,6 +45,10 @@ type FocusZone =
   | 'PARTIAL_BILLETES'
   | 'PARTIAL_NOTA'
   | 'PARTIAL_CONFIRM'
+  | 'RIGHT_PROPINA'
+  | 'RIGHT_METODO'
+  | 'RIGHT_EFECTIVO_INPUT'
+  | 'RIGHT_BILLETES'
   | 'FINAL_CONFIRM';
 
 export default function PosCheckoutModal({
@@ -93,11 +97,13 @@ export default function PosCheckoutModal({
   const [focusZone, setFocusZone] = useState<FocusZone>('ITEMS');
   const [focusedItemIdx, setFocusedItemIdx] = useState(0);
   const [partialBilleteIdx, setPartialBilleteIdx] = useState(0);
+  const [rightBilleteIdx, setRightBilleteIdx] = useState(0);
 
   const itemRowRefs = useRef<Array<HTMLLabelElement | null>>([]);
   const partialEfInputRef = useRef<HTMLInputElement | null>(null);
   const partialNotaRef = useRef<HTMLInputElement | null>(null);
   const partialConfirmRef = useRef<HTMLButtonElement | null>(null);
+  const rightEfInputRef = useRef<HTMLInputElement | null>(null);
   const finalConfirmRef = useRef<HTMLButtonElement | null>(null);
 
   // Sincronizar pagos si ordenActiva.pagos_detalle cambia externamente
@@ -174,10 +180,26 @@ export default function PosCheckoutModal({
       setTimeout(() => partialNotaRef.current?.focus(), 15);
     } else if (focusZone === 'PARTIAL_CONFIRM') {
       setTimeout(() => partialConfirmRef.current?.focus(), 15);
+    } else if (focusZone === 'RIGHT_EFECTIVO_INPUT') {
+      setTimeout(() => {
+        rightEfInputRef.current?.focus();
+        rightEfInputRef.current?.select();
+      }, 15);
     } else if (focusZone === 'FINAL_CONFIRM') {
       setTimeout(() => finalConfirmRef.current?.focus(), 15);
     } else if (focusZone === 'ITEMS') {
+      if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === 'INPUT') {
+        document.activeElement.blur();
+      }
       itemRowRefs.current[focusedItemIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (
+      focusZone === 'RIGHT_PROPINA' ||
+      focusZone === 'RIGHT_METODO' ||
+      focusZone === 'RIGHT_BILLETES'
+    ) {
+      if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === 'INPUT') {
+        document.activeElement.blur();
+      }
     }
   }, [focusZone, focusedItemIdx]);
 
@@ -503,6 +525,23 @@ export default function PosCheckoutModal({
           }
           return;
         }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setFocusZone(
+            habilitaPropinas && metodoPago !== 'CONSUMO_INTERNO' ? 'RIGHT_PROPINA' : 'RIGHT_METODO'
+          );
+          return;
+        }
+      }
+
+      if (focusZone === 'PARTIAL_METODO' || focusZone === 'PARTIAL_CONFIRM') {
+        if (e.key === 'ArrowRight' && focusZone === 'PARTIAL_CONFIRM') {
+          e.preventDefault();
+          setFocusZone(
+            habilitaPropinas && metodoPago !== 'CONSUMO_INTERNO' ? 'RIGHT_PROPINA' : 'RIGHT_METODO'
+          );
+          return;
+        }
       }
 
       if (focusZone === 'PARTIAL_METODO') {
@@ -567,10 +606,122 @@ export default function PosCheckoutModal({
         }
       }
 
-      if (focusZone === 'FINAL_CONFIRM') {
+      const rightMetodos: Array<typeof metodoPago> =
+        pagosRegistrados.length === 0
+          ? ['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'CREDITO', 'MIXTO', 'CONSUMO_INTERNO']
+          : ['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'CREDITO', 'MIXTO'];
+      const rightBilletesOpts = [
+        metodoPago === 'MIXTO' ? faltaMixEfectivo : montoObjetivoDerecha,
+        ...BILLETES,
+      ];
+
+      if (focusZone === 'RIGHT_PROPINA') {
+        const pcts = [0, 0.05, 0.1];
+        const curIdx = pcts.findIndex(
+          (p) => Math.round(ordenActiva.subtotal_bruto * p) === propinaValor
+        );
+        const effIdx = curIdx < 0 ? 0 : curIdx;
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (effIdx <= 0) {
+            setFocusZone('ITEMS');
+          } else {
+            setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pcts[effIdx - 1]));
+          }
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const nextIdx = Math.min(pcts.length - 1, effIdx + 1);
+          setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pcts[nextIdx]));
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setFocusZone('RIGHT_METODO');
+          return;
+        }
+      }
+
+      if (focusZone === 'RIGHT_METODO') {
+        const curM = rightMetodos.indexOf(metodoPago);
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (curM <= 0) {
+            setFocusZone('ITEMS');
+          } else {
+            setMetodoPago(rightMetodos[curM - 1]);
+          }
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const nextM = Math.min(rightMetodos.length - 1, curM + 1);
+          setMetodoPago(rightMetodos[nextM]);
+          return;
+        }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
+          setFocusZone(
+            habilitaPropinas && metodoPago !== 'CONSUMO_INTERNO' ? 'RIGHT_PROPINA' : 'ITEMS'
+          );
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (metodoPago === 'EFECTIVO' || metodoPago === 'MIXTO') {
+            setFocusZone('RIGHT_EFECTIVO_INPUT');
+          } else {
+            setFocusZone('FINAL_CONFIRM');
+          }
+          return;
+        }
+      }
+
+      if (focusZone === 'RIGHT_BILLETES') {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (rightBilleteIdx <= 0) {
+            setFocusZone('ITEMS');
+          } else {
+            const nextIdx = rightBilleteIdx - 1;
+            setRightBilleteIdx(nextIdx);
+            setPagoConEfectivo(rightBilletesOpts[nextIdx]);
+          }
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const nextIdx = Math.min(rightBilletesOpts.length - 1, rightBilleteIdx + 1);
+          setRightBilleteIdx(nextIdx);
+          setPagoConEfectivo(rightBilletesOpts[nextIdx]);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setFocusZone('RIGHT_EFECTIVO_INPUT');
+          return;
+        }
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+          e.preventDefault();
+          setFocusZone('FINAL_CONFIRM');
+          return;
+        }
+      }
+
+      if (focusZone === 'FINAL_CONFIRM') {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
           setFocusZone('ITEMS');
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (metodoPago === 'EFECTIVO' || metodoPago === 'MIXTO') {
+            setFocusZone('RIGHT_BILLETES');
+          } else {
+            setFocusZone('RIGHT_METODO');
+          }
           return;
         }
         if (e.key === 'Enter') {
@@ -592,6 +743,14 @@ export default function PosCheckoutModal({
     pagoParcialMetodo,
     pagoParcialMonto,
     partialBilleteIdx,
+    rightBilleteIdx,
+    habilitaPropinas,
+    metodoPago,
+    pagosRegistrados.length,
+    propinaValor,
+    ordenActiva.subtotal_bruto,
+    faltaMixEfectivo,
+    montoObjetivoDerecha,
     onClose,
     handleFinalConfirm,
     handleAgregarTransaccion,
@@ -914,21 +1073,36 @@ export default function PosCheckoutModal({
 
             {/* Propina y Descuento SIEMPRE visibles */}
             {metodoPago !== 'CONSUMO_INTERNO' && (
-              <div className={`grid ${habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs`}>
+              <div
+                className={`grid ${habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs p-1.5 rounded-xl transition ${
+                  focusZone === 'RIGHT_PROPINA' ? 'ring-2 ring-blue-500 bg-blue-50/40' : ''
+                }`}
+              >
                 {habilitaPropinas && (
                   <div>
                     <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
                     <div className="flex gap-1 mb-1">
-                      {[0, 0.05, 0.1].map((pct) => (
-                        <button
-                          key={pct}
-                          type="button"
-                          onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))}
-                          className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-bold text-zinc-700 cursor-pointer"
-                        >
-                          {pct * 100}%
-                        </button>
-                      ))}
+                      {[0, 0.05, 0.1].map((pct) => {
+                        const valPct = Math.round(ordenActiva.subtotal_bruto * pct);
+                        const isAct = propinaValor === valPct;
+                        return (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => {
+                              setPropinaValor(valPct);
+                              setFocusZone('RIGHT_PROPINA');
+                            }}
+                            className={`px-2.5 py-1 rounded border font-bold cursor-pointer ${
+                              isAct
+                                ? 'bg-zinc-900 text-white border-zinc-900'
+                                : 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700'
+                            }`}
+                          >
+                            {pct * 100}%
+                          </button>
+                        );
+                      })}
                     </div>
                     <input
                       type="number"
@@ -998,7 +1172,11 @@ export default function PosCheckoutModal({
             {/* Cobro del Total o Saldo Restante SIEMPRE visible mientras falte por cobrar */}
             {(pagosRegistrados.length === 0 || faltaPorCobrar > 0) && (
               <>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
+                <div
+                  className={`grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1 rounded-xl border transition ${
+                    focusZone === 'RIGHT_METODO' ? 'ring-2 ring-blue-500 border-blue-400' : 'border-zinc-200'
+                  }`}
+                >
                   {(
                     [
                       { id: 'EFECTIVO' as const, label: 'EFECTIVO' },
@@ -1025,7 +1203,13 @@ export default function PosCheckoutModal({
                 </div>
 
                 {(metodoPago === 'EFECTIVO' || metodoPago === 'MIXTO') && (
-                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2.5 text-xs">
+                  <div
+                    className={`bg-zinc-50 border rounded-xl p-3 space-y-2.5 text-xs transition ${
+                      focusZone === 'RIGHT_EFECTIVO_INPUT' || focusZone === 'RIGHT_BILLETES'
+                        ? 'border-blue-400 ring-2 ring-blue-500/40'
+                        : 'border-zinc-200'
+                    }`}
+                  >
                     {metodoPago === 'MIXTO' && (
                       <>
                         <div className="grid grid-cols-3 gap-2">
@@ -1082,19 +1266,49 @@ export default function PosCheckoutModal({
                       )}
                     </div>
                     <input
+                      ref={rightEfInputRef}
                       type="number"
                       value={pagoConEfectivo || ''}
-                      onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))}
+                      onFocus={() => setFocusZone('RIGHT_EFECTIVO_INPUT')}
+                      onChange={(e) => {
+                        setPagoConEfectivo(Number(e.target.value || 0));
+                        setRightBilleteIdx(-1);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setFocusZone('RIGHT_METODO');
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setFocusZone('RIGHT_BILLETES');
+                        } else if (e.key === 'ArrowLeft') {
+                          const input = e.currentTarget;
+                          if ((input.selectionStart ?? 0) === 0) {
+                            e.preventDefault();
+                            setFocusZone('ITEMS');
+                          }
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          setFocusZone('FINAL_CONFIRM');
+                        }
+                      }}
                       placeholder="Ingresa monto entregado..."
                       className="w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-xl text-lg font-extrabold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div
+                      className={`flex gap-1.5 flex-wrap p-1 rounded-lg ${
+                        focusZone === 'RIGHT_BILLETES' ? 'ring-2 ring-blue-500 bg-blue-50/60' : ''
+                      }`}
+                    >
                       <button
                         type="button"
-                        onClick={() =>
-                          setPagoConEfectivo(metodoPago === 'MIXTO' ? faltaMixEfectivo : montoObjetivoDerecha)
-                        }
+                        onClick={() => {
+                          setPagoConEfectivo(metodoPago === 'MIXTO' ? faltaMixEfectivo : montoObjetivoDerecha);
+                          setRightBilleteIdx(0);
+                          setFocusZone('RIGHT_BILLETES');
+                        }}
                         className={`px-3 py-1.5 rounded-lg border font-bold cursor-pointer ${
+                          (focusZone === 'RIGHT_BILLETES' && rightBilleteIdx === 0) ||
                           pagoConEfectivo === (metodoPago === 'MIXTO' ? faltaMixEfectivo : montoObjetivoDerecha)
                             ? 'bg-zinc-900 text-white border-zinc-900'
                             : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'
@@ -1102,12 +1316,17 @@ export default function PosCheckoutModal({
                       >
                         Exacto
                       </button>
-                      {BILLETES.map((b) => (
+                      {BILLETES.map((b, bIdx) => (
                         <button
                           key={b}
                           type="button"
-                          onClick={() => setPagoConEfectivo(b)}
+                          onClick={() => {
+                            setPagoConEfectivo(b);
+                            setRightBilleteIdx(bIdx + 1);
+                            setFocusZone('RIGHT_BILLETES');
+                          }}
                           className={`px-3 py-1.5 rounded-lg border font-bold tabular-nums cursor-pointer ${
+                            (focusZone === 'RIGHT_BILLETES' && rightBilleteIdx === bIdx + 1) ||
                             pagoConEfectivo === b
                               ? 'bg-zinc-900 text-white border-zinc-900'
                               : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'
