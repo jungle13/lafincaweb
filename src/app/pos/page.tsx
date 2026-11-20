@@ -18,6 +18,7 @@ import {
   Lock,
   LogOut,
   Maximize2,
+  Minus,
   MonitorSmartphone,
   Package,
   Percent,
@@ -152,7 +153,13 @@ export default function ElianaPosPage() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [captureInput, setCaptureInput] = useState('');
   const [catFiltro, setCatFiltro] = useState('TODAS');
+  const [navZone, setNavZone] = useState<'SEARCH' | 'CATEGORIES' | 'PRODUCTS' | 'TICKET'>('SEARCH');
+  const [focusedProductIndex, setFocusedProductIndex] = useState(0);
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const productCardRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const categoryBtnRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const ticketRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const [lastPayment, setLastPayment] = useState<LastPaymentMemory>({
     total: 0,
@@ -644,24 +651,6 @@ export default function ElianaPosPage() {
     }
   };
 
-  const handleCambiarCantidadItem = useCallback(
-    async (item: PosOrdenItem, delta: number) => {
-      if (!ordenActiva || delta <= 0) return;
-      await handleAgregarProducto(
-        {
-          id: item.producto_id || '',
-          codigo: item.codigo_producto,
-          nombre: item.nombre_producto,
-          categoria: item.categoria,
-          precio_total: item.precio_unitario,
-          precio_neto: item.precio_unitario,
-        },
-        delta
-      );
-    },
-    [ordenActiva, handleAgregarProducto]
-  );
-
   const handleAnularItem = useCallback(
     async (item: PosOrdenItem) => {
       if (!ordenActiva) return;
@@ -673,23 +662,72 @@ export default function ElianaPosPage() {
         if (!resp || !resp.trim()) return;
         motivo = resp.trim();
       }
+      const currentIdx = itemsActivos.findIndex((i) => i.id === item.id);
+      const remaining = itemsActivos.filter((i) => i.id !== item.id);
+      const nextSelected =
+        remaining.length > 0
+          ? remaining[Math.min(currentIdx, remaining.length - 1)].id
+          : null;
+
       setBusyAction(true);
       try {
         await executePosAction('ANULAR_ITEM_ORDEN', {
           item_id: item.id,
           orden_id: ordenActiva.id,
           motivo,
+          usuario: cajeroNombre,
         });
+        setSelectedItemId(nextSelected);
+        if (!nextSelected) setNavZone('SEARCH');
         await fetchPosState();
-        focusCapture();
-        notify('ok', 'Ítem eliminado.');
       } catch (e: unknown) {
-        notify('err', e instanceof Error ? e.message : 'Error eliminando ítem');
+        notify('err', e instanceof Error ? e.message : 'Error anulando producto');
       } finally {
         setBusyAction(false);
       }
     },
-    [ordenActiva, executePosAction, fetchPosState, focusCapture, notify]
+    [ordenActiva, itemsActivos, cajeroNombre, executePosAction, fetchPosState, notify]
+  );
+
+  const handleCambiarCantidadItem = useCallback(
+    async (item: PosOrdenItem, delta: number) => {
+      if (!ordenActiva || delta === 0) return;
+      const nextQty = Number(item.cantidad || 0) + delta;
+      if (nextQty <= 0) {
+        await handleAnularItem(item);
+        return;
+      }
+      if (delta > 0) {
+        await handleAgregarProducto(
+          {
+            id: item.producto_id || '',
+            codigo: item.codigo_producto,
+            nombre: item.nombre_producto,
+            categoria: item.categoria,
+            precio_total: item.precio_unitario,
+            precio_neto: item.precio_unitario,
+          },
+          delta
+        );
+        return;
+      }
+      setBusyAction(true);
+      try {
+        await executePosAction('ACTUALIZAR_ITEM_PRECIO_CANTIDAD', {
+          orden_id: ordenActiva.id,
+          item_id: item.id,
+          cantidad: nextQty,
+          precio_unitario: item.precio_unitario,
+          notas_comanda: item.notas_comanda || null,
+        });
+        await fetchPosState();
+      } catch (e: unknown) {
+        notify('err', e instanceof Error ? e.message : 'Error actualizando cantidad');
+      } finally {
+        setBusyAction(false);
+      }
+    },
+    [ordenActiva, handleAnularItem, handleAgregarProducto, executePosAction, fetchPosState, notify]
   );
 
   const handleEliminarTicket = async () => {
@@ -1088,10 +1126,24 @@ export default function ElianaPosPage() {
   });
 
   useEffect(() => {
+    setFocusedProductIndex((prev) => {
+      if (productosFiltrados.length === 0) return 0;
+      return Math.min(prev, productosFiltrados.length - 1);
+    });
+  }, [productosFiltrados.length]);
+
+  useEffect(() => {
+    if (itemsActivos.length === 0 && navZone === 'TICKET') {
+      setNavZone('SEARCH');
+    }
+  }, [itemsActivos.length, navZone]);
+
+  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!sesionActiva) return;
       const target = e.target as HTMLElement | null;
       const isTextArea = target?.tagName === 'TEXTAREA';
+      const isOtherInput = target?.tagName === 'INPUT' && target !== captureInputRef.current;
       const isAnyModalOpen =
         showCobroModal ||
         showAsignarClienteModal ||
@@ -1122,11 +1174,12 @@ export default function ElianaPosPage() {
         setShowSettingsModal(false);
         setShowExitModal(false);
         setCashFlowModal(null);
+        setNavZone('SEARCH');
         focusCapture();
         return;
       }
 
-      if (e.key === 'F1') { e.preventDefault(); setActiveTab('VENTAS'); focusCapture(); return; }
+      if (e.key === 'F1') { e.preventDefault(); setActiveTab('VENTAS'); setNavZone('SEARCH'); focusCapture(); return; }
       if (e.key === 'F2' && posConfig.habilitaMesas) { e.preventDefault(); setActiveTab('MESAS'); return; }
       if (e.key === 'F3') { e.preventDefault(); setActiveTab('PRODUCTOS'); return; }
       if (e.key === 'F4') { e.preventDefault(); setActiveTab('INVENTARIO'); return; }
@@ -1162,29 +1215,198 @@ export default function ElianaPosPage() {
       if (e.key === 'Insert' && !isAnyModalOpen) { e.preventDefault(); setShowVariosModal(true); return; }
       if (e.ctrlKey && e.key.toLowerCase() === 'p') { e.preventDefault(); setShowArtComunModal(true); return; }
 
-      if (isAnyModalOpen || isTextArea || activeTab !== 'VENTAS') return;
-      const isTypingInCapture = target === captureInputRef.current;
+      if (isAnyModalOpen || isTextArea || isOtherInput || activeTab !== 'VENTAS') return;
 
+      const isTypingInCapture = target === captureInputRef.current;
+      const inputEl = captureInputRef.current;
+      const caretAtStart = !isTypingInCapture || ((inputEl?.selectionStart ?? 0) === 0 && (inputEl?.selectionEnd ?? 0) === 0);
+      const caretAtEnd = !isTypingInCapture || ((inputEl?.selectionEnd ?? captureInput.length) >= captureInput.length);
+      const gridCols = typeof window !== 'undefined' && window.innerWidth >= 1280 ? 3 : 2;
+      const catIdx = Math.max(0, categoriasProductos.indexOf(catFiltro));
+
+      // Auto-escritura global: cualquier carácter imprimible fuera del input escribe directo en Código/Producto
+      if (
+        !isTypingInCapture &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        e.key.length === 1 &&
+        e.key !== '+' &&
+        e.key !== '-' &&
+        /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ .,/]$/.test(e.key)
+      ) {
+        e.preventDefault();
+        setNavZone('SEARCH');
+        setCaptureInput((prev) => prev + e.key);
+        captureInputRef.current?.focus();
+        return;
+      }
+
+      if (!isTypingInCapture && e.key === 'Backspace') {
+        e.preventDefault();
+        setNavZone('SEARCH');
+        setCaptureInput((prev) => prev.slice(0, -1));
+        captureInputRef.current?.focus();
+        return;
+      }
+
+      // Controles de cantidad y eliminación sobre el ítem seleccionado del ticket
       if (e.key === 'Delete' && (!isTypingInCapture || captureInput === '')) {
         const selected = itemsActivos.find((i) => i.id === selectedItemId);
-        if (selected) { e.preventDefault(); handleAnularItem(selected); }
+        if (selected) { e.preventDefault(); void handleAnularItem(selected); }
         return;
       }
-      if (e.key === 'ArrowDown' && itemsActivos.length > 0) {
-        e.preventDefault();
-        const idx = itemsActivos.findIndex((i) => i.id === selectedItemId);
-        setSelectedItemId(itemsActivos[idx < 0 ? 0 : Math.min(itemsActivos.length - 1, idx + 1)].id);
-        return;
-      }
-      if (e.key === 'ArrowUp' && itemsActivos.length > 0) {
-        e.preventDefault();
-        const idx = itemsActivos.findIndex((i) => i.id === selectedItemId);
-        setSelectedItemId(itemsActivos[idx < 0 ? 0 : Math.max(0, idx - 1)].id);
-        return;
-      }
-      if ((e.key === '+' || e.key === 'Add') && (!isTypingInCapture || captureInput === '')) {
+
+      if ((e.key === '+' || e.key === 'Add') && (navZone === 'TICKET' || !isTypingInCapture || captureInput === '')) {
         const selected = itemsActivos.find((i) => i.id === selectedItemId);
-        if (selected) { e.preventDefault(); handleCambiarCantidadItem(selected, 1); }
+        if (selected) { e.preventDefault(); void handleCambiarCantidadItem(selected, 1); return; }
+      }
+
+      if ((e.key === '-' || e.key === 'Subtract') && (navZone === 'TICKET' || !isTypingInCapture || captureInput === '')) {
+        const selected = itemsActivos.find((i) => i.id === selectedItemId);
+        if (selected) { e.preventDefault(); void handleCambiarCantidadItem(selected, -1); return; }
+      }
+
+      // Enter en grilla derecha de productos agrega el producto enfocado
+      if (e.key === 'Enter' && navZone === 'PRODUCTS') {
+        const prod = productosFiltrados[focusedProductIndex];
+        if (prod) {
+          e.preventDefault();
+          void handleAgregarProducto(prod, 1);
+        }
+        return;
+      }
+
+      // Flecha Derecha: categorías automáticas / grilla de productos
+      if (e.key === 'ArrowRight') {
+        if (navZone === 'SEARCH' && caretAtEnd && touchMode && categoriasProductos.length > 0) {
+          e.preventDefault();
+          captureInputRef.current?.blur();
+          const nextCatIdx = Math.min(categoriasProductos.length - 1, catIdx + 1);
+          setCatFiltro(categoriasProductos[nextCatIdx]);
+          setFocusedProductIndex(0);
+          setNavZone('CATEGORIES');
+          categoryBtnRefs.current[nextCatIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+          return;
+        }
+        if (navZone === 'CATEGORIES' && categoriasProductos.length > 0) {
+          e.preventDefault();
+          const nextCatIdx = Math.min(categoriasProductos.length - 1, catIdx + 1);
+          setCatFiltro(categoriasProductos[nextCatIdx]);
+          setFocusedProductIndex(0);
+          categoryBtnRefs.current[nextCatIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+          return;
+        }
+        if (navZone === 'PRODUCTS' && productosFiltrados.length > 0) {
+          e.preventDefault();
+          const nextIdx = Math.min(productosFiltrados.length - 1, focusedProductIndex + 1);
+          setFocusedProductIndex(nextIdx);
+          productCardRefs.current[nextIdx]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (navZone === 'TICKET' && touchMode) {
+          e.preventDefault();
+          if (productosFiltrados.length > 0) {
+            setNavZone('PRODUCTS');
+            productCardRefs.current[focusedProductIndex]?.scrollIntoView({ block: 'nearest' });
+          } else {
+            setNavZone('CATEGORIES');
+          }
+          return;
+        }
+      }
+
+      // Flecha Izquierda: retrocede categorías o salta al listado de productos del ticket
+      if (e.key === 'ArrowLeft') {
+        if (navZone === 'SEARCH' && caretAtStart && itemsActivos.length > 0) {
+          e.preventDefault();
+          captureInputRef.current?.blur();
+          const targetId = itemsActivos.some((i) => i.id === selectedItemId) ? selectedItemId! : itemsActivos[0].id;
+          setSelectedItemId(targetId);
+          setNavZone('TICKET');
+          ticketRowRefs.current[targetId]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (navZone === 'CATEGORIES') {
+          e.preventDefault();
+          if (catIdx > 0) {
+            const prevCatIdx = catIdx - 1;
+            setCatFiltro(categoriasProductos[prevCatIdx]);
+            setFocusedProductIndex(0);
+            categoryBtnRefs.current[prevCatIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+          } else if (itemsActivos.length > 0) {
+            const targetId = itemsActivos.some((i) => i.id === selectedItemId) ? selectedItemId! : itemsActivos[0].id;
+            setSelectedItemId(targetId);
+            setNavZone('TICKET');
+            ticketRowRefs.current[targetId]?.scrollIntoView({ block: 'nearest' });
+          }
+          return;
+        }
+        if (navZone === 'PRODUCTS') {
+          e.preventDefault();
+          if (focusedProductIndex % gridCols === 0 && itemsActivos.length > 0) {
+            const targetId = itemsActivos.some((i) => i.id === selectedItemId) ? selectedItemId! : itemsActivos[0].id;
+            setSelectedItemId(targetId);
+            setNavZone('TICKET');
+            ticketRowRefs.current[targetId]?.scrollIntoView({ block: 'nearest' });
+          } else if (focusedProductIndex > 0) {
+            const prevIdx = focusedProductIndex - 1;
+            setFocusedProductIndex(prevIdx);
+            productCardRefs.current[prevIdx]?.scrollIntoView({ block: 'nearest' });
+          }
+          return;
+        }
+      }
+
+      // Flecha Abajo: entra al contenedor derecho desde Search/Categorías o navega filas
+      if (e.key === 'ArrowDown') {
+        if ((navZone === 'SEARCH' || navZone === 'CATEGORIES') && touchMode && productosFiltrados.length > 0) {
+          e.preventDefault();
+          captureInputRef.current?.blur();
+          setFocusedProductIndex(0);
+          setNavZone('PRODUCTS');
+          productCardRefs.current[0]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (navZone === 'PRODUCTS' && productosFiltrados.length > 0) {
+          e.preventDefault();
+          const nextIdx = Math.min(productosFiltrados.length - 1, focusedProductIndex + gridCols);
+          setFocusedProductIndex(nextIdx);
+          productCardRefs.current[nextIdx]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (navZone === 'TICKET' && itemsActivos.length > 0) {
+          e.preventDefault();
+          const idx = itemsActivos.findIndex((i) => i.id === selectedItemId);
+          const nextItem = itemsActivos[idx < 0 ? 0 : Math.min(itemsActivos.length - 1, idx + 1)];
+          setSelectedItemId(nextItem.id);
+          ticketRowRefs.current[nextItem.id]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+      }
+
+      // Flecha Arriba: navega hacia arriba en productos o ticket
+      if (e.key === 'ArrowUp') {
+        if (navZone === 'PRODUCTS') {
+          e.preventDefault();
+          if (focusedProductIndex < gridCols) {
+            setNavZone('CATEGORIES');
+            categoryBtnRefs.current[catIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+          } else {
+            const prevIdx = focusedProductIndex - gridCols;
+            setFocusedProductIndex(prevIdx);
+            productCardRefs.current[prevIdx]?.scrollIntoView({ block: 'nearest' });
+          }
+          return;
+        }
+        if (navZone === 'TICKET' && itemsActivos.length > 0) {
+          e.preventDefault();
+          const idx = itemsActivos.findIndex((i) => i.id === selectedItemId);
+          const prevItem = itemsActivos[idx < 0 ? 0 : Math.max(0, idx - 1)];
+          setSelectedItemId(prevItem.id);
+          ticketRowRefs.current[prevItem.id]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
       }
     };
 
@@ -1192,10 +1414,11 @@ export default function ElianaPosPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     sesionActiva, activeTab, captureInput, itemsActivos, selectedItemId, ordenActiva, posConfig,
+    navZone, focusedProductIndex, categoriasProductos, catFiltro, productosFiltrados, touchMode,
     showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
     showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
     showSettingsModal, showExitModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
-    handleAnularItem, handleCambiarCantidadItem, handleCambiarSiguienteTicket,
+    handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem, handleCambiarSiguienteTicket,
     handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
 
@@ -1517,6 +1740,7 @@ export default function ElianaPosPage() {
                   autoFocus
                   type="text"
                   value={captureInput}
+                  onFocus={() => setNavZone('SEARCH')}
                   onChange={(e) => setCaptureInput(e.target.value)}
                   placeholder="Escanea código de barras o escribe nombre del producto y presiona ENTER..."
                   className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-300 focus:border-blue-600 focus:bg-white rounded-md text-sm font-medium text-zinc-900 outline-none"
@@ -1646,8 +1870,18 @@ export default function ElianaPosPage() {
                           return (
                             <tr
                               key={it.id}
-                              onClick={() => setSelectedItemId(it.id)}
-                              className={`cursor-pointer ${isRowSel ? 'bg-blue-50 border-l-4 border-l-blue-600' : 'hover:bg-zinc-50'}`}
+                              ref={(el) => {
+                                ticketRowRefs.current[it.id] = el;
+                              }}
+                              onClick={() => {
+                                setSelectedItemId(it.id);
+                                setNavZone('TICKET');
+                              }}
+                              className={`cursor-pointer transition-colors ${
+                                isRowSel
+                                  ? 'bg-blue-50/90 border-l-4 border-l-blue-600'
+                                  : 'hover:bg-zinc-50'
+                              }`}
                             >
                               <td className="py-2.5 px-3 font-mono text-xs text-zinc-500 border-r border-zinc-100">{it.codigo_producto || '—'}</td>
                               <td className="py-2.5 px-3 font-semibold text-zinc-900">
@@ -1657,8 +1891,11 @@ export default function ElianaPosPage() {
                               <td className="py-2.5 px-3 text-right font-medium tabular-nums text-zinc-700">{formatMoney(it.precio_unitario)}</td>
                               <td className="py-2.5 px-3">
                                 <div className="flex items-center justify-center gap-1.5">
+                                  <button onClick={(e) => { e.stopPropagation(); void handleCambiarCantidadItem(it, -1); }} className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
+                                    <Minus className="w-3 h-3" />
+                                  </button>
                                   <span className="font-bold tabular-nums text-zinc-900 min-w-[24px] text-center">{it.cantidad}</span>
-                                  <button onClick={(e) => { e.stopPropagation(); handleCambiarCantidadItem(it, 1); }} className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
+                                  <button onClick={(e) => { e.stopPropagation(); void handleCambiarCantidadItem(it, 1); }} className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
                                     <Plus className="w-3 h-3" />
                                   </button>
                                 </div>
@@ -1700,22 +1937,60 @@ export default function ElianaPosPage() {
             {touchMode && (
               <div className="w-[40%] max-w-[520px] min-w-[320px] bg-zinc-50 flex flex-col min-h-0 overflow-hidden">
                 <div className="p-2 border-b border-zinc-200 bg-white flex items-center gap-1.5 overflow-x-auto shrink-0">
-                  {categoriasProductos.map((c) => (
-                    <button key={c} onClick={() => setCatFiltro(c)} className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer border ${catFiltro === c ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'}`}>
-                      {c}
-                    </button>
-                  ))}
+                  {categoriasProductos.map((c, cIdx) => {
+                    const isCatActive = catFiltro === c;
+                    const isCatFocused = navZone === 'CATEGORIES' && isCatActive;
+                    return (
+                      <button
+                        key={c}
+                        ref={(el) => {
+                          categoryBtnRefs.current[cIdx] = el;
+                        }}
+                        onClick={() => {
+                          setCatFiltro(c);
+                          setFocusedProductIndex(0);
+                          setNavZone('CATEGORIES');
+                        }}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer border transition-all ${
+                          isCatActive
+                            ? 'bg-zinc-900 text-white border-zinc-900'
+                            : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'
+                        } ${isCatFocused ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="flex-1 overflow-y-auto p-2.5 grid grid-cols-2 xl:grid-cols-3 gap-2 content-start">
-                  {productosFiltrados.map((p) => (
-                    <button key={p.id} disabled={busyAction} onClick={() => handleAgregarProducto(p, 1)} className="p-2.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:bg-zinc-100 text-left flex flex-col justify-between min-h-[76px] cursor-pointer">
-                      <span className="font-semibold text-xs text-zinc-900 leading-snug line-clamp-2">{p.nombre}</span>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-[10px] font-mono text-zinc-400">{p.codigo}</span>
-                        <span className="text-xs font-bold tabular-nums text-zinc-900 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">{formatMoney(p.precio_total)}</span>
-                      </div>
-                    </button>
-                  ))}
+                  {productosFiltrados.map((p, pIdx) => {
+                    const isProdFocused = navZone === 'PRODUCTS' && focusedProductIndex === pIdx;
+                    return (
+                      <button
+                        key={p.id}
+                        ref={(el) => {
+                          productCardRefs.current[pIdx] = el;
+                        }}
+                        disabled={busyAction}
+                        onClick={() => {
+                          setFocusedProductIndex(pIdx);
+                          setNavZone('PRODUCTS');
+                          void handleAgregarProducto(p, 1);
+                        }}
+                        className={`p-2.5 rounded-lg border text-left flex flex-col justify-between min-h-[76px] cursor-pointer transition-all ${
+                          isProdFocused
+                            ? 'border-blue-500 bg-blue-50/70 ring-2 ring-blue-500 shadow-xs'
+                            : 'border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:bg-zinc-100'
+                        }`}
+                      >
+                        <span className="font-semibold text-xs text-zinc-900 leading-snug line-clamp-2">{p.nombre}</span>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[10px] font-mono text-zinc-400">{p.codigo}</span>
+                          <span className="text-xs font-bold tabular-nums text-zinc-900 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">{formatMoney(p.precio_total)}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
