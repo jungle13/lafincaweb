@@ -23,6 +23,7 @@ import {
   Lock,
   ArrowRight,
   Settings2,
+  Users,
   X,
   Check,
 } from 'lucide-react';
@@ -145,6 +146,15 @@ const ALL_MODULES: QuickModule[] = [
     icon: ClipboardCheck,
     iconBg: 'bg-purple-50',
     iconColor: 'text-purple-600',
+    roles: ['ADMIN', 'GESTOR'],
+  },
+  {
+    title: 'Gestión de Operarios',
+    description: 'Meseros, cajeros y personal operativo (datos de contacto, cargo y acceso POS).',
+    href: '/operarios',
+    icon: Users,
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-600',
     roles: ['ADMIN', 'GESTOR'],
   },
   // Módulos exclusivos de ADMIN

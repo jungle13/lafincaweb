@@ -23,6 +23,7 @@ const VIEW_TITLES: Record<string, string> = {
   '/ventas': 'Salidas por Venta',
   '/proveedores': 'Proveedores y Pagos',
   '/productos-venta': 'Productos de Venta',
+  '/operarios': 'Gestión de Operarios',
   '/chat-bot': 'Historial Telegram Bot • Asistente IA',
 };
 

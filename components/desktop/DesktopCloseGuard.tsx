@@ -19,6 +19,7 @@ const GESTOR_ALLOWED_PREFIXES = [
   '/costeo-diario',
   '/inventario-consolidado',
   '/auditoria-cocina',
+  '/operarios',
 ];
 
 const OPERATIVO_ALLOWED_PREFIXES = ['/', '/pos', '/libros-apoyo'];

@@ -1,4 +1,14 @@
-export type PosTab = 'VENTAS' | 'MESAS' | 'DOMICILIOS' | 'PRODUCTOS' | 'INVENTARIO' | 'CORTE';
+export type PosTab = 'VENTAS' | 'MESAS' | 'DOMICILIOS' | 'PRODUCTOS' | 'INVENTARIO' | 'VENTAS_DIA' | 'CORTE';
+
+export interface OperarioPos {
+  id: string;
+  username: string;
+  nombre_cajero: string;
+  cargo_area: 'Personal Cocina' | 'Personal Caja / Servicio' | 'Dueño / Gerencia';
+  telefono?: string;
+  correo?: string;
+  rol_sistema?: string;
+}
 
 export interface PosOrdenItem {
   id: string;
@@ -42,9 +52,13 @@ export interface PosOrden {
   pago_transferencia: number;
   pago_credito?: number;
   comision_tarjeta?: number;
+  efectivo_recibido?: number;
+  cambio_entregado?: number;
   estado: 'ABIERTA' | 'PRECUENTA' | 'FACTURADA' | 'ANULADA';
   precuenta_impresa_veces: number;
   created_at?: string;
+  pagado_at?: string | null;
+  closed_at?: string | null;
   items: PosOrdenItem[];
 }
 

@@ -78,6 +78,7 @@ export async function GET(request: Request) {
       { data: devolucionesDia },
       { data: movimientosInventario },
       { data: diarioHoy },
+      { data: operariosRows },
     ] = await Promise.all([
       supabase.from('pos_mesas').select('*').order('numero', { ascending: true }),
       supabase
@@ -127,6 +128,12 @@ export async function GET(request: Request) {
         .eq('fecha', fecha)
         .eq('tipo_libro', 'CAJA_MENOR')
         .maybeSingle(),
+      supabase
+        .from('libro_caja_usuarios')
+        .select('id, username, nombre_cajero, cargo_area, telefono, correo, rol_sistema')
+        .neq('username', 'admin')
+        .eq('activo', true)
+        .order('nombre_cajero', { ascending: true }),
     ]);
 
     if (errM) throw errM;
@@ -357,6 +364,7 @@ export async function GET(request: Request) {
       consumosInternosHoy,
       gananciaEstimadaHoy: Math.round(gananciaEstimadaHoy),
       movimientosInventario: movimientosInventario || [],
+      operarios: operariosRows || [],
     });
   } catch (err: any) {
     console.error('Error en GET /api/pos:', err);
@@ -1367,6 +1375,117 @@ export async function POST(request: NextRequest) {
         .single();
       if (error) throw error;
       return NextResponse.json({ success: true, orden });
+    }
+
+    // 15B. Asignar Mesero / Personal Operativo a una orden (para propinas y trazabilidad)
+    if (action === 'ASIGNAR_MESERO_ORDEN') {
+      const { orden_id, mesero_nombre = '' } = body;
+      if (!orden_id) {
+        return NextResponse.json({ success: false, error: 'orden_id requerido' }, { status: 400 });
+      }
+      const cleanMesero = String(mesero_nombre || '').trim() || null;
+      const { data: orden, error } = await supabase
+        .from('pos_ordenes')
+        .update({
+          mesero_nombre: cleanMesero,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orden_id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      if (orden?.mesa_numero) {
+        await supabase
+          .from('pos_mesas')
+          .update({ mesero_actual: cleanMesero })
+          .eq('numero', orden.mesa_numero);
+      }
+      return NextResponse.json({ success: true, orden });
+    }
+
+    // 15C. Actualizar nota / solicitud para cocina de un ítem
+    if (action === 'ACTUALIZAR_NOTA_ITEM') {
+      const { item_id, notas_comanda = '' } = body;
+      if (!item_id) {
+        return NextResponse.json({ success: false, error: 'item_id requerido' }, { status: 400 });
+      }
+      const { error } = await supabase
+        .from('pos_orden_items')
+        .update({ notas_comanda: String(notas_comanda || '').trim() || null })
+        .eq('id', item_id);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // 15D. Devolución completa de un ticket facturado
+    if (action === 'DEVOLVER_TICKET_COMPLETO') {
+      const { orden_id, metodo_reembolso = 'EFECTIVO', motivo = 'Devolución completa de ticket' } = body;
+      if (!orden_id) {
+        return NextResponse.json({ success: false, error: 'orden_id requerido' }, { status: 400 });
+      }
+      const [{ data: ord }, { data: items }] = await Promise.all([
+        supabase.from('pos_ordenes').select('*').eq('id', orden_id).single(),
+        supabase.from('pos_orden_items').select('*').eq('orden_id', orden_id).neq('estado_comanda', 'ANULADO'),
+      ]);
+      if (!ord) {
+        return NextResponse.json({ success: false, error: 'Factura no encontrada' }, { status: 404 });
+      }
+      const activos = items || [];
+      let totalDevuelto = 0;
+      for (const it of activos) {
+        const cant = Number(it.cantidad || 1);
+        const val = Math.round(cant * Number(it.precio_unitario || 0));
+        totalDevuelto += val;
+        await supabase.from('pos_devoluciones').insert({
+          fecha: todayStr,
+          orden_id: ord.id,
+          orden_consecutivo: ord.consecutivo,
+          item_id: it.id,
+          nombre_producto: it.nombre_producto,
+          cantidad_devuelta: cant,
+          valor_devuelto: val,
+          metodo_reembolso,
+          motivo,
+          caja_nombre: cajaNombre,
+          cajero_nombre: cajeroNombre,
+        });
+      }
+      if (metodo_reembolso === 'CREDITO' && ord.cliente_nombre && totalDevuelto > 0) {
+        await supabase.from('pos_creditos_movimientos').insert({
+          fecha: todayStr,
+          cliente_nombre: ord.cliente_nombre,
+          cliente_telefono: ord.cliente_telefono || null,
+          tipo: 'ABONO',
+          orden_id: ord.id,
+          orden_consecutivo: ord.consecutivo,
+          monto: totalDevuelto,
+          metodo_pago: 'CREDITO',
+          caja_nombre: cajaNombre,
+          cajero_nombre: cajeroNombre,
+          observaciones: `Nota crédito por devolución completa de ${ord.consecutivo}`,
+        });
+      }
+      if (totalDevuelto > 0) {
+        const periodoId = `per-${todayStr.slice(0, 7)}`;
+        const { data: vtaDia } = await supabase
+          .from('ventas_diarias')
+          .select('*')
+          .eq('periodo_id', periodoId)
+          .eq('fecha', todayStr)
+          .maybeSingle();
+        if (vtaDia) {
+          await supabase
+            .from('ventas_diarias')
+            .update({
+              venta_neta: Math.max(0, Number(vtaDia.venta_neta || 0) - totalDevuelto),
+              gran_total: Math.max(0, Number(vtaDia.gran_total || 0) - totalDevuelto),
+            })
+            .eq('id', vtaDia.id);
+          invalidateVentasCache();
+        }
+      }
+      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
+      return NextResponse.json({ success: true, totalDevuelto });
     }
 
     // 16. CRUD Productos desde F3 Productos del POS

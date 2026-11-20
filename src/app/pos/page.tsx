@@ -21,9 +21,11 @@ import {
   Minus,
   MonitorSmartphone,
   Package,
+  Pencil,
   Percent,
   Plus,
   Printer,
+  Receipt,
   RefreshCw,
   Scale,
   ScanBarcode,
@@ -35,6 +37,7 @@ import {
   Unlock,
   UserCheck,
   UserPlus,
+  Users,
   Utensils,
   Wifi,
   WifiOff,
@@ -61,7 +64,7 @@ import {
 } from '@/lib/posHardwareBridge';
 import PosCashCutView from '@/components/pos/PosCashCutView';
 import PosCreditsModal from '@/components/pos/PosCreditsModal';
-import PosReturnsModal from '@/components/pos/PosReturnsModal';
+import PosSalesHistoryView from '@/components/pos/PosSalesHistoryView';
 import PosTerminalSettingsModal from '@/components/pos/PosTerminalSettingsModal';
 import PosProductsModule from '@/components/pos/PosProductsModule';
 import PosInventoryModule from '@/components/pos/PosInventoryModule';
@@ -76,6 +79,7 @@ import type {
   EventoTurno,
   FlujoEfectivoRow,
   InventarioMovimiento,
+  OperarioPos,
   PosMesa,
   PosOrden,
   PosOrdenItem,
@@ -225,6 +229,11 @@ export default function ElianaPosPage() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showCancelarTicketModal, setShowCancelarTicketModal] = useState(false);
+  const [operarios, setOperarios] = useState<OperarioPos[]>([]);
+  const [showAsignarMeseroModal, setShowAsignarMeseroModal] = useState(false);
+  const [notaItemTarget, setNotaItemTarget] = useState<PosOrdenItem | null>(null);
+  const [notaItemText, setNotaItemText] = useState('');
+  const [consumoNota, setConsumoNota] = useState('');
 
   const [cashFlowModal, setCashFlowModal] = useState<'ENTRADA' | 'SALIDA' | null>(null);
   const [cashFlowMonto, setCashFlowMonto] = useState('');
@@ -287,6 +296,7 @@ export default function ElianaPosPage() {
     setConsumosInternosHoy((data.consumosInternosHoy as PosOrden[]) || []);
     setGananciaEstimadaHoy(Number(data.gananciaEstimadaHoy || 0));
     setMovimientosInventario((data.movimientosInventario as InventarioMovimiento[]) || []);
+    if (Array.isArray(data.operarios)) setOperarios(data.operarios as OperarioPos[]);
     setJornadaCerradaTotal(Boolean(data.jornadaCerradaTotal));
   }, []);
 
@@ -897,8 +907,12 @@ export default function ElianaPosPage() {
     let cred = 0;
 
     if (metodoPago === 'CONSUMO_INTERNO') {
-      if (!clienteCreditoNombre.trim()) {
-        return notify('err', 'Indica el nombre de la persona o área para el Consumo Interno.');
+      if (areaConsumo === 'Cortesía / Degustación') {
+        if (!consumoNota.trim() && !clienteCreditoNombre.trim()) {
+          return notify('err', 'Ingresa una nota explicando la cortesía o degustación.');
+        }
+      } else if (!clienteCreditoNombre.trim()) {
+        return notify('err', 'Selecciona o indica el personal beneficiario del Consumo Interno.');
       }
     } else if (metodoPago === 'EFECTIVO') {
       ef = totalFinalCobro;
@@ -937,7 +951,10 @@ export default function ElianaPosPage() {
         pago_transferencia: trf,
         pago_credito: cred,
         comision_tarjeta: comisionTarjeta,
-        cliente_nombre: clienteCreditoNombre.trim() || ordenActiva.cliente_nombre,
+        cliente_nombre:
+          metodoPago === 'CONSUMO_INTERNO' && areaConsumo === 'Cortesía / Degustación'
+            ? (consumoNota.trim() || clienteCreditoNombre.trim())
+            : (clienteCreditoNombre.trim() || ordenActiva.cliente_nombre),
         cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono,
         area_consumo: areaConsumo,
         propina: metodoPago === 'CONSUMO_INTERNO' ? 0 : propinaValor,
@@ -1190,6 +1207,8 @@ export default function ElianaPosPage() {
         showSettingsModal ||
         showExitModal ||
         showCancelarTicketModal ||
+        showAsignarMeseroModal ||
+        notaItemTarget !== null ||
         cashFlowModal !== null;
 
       if (e.key === 'Escape') {
@@ -1207,6 +1226,8 @@ export default function ElianaPosPage() {
         setShowSettingsModal(false);
         setShowExitModal(false);
         setShowCancelarTicketModal(false);
+        setShowAsignarMeseroModal(false);
+        setNotaItemTarget(null);
         setCashFlowModal(null);
         setNavZone('SEARCH');
         focusCapture();
@@ -1228,7 +1249,7 @@ export default function ElianaPosPage() {
       }
       if (e.key === 'F3') { e.preventDefault(); setActiveTab('PRODUCTOS'); return; }
       if (e.key === 'F4') { e.preventDefault(); setActiveTab('INVENTARIO'); return; }
-      if (e.key === 'F5') { e.preventDefault(); handleCambiarSiguienteTicket(); return; }
+      if (e.key === 'F5') { e.preventDefault(); setActiveTab('VENTAS_DIA'); return; }
       if (e.key === 'F6') {
         e.preventDefault();
         if (posConfig.habilitaComandasCocina && ordenActiva && itemsActivos.some((i) => i.estado_comanda === 'PENDIENTE')) {
@@ -1270,6 +1291,13 @@ export default function ElianaPosPage() {
         setAsignarNombre(ordenActiva.cliente_nombre || '');
         setAsignarTel(ordenActiva.cliente_telefono || '');
         setShowAsignarClienteModal(true);
+        return;
+      }
+
+      // Atajo fácil para Asignar Personal / Mesero: Alt+M
+      if (!isAnyModalOpen && ordenActiva && e.altKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setShowAsignarMeseroModal(true);
         return;
       }
 
@@ -1461,6 +1489,17 @@ export default function ElianaPosPage() {
         return;
       }
 
+      // Enter en listado izquierdo (ticket) abre el modal "Ingresa solicitudes para cocina"
+      if (e.key === 'Enter' && navZone === 'TICKET') {
+        const selected = itemsActivos.find((i) => i.id === selectedItemId);
+        if (selected) {
+          e.preventDefault();
+          setNotaItemTarget(selected);
+          setNotaItemText(selected.notas_comanda || '');
+        }
+        return;
+      }
+
       // Flecha Derecha: entra a categorías / avanza categorías / avanza en grilla / vuelve de ticket a categorías
       if (e.key === 'ArrowRight') {
         if (navZone === 'SEARCH' && caretAtEnd && touchMode && categoriasProductos.length > 0) {
@@ -1595,7 +1634,7 @@ export default function ElianaPosPage() {
     mesasNavZone, focusedMesaIndex, zonasDisponibles, zonaFiltro, mesasFiltradas,
     showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
     showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
-    showSettingsModal, showExitModal, showCancelarTicketModal, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
+    showSettingsModal, showExitModal, showCancelarTicketModal, showAsignarMeseroModal, notaItemTarget, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo,
     handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem,
     handleCambiarSiguienteTicket, handleCambiarTicketDireccion, handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
@@ -1632,6 +1671,7 @@ export default function ElianaPosPage() {
     }
     mods.push({ key: 'PRODUCTOS', fKey: 'F3', label: 'Productos', icon: Package });
     mods.push({ key: 'INVENTARIO', fKey: 'F4', label: 'Inventario', icon: Boxes });
+    mods.push({ key: 'VENTAS_DIA', fKey: 'F5', label: 'Ventas / Dev.', icon: Receipt });
     mods.push({ key: 'CORTE', label: 'Corte de Caja', icon: Lock });
     return mods;
   }, [posConfig.habilitaMesas, posConfig.habilitaDomicilios, mesas, ordenesDomicilio]);
@@ -1996,114 +2036,173 @@ export default function ElianaPosPage() {
             </div>
           </div>
 
-          <div className="bg-zinc-100 border-b border-zinc-200 px-3 pt-1.5 flex items-center gap-1 overflow-x-auto shrink-0">
+          <div className="bg-zinc-200/80 border-b border-zinc-300 px-3 pt-1.5 flex items-center gap-1.5 overflow-x-auto shrink-0">
             {ordenesAbiertas.map((ord) => {
               const isSelected = ordenActiva?.id === ord.id;
+              const canalTabColor =
+                ord.canal_venta === 'SALON_MESA'
+                  ? isSelected
+                    ? 'bg-sky-100 text-sky-950 border-sky-400 shadow-xs'
+                    : 'bg-sky-50/80 text-sky-800 border-sky-200 hover:bg-sky-100/70'
+                  : ord.canal_venta === 'DOMICILIO'
+                    ? isSelected
+                      ? 'bg-emerald-100 text-emerald-950 border-emerald-400 shadow-xs'
+                      : 'bg-emerald-50/80 text-emerald-800 border-emerald-200 hover:bg-emerald-100/70'
+                    : isSelected
+                      ? 'bg-amber-100 text-amber-950 border-amber-400 shadow-xs'
+                      : 'bg-amber-50/80 text-amber-800 border-amber-200 hover:bg-amber-100/70';
               return (
                 <button
                   key={ord.id}
                   onClick={() => { setOrdenActivaId(ord.id); focusCapture(); }}
-                  className={`px-3 py-1.5 rounded-t-md text-xs font-semibold border border-b-0 flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-                    isSelected ? 'bg-white text-zinc-950 border-zinc-300' : 'bg-zinc-200 text-zinc-600 border-transparent hover:bg-zinc-50'
-                  }`}
+                  className={`px-3.5 py-2 rounded-t-lg text-xs font-bold border border-b-0 flex items-center gap-2 whitespace-nowrap cursor-pointer transition ${canalTabColor}`}
                 >
                   <span>{getOrdenTabLabel(ord)}</span>
-                  <span className="text-[11px] font-bold tabular-nums text-zinc-900">{formatMoney(ord.gran_total)}</span>
+                  <span className="text-xs font-extrabold tabular-nums">{formatMoney(ord.gran_total)}</span>
                 </button>
               );
             })}
             <button
               ref={nuevoTicketBtnRef}
               onClick={handleNuevaVentaMostrador}
-              className="px-2.5 py-1 mb-1 rounded-md bg-white hover:bg-zinc-200 border border-zinc-300 text-zinc-800 text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-1.5 mb-1 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-zinc-800 text-xs font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <Plus className="w-3 h-3" /> Nuevo Ticket
+              <Plus className="w-3.5 h-3.5" /> Nuevo Ticket
             </button>
           </div>
 
           <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden border-r border-zinc-200">
               {ordenActiva ? (
-                <div className="flex-1 overflow-y-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200 text-[11px] uppercase text-zinc-500 font-semibold z-10">
-                      <tr>
-                        <th className="py-2.5 px-3 w-24 border-r border-zinc-200">Código</th>
-                        <th className="py-2.5 px-3">Descripción del Producto</th>
-                        <th className="py-2.5 px-3 text-right w-28">Precio Venta</th>
-                        <th className="py-2.5 px-3 text-center w-24">Cant.</th>
-                        <th className="py-2.5 px-3 text-right w-28 border-x border-zinc-200">Importe</th>
-                        <th className="py-2.5 px-3 text-right w-20">Existencia</th>
-                        {posConfig.habilitaComandasCocina && <th className="py-2.5 px-3 text-center w-24">Estado</th>}
-                        <th className="py-2.5 px-2 text-center w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 text-sm">
-                      {itemsActivos.length === 0 ? (
-                        <tr>
-                          <td colSpan={posConfig.habilitaComandasCocina ? 8 : 7} className="py-24 text-center text-zinc-400">
-                            <p className="font-semibold text-base text-zinc-600">Cuenta vacía ({getOrdenTabLabel(ordenActiva)})</p>
-                            <p className="text-xs mt-1 text-zinc-500">Escanea un código, escribe un producto arriba o selecciona en el panel táctil.</p>
-                          </td>
-                        </tr>
-                      ) : (
-                        itemsActivos.map((it) => {
-                          const isRowSel = selectedItemId === it.id;
-                          const stock = it.producto_id ? (prodStockMap.get(it.producto_id) ?? 0) : 0;
-                          return (
-                            <tr
-                              key={it.id}
-                              ref={(el) => {
-                                ticketRowRefs.current[it.id] = el;
-                              }}
-                              onClick={() => {
-                                setSelectedItemId(it.id);
-                                setNavZone('TICKET');
-                              }}
-                              className={`cursor-pointer transition-colors ${
-                                isRowSel
-                                  ? 'bg-blue-50/90 border-l-4 border-l-blue-600'
-                                  : 'hover:bg-zinc-50'
-                              }`}
-                            >
-                              <td className="py-2.5 px-3 font-mono text-xs text-zinc-500 border-r border-zinc-100">{it.codigo_producto || '—'}</td>
-                              <td className="py-2.5 px-3 font-semibold text-zinc-900">
-                                {it.nombre_producto}
-                                {it.notas_comanda && <span className="ml-2 text-[11px] font-normal text-zinc-500">({it.notas_comanda})</span>}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-medium tabular-nums text-zinc-700">{formatMoney(it.precio_unitario)}</td>
-                              <td className="py-2.5 px-3">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button onClick={(e) => { e.stopPropagation(); void handleCambiarCantidadItem(it, -1); }} className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
-                                    <Minus className="w-3 h-3" />
-                                  </button>
-                                  <span className="font-bold tabular-nums text-zinc-900 min-w-[24px] text-center">{it.cantidad}</span>
-                                  <button onClick={(e) => { e.stopPropagation(); void handleCambiarCantidadItem(it, 1); }} className="w-6 h-6 rounded border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
-                                    <Plus className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-bold tabular-nums text-zinc-950 border-x border-zinc-100">{formatMoney(it.subtotal)}</td>
-                              <td className="py-2.5 px-3 text-right font-semibold tabular-nums text-xs text-zinc-500">{stock}</td>
-                              {posConfig.habilitaComandasCocina && (
-                                <td className="py-2.5 px-3 text-center">
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${it.estado_comanda === 'COMANDADO' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200'}`}>
-                                    {it.estado_comanda}
-                                  </span>
-                                </td>
-                              )}
-                              <td className="py-2.5 px-2 text-center">
-                                <button onClick={(e) => { e.stopPropagation(); handleAnularItem(it); }} className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 cursor-pointer">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })
+                <>
+                  {/* Barra destacada de Ticket Activo (armonía estilo eleventa) */}
+                  <div
+                    className={`px-4 py-2 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 ${
+                      ordenActiva.canal_venta === 'SALON_MESA'
+                        ? 'bg-sky-100/90 border-sky-300 text-sky-950 border-l-4 border-l-sky-600'
+                        : ordenActiva.canal_venta === 'DOMICILIO'
+                          ? 'bg-emerald-100/90 border-emerald-300 text-emerald-950 border-l-4 border-l-emerald-600'
+                          : 'bg-amber-100/90 border-amber-300 text-amber-950 border-l-4 border-l-amber-500'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="text-sm font-extrabold tracking-tight uppercase">
+                        VENTA — {getOrdenTabLabel(ordenActiva)}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-white/80 border border-black/10 text-xs font-bold">
+                        Mesero: {ordenActiva.mesero_nombre || 'Sin asignar'}
+                      </span>
+                      {ordenActiva.cliente_nombre && (
+                        <span className="px-2 py-0.5 rounded-md bg-white/80 border border-black/10 text-xs font-semibold">
+                          Cliente: {ordenActiva.cliente_nombre}
+                        </span>
                       )}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                    <span className="text-sm font-extrabold tabular-nums">
+                      {formatMoney(ordenActiva.gran_total)}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="sticky top-0 bg-zinc-100 border-b border-zinc-300 text-xs uppercase text-zinc-600 font-bold z-10">
+                        <tr>
+                          <th className="py-2.5 px-3 w-24 border-r border-zinc-200 bg-sky-50/70">Código</th>
+                          <th className="py-2.5 px-3">Descripción del Producto</th>
+                          <th className="py-2.5 px-3 text-right w-28">Precio Venta</th>
+                          <th className="py-2.5 px-3 text-center w-28">Cant.</th>
+                          <th className="py-2.5 px-3 text-right w-28 border-x border-zinc-200 bg-emerald-50/70">Importe</th>
+                          <th className="py-2.5 px-3 text-right w-20">Exist.</th>
+                          {posConfig.habilitaComandasCocina && <th className="py-2.5 px-3 text-center w-24">Estado</th>}
+                          <th className="py-2.5 px-2 text-center w-20">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200 text-sm">
+                        {itemsActivos.length === 0 ? (
+                          <tr>
+                            <td colSpan={posConfig.habilitaComandasCocina ? 8 : 7} className="py-24 text-center text-zinc-400">
+                              <p className="font-semibold text-base text-zinc-600">Cuenta vacía ({getOrdenTabLabel(ordenActiva)})</p>
+                              <p className="text-xs mt-1 text-zinc-500">Escanea un código, escribe un producto arriba o selecciona en el panel táctil.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          itemsActivos.map((it) => {
+                            const isRowSel = selectedItemId === it.id;
+                            const stock = it.producto_id ? (prodStockMap.get(it.producto_id) ?? 0) : 0;
+                            return (
+                              <tr
+                                key={it.id}
+                                ref={(el) => {
+                                  ticketRowRefs.current[it.id] = el;
+                                }}
+                                onClick={() => {
+                                  setSelectedItemId(it.id);
+                                  setNavZone('TICKET');
+                                }}
+                                className={`cursor-pointer transition-colors ${
+                                  isRowSel
+                                    ? 'bg-blue-100/80 border-l-4 border-l-blue-600'
+                                    : 'hover:bg-zinc-50'
+                                }`}
+                              >
+                                <td className="py-3 px-3 font-mono text-xs text-zinc-600 border-r border-zinc-200/80 bg-sky-50/45">{it.codigo_producto || '—'}</td>
+                                <td className="py-3 px-3 font-semibold text-[15px] text-zinc-900">
+                                  <div>{it.nombre_producto}</div>
+                                  {it.notas_comanda && (
+                                    <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100/90 border border-amber-300 text-xs font-semibold text-amber-950">
+                                      Cocina: {it.notas_comanda}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right font-semibold tabular-nums text-zinc-700">{formatMoney(it.precio_unitario)}</td>
+                                <td className="py-3 px-3">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button onClick={(e) => { e.stopPropagation(); void handleCambiarCantidadItem(it, -1); }} className="w-8 h-8 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
+                                      <Minus className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="font-extrabold text-base tabular-nums text-zinc-950 min-w-[26px] text-center">{it.cantidad}</span>
+                                    <button onClick={(e) => { e.stopPropagation(); void handleCambiarCantidadItem(it, 1); }} className="w-8 h-8 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 cursor-pointer">
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-right font-extrabold text-[15px] tabular-nums text-zinc-950 border-x border-zinc-200/80 bg-emerald-50/50">{formatMoney(it.subtotal)}</td>
+                                <td className="py-3 px-3 text-right font-semibold tabular-nums text-xs text-zinc-500">{stock}</td>
+                                {posConfig.habilitaComandasCocina && (
+                                  <td className="py-3 px-3 text-center">
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${it.estado_comanda === 'COMANDADO' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200'}`}>
+                                      {it.estado_comanda}
+                                    </span>
+                                  </td>
+                                )}
+                                <td className="py-3 px-2 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      title="Ingresa solicitudes para cocina"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedItemId(it.id);
+                                        setNotaItemTarget(it);
+                                        setNotaItemText(it.notas_comanda || '');
+                                      }}
+                                      className="p-2 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 cursor-pointer"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); void handleAnularItem(it); }} className="p-2 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 cursor-pointer">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 p-6">
                   <p className="font-semibold text-zinc-700">No hay cuentas abiertas</p>
@@ -2187,8 +2286,8 @@ export default function ElianaPosPage() {
                 <span className="text-xs font-semibold text-zinc-700 mr-2 tabular-nums">
                   {itemsActivos.reduce((a, b) => a + Number(b.cantidad || 0), 0)} Productos en la venta actual
                 </span>
-                <button onClick={handleCambiarSiguienteTicket} className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 cursor-pointer">
-                  F5 - Cambiar
+                <button onClick={handleCambiarSiguienteTicket} className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-bold text-zinc-700 cursor-pointer">
+                  Shift+←/→ Cambiar
                 </button>
                 <button
                   onClick={() => {
@@ -2198,12 +2297,26 @@ export default function ElianaPosPage() {
                     setShowAsignarClienteModal(true);
                   }}
                   disabled={!ordenActiva}
-                  className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 text-xs font-bold text-zinc-700 flex items-center gap-1.5 cursor-pointer"
                 >
-                  <UserPlus className="w-3.5 h-3.5 text-zinc-600" />
-                  <span>Asignar Cliente / Personal</span>
-                  <span className="px-1 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-mono font-semibold text-zinc-600">
+                  <UserPlus className="w-4 h-4 text-zinc-600" />
+                  <span>Asignar Cliente</span>
+                  <span className="px-1 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-mono font-bold text-zinc-600">
                     ALT+C
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (!ordenActiva) return;
+                    setShowAsignarMeseroModal(true);
+                  }}
+                  disabled={!ordenActiva}
+                  className="px-3 py-1.5 rounded-lg border border-sky-300 bg-sky-50 hover:bg-sky-100 disabled:opacity-40 text-xs font-bold text-sky-900 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Users className="w-4 h-4 text-sky-700" />
+                  <span>Asignar Personal</span>
+                  <span className="px-1 py-0.5 rounded bg-white border border-sky-200 text-[10px] font-mono font-bold text-sky-700">
+                    ALT+M
                   </span>
                 </button>
                 {posConfig.habilitaComandasCocina && (
@@ -2239,9 +2352,9 @@ export default function ElianaPosPage() {
                   <Printer className="w-3.5 h-3.5 text-zinc-500" />
                   Reimprimir Último Ticket
                 </button>
-                <button onClick={() => setShowVentasDiaModal(true)} className="px-3 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-semibold text-zinc-700 flex items-center gap-1.5 cursor-pointer">
-                  <History className="w-3.5 h-3.5 text-zinc-500" />
-                  Ventas y Devoluciones ({resumenDia.cantidadFacturas})
+                <button onClick={() => setActiveTab('VENTAS_DIA')} className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-bold text-zinc-700 flex items-center gap-1.5 cursor-pointer">
+                  <History className="w-4 h-4 text-zinc-500" />
+                  F5 - Ventas y Devoluciones ({resumenDia.cantidadFacturas})
                 </button>
               </div>
 
@@ -2566,9 +2679,9 @@ export default function ElianaPosPage() {
                 </div>
                 <input autoFocus type="number" value={pagoConEfectivo} onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))} className={`w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-md text-xl font-bold tabular-nums text-zinc-950 outline-none ${noSpinnerClass}`} />
                 <div className="flex gap-1.5 flex-wrap">
-                  <button onClick={() => setPagoConEfectivo(totalFinalCobro)} className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold text-zinc-800 cursor-pointer">Exacto</button>
-                  {[20000, 50000, 100000, 200000].map((billete) => (
-                    <button key={billete} onClick={() => setPagoConEfectivo(billete)} className="px-3 py-1 rounded-md bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-semibold tabular-nums text-zinc-800 cursor-pointer">{formatMoney(billete)}</button>
+                  <button onClick={() => setPagoConEfectivo(totalFinalCobro)} className="px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-bold text-zinc-800 cursor-pointer">Exacto</button>
+                  {[10000, 20000, 50000, 100000, 200000].map((billete) => (
+                    <button key={billete} onClick={() => setPagoConEfectivo(billete)} className="px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 text-xs font-bold tabular-nums text-zinc-800 cursor-pointer">{formatMoney(billete)}</button>
                   ))}
                 </div>
               </div>
@@ -2581,35 +2694,106 @@ export default function ElianaPosPage() {
               </div>
             )}
 
-            {(metodoPago === 'CREDITO' || metodoPago === 'CONSUMO_INTERNO' || (metodoPago === 'MIXTO' && pagoCredito > 0)) && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 space-y-2 text-xs">
-                <div className="font-bold text-zinc-800">
-                  {metodoPago === 'CONSUMO_INTERNO'
-                    ? 'Consumo Interno — Beneficiario y Área (No afecta el cuadre de caja)'
-                    : 'Cliente para Cargo a Crédito (Libro Mayor)'}
+            {metodoPago === 'CONSUMO_INTERNO' && (
+              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3.5 space-y-3 text-xs">
+                <div className="font-bold text-zinc-900">
+                  Consumo Interno — Selecciona Cargo / Área (No afecta el cuadre de caja)
                 </div>
+
+                {/* 4 Cards táctiles de Cargo */}
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Personal Cocina', 'Personal Caja / Servicio', 'Dueño / Gerencia', 'Cortesía / Degustación'] as const).map((area) => {
+                    const active = areaConsumo === area;
+                    return (
+                      <button
+                        key={area}
+                        type="button"
+                        onClick={() => {
+                          setAreaConsumo(area);
+                          setClienteCreditoNombre('');
+                          setConsumoNota('');
+                        }}
+                        className={`py-2.5 px-3 rounded-xl border text-xs font-bold text-left cursor-pointer transition ${
+                          active
+                            ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs'
+                            : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-100'
+                        }`}
+                      >
+                        {area}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {areaConsumo === 'Cortesía / Degustación' ? (
+                  <div>
+                    <label className="font-bold text-zinc-700 block mb-1">Nota de Cortesía / Degustación</label>
+                    <textarea
+                      rows={3}
+                      autoFocus
+                      value={consumoNota}
+                      onChange={(e) => setConsumoNota(e.target.value)}
+                      placeholder="Ej: Cortesía para visita de ingenieros / degustación mesa especial..."
+                      className="w-full px-3 py-2.5 bg-white border border-zinc-300 focus:border-blue-500 rounded-xl text-sm font-medium outline-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="font-semibold text-zinc-600">Selecciona la persona ({areaConsumo}):</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                      {operarios
+                        .filter((op) => op.cargo_area === areaConsumo)
+                        .map((op) => {
+                          const selected = clienteCreditoNombre === op.nombre_cajero;
+                          return (
+                            <button
+                              key={op.id}
+                              type="button"
+                              onClick={() => setClienteCreditoNombre(op.nombre_cajero)}
+                              className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
+                                selected
+                                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                  : 'bg-white text-zinc-800 border-zinc-300 hover:bg-blue-50'
+                              }`}
+                            >
+                              <div className="font-bold text-xs truncate">{op.nombre_cajero}</div>
+                              <div className={`text-[10px] truncate ${selected ? 'text-blue-100' : 'text-zinc-500'}`}>
+                                @{op.username}
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                    {operarios.filter((op) => op.cargo_area === areaConsumo).length === 0 && (
+                      <input
+                        type="text"
+                        value={clienteCreditoNombre}
+                        onChange={(e) => setClienteCreditoNombre(e.target.value)}
+                        placeholder={`Nombre de ${areaConsumo}`}
+                        className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-xl text-sm font-semibold"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(metodoPago === 'CREDITO' || (metodoPago === 'MIXTO' && pagoCredito > 0)) && (
+              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 space-y-2 text-xs">
+                <div className="font-bold text-zinc-800">Cliente para Cargo a Crédito (Libro Mayor)</div>
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
                     value={clienteCreditoNombre}
                     onChange={(e) => setClienteCreditoNombre(e.target.value)}
-                    placeholder={metodoPago === 'CONSUMO_INTERNO' ? 'Ej. Olga (Cocina) o Dueño' : 'Nombre completo del cliente'}
+                    placeholder="Nombre completo del cliente"
                     list="clientes-credito-list"
-                    className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-semibold"
+                    className="px-2.5 py-2 bg-white border border-zinc-300 rounded-lg font-semibold"
                   />
                   <datalist id="clientes-credito-list">
                     {creditosClientes.map((c) => <option key={c.cliente_nombre} value={c.cliente_nombre} />)}
                   </datalist>
-                  {metodoPago === 'CONSUMO_INTERNO' ? (
-                    <select value={areaConsumo} onChange={(e) => setAreaConsumo(e.target.value)} className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-semibold">
-                      <option value="Personal Cocina">Personal Cocina</option>
-                      <option value="Personal Caja / Servicio">Personal Caja / Servicio</option>
-                      <option value="Dueño / Gerencia">Dueño / Gerencia</option>
-                      <option value="Cortesía / Degustación">Cortesía / Degustación</option>
-                    </select>
-                  ) : (
-                    <input type="text" value={clienteCreditoTel} onChange={(e) => setClienteCreditoTel(e.target.value)} placeholder="Teléfono (opcional)" className="px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md" />
-                  )}
+                  <input type="text" value={clienteCreditoTel} onChange={(e) => setClienteCreditoTel(e.target.value)} placeholder="Teléfono (opcional)" className="px-2.5 py-2 bg-white border border-zinc-300 rounded-lg" />
                 </div>
               </div>
             )}
@@ -2833,12 +3017,13 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {showVentasDiaModal && (
-        <PosReturnsModal
+      {/* ==================== F5: VENTAS Y DEVOLUCIONES (INTEGRADO) ==================== */}
+      {activeTab === 'VENTAS_DIA' && (
+        <PosSalesHistoryView
           ordenesFacturadas={ordenesFacturadasHoy}
+          consumosInternosHoy={consumosInternosHoy}
           devolucionesDia={devolucionesDia}
           busyAction={busyAction}
-          onClose={() => setShowVentasDiaModal(false)}
           onReimprimirOrden={async (orden) => {
             await printThermalTicket({
               titulo: 'COPIA DE FACTURA POS',
@@ -2849,7 +3034,12 @@ export default function ElianaPosPage() {
               canal: orden.canal_venta,
               mesaNumero: orden.mesa_numero,
               clienteNombre: orden.cliente_nombre,
-              items: orden.items.map((it) => ({ nombre: it.nombre_producto, cantidad: it.cantidad, precioUnitario: it.precio_unitario, subtotal: it.subtotal })),
+              items: orden.items.map((it) => ({
+                nombre: it.nombre_producto,
+                cantidad: it.cantidad,
+                precioUnitario: it.precio_unitario,
+                subtotal: it.subtotal,
+              })),
               subtotal: orden.subtotal_bruto,
               descuento: orden.descuento,
               propina: orden.propina,
@@ -2871,7 +3061,171 @@ export default function ElianaPosPage() {
               setBusyAction(false);
             }
           }}
+          onDevolverTicketCompleto={async (payload) => {
+            setBusyAction(true);
+            try {
+              await executePosAction('DEVOLVER_TICKET_COMPLETO', payload);
+              await fetchPosState();
+              notify('ok', 'Devolución completa del ticket registrada.');
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error devolviendo ticket');
+            } finally {
+              setBusyAction(false);
+            }
+          }}
         />
+      )}
+
+      {/* Modal Asignar Personal / Mesero (Alt+M) */}
+      {showAsignarMeseroModal && ordenActiva && (
+        <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-300 max-w-lg w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-zinc-950">Asignar Personal / Mesero (Alt+M)</h3>
+                <p className="text-xs text-zinc-500">
+                  Las propinas de {getOrdenTabLabel(ordenActiva)} se atribuirán al personal seleccionado.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAsignarMeseroModal(false);
+                  focusCapture();
+                }}
+                className="p-1.5 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto">
+              {operarios.map((op) => {
+                const selected = ordenActiva.mesero_nombre === op.nombre_cajero;
+                return (
+                  <button
+                    key={op.id}
+                    type="button"
+                    disabled={busyAction}
+                    onClick={async () => {
+                      setBusyAction(true);
+                      try {
+                        await executePosAction('ASIGNAR_MESERO_ORDEN', {
+                          orden_id: ordenActiva.id,
+                          mesero_nombre: op.nombre_cajero,
+                        });
+                        setShowAsignarMeseroModal(false);
+                        await fetchPosState();
+                        focusCapture();
+                        notify('ok', `Personal asignado: ${op.nombre_cajero}`);
+                      } catch (e: unknown) {
+                        notify('err', e instanceof Error ? e.message : 'Error asignando personal');
+                      } finally {
+                        setBusyAction(false);
+                      }
+                    }}
+                    className={`p-3.5 rounded-xl border text-left cursor-pointer transition ${
+                      selected
+                        ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                        : 'bg-zinc-50 text-zinc-900 border-zinc-300 hover:bg-sky-50 hover:border-sky-400'
+                    }`}
+                  >
+                    <div className="font-bold text-sm truncate">{op.nombre_cajero}</div>
+                    <div className={`text-[11px] truncate mt-0.5 ${selected ? 'text-sky-100' : 'text-zinc-500'}`}>
+                      {op.cargo_area}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ingresa Solicitudes para Cocina (Lapicito / Enter en Ticket) */}
+      {notaItemTarget && (
+        <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setBusyAction(true);
+              try {
+                await executePosAction('ACTUALIZAR_NOTA_ITEM', {
+                  item_id: notaItemTarget.id,
+                  notas_comanda: notaItemText,
+                });
+                setNotaItemTarget(null);
+                await fetchPosState();
+                focusCapture();
+                notify('ok', 'Solicitud para cocina guardada.');
+              } catch (err: unknown) {
+                notify('err', err instanceof Error ? err.message : 'Error guardando solicitud');
+              } finally {
+                setBusyAction(false);
+              }
+            }}
+            className="bg-white rounded-2xl border border-zinc-300 max-w-md w-full p-5 space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-zinc-950">Ingresa solicitudes para cocina</h3>
+                <p className="text-xs text-zinc-500">{notaItemTarget.nombre_producto}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNotaItemTarget(null);
+                  focusCapture();
+                }}
+                className="p-1.5 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {['Sin cebolla', 'Término 3/4', 'Bien asado', 'Sin sal', 'Salsa aparte', 'Para llevar'].map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setNotaItemText((prev) => (prev ? `${prev}, ${chip}` : chip))}
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-xs font-bold text-amber-900 cursor-pointer"
+                >
+                  + {chip}
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="text"
+              autoFocus
+              value={notaItemText}
+              onChange={(e) => setNotaItemText(e.target.value)}
+              placeholder="Ej: Sin ensalada, término medio, bien cocido..."
+              className="w-full px-3.5 py-2.5 border border-zinc-300 focus:border-blue-500 rounded-xl text-sm font-medium outline-none"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setNotaItemTarget(null);
+                  focusCapture();
+                }}
+                className="px-4 py-2 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={busyAction}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer"
+              >
+                Guardar Solicitud
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {showCreditosModal && (
