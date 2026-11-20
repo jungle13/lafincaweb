@@ -149,13 +149,22 @@ export async function GET(request: Request) {
 
     const ordenIds = (ordenes || []).map((o: any) => o.id);
     let itemsAll: any[] = [];
+    let pagosAll: any[] = [];
     if (ordenIds.length > 0) {
-      const { data: itemsRows } = await supabase
-        .from('pos_orden_items')
-        .select('*')
-        .in('orden_id', ordenIds)
-        .order('created_at', { ascending: true });
+      const [{ data: itemsRows }, { data: pagosRows }] = await Promise.all([
+        supabase
+          .from('pos_orden_items')
+          .select('*')
+          .in('orden_id', ordenIds)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('pos_orden_pagos')
+          .select('*')
+          .in('orden_id', ordenIds)
+          .order('numero_pago', { ascending: true }),
+      ]);
       itemsAll = itemsRows || [];
+      pagosAll = pagosRows || [];
     }
 
     const itemsByOrden = new Map<string, any[]>();
@@ -165,9 +174,17 @@ export async function GET(request: Request) {
       else itemsByOrden.set(it.orden_id, [it]);
     }
 
+    const pagosByOrden = new Map<string, any[]>();
+    for (const pg of pagosAll) {
+      const list = pagosByOrden.get(pg.orden_id);
+      if (list) list.push(pg);
+      else pagosByOrden.set(pg.orden_id, [pg]);
+    }
+
     const ordenesEnriquecidas = (ordenes || []).map((o: any) => ({
       ...o,
       items: itemsByOrden.get(o.id) || [],
+      pagos_detalle: pagosByOrden.get(o.id) || [],
     }));
 
     const ordenById = new Map<string, any>();
@@ -175,10 +192,24 @@ export async function GET(request: Request) {
       ordenById.set(o.id, o);
     }
 
-    const mesasEnriquecidas = (mesas || []).map((m: any) => ({
-      ...m,
-      orden_activa: m.orden_activa_id ? ordenById.get(m.orden_activa_id) || null : null,
-    }));
+    const mesasEnriquecidas = (mesas || []).map((m: any) => {
+      const ordAct = m.orden_activa_id ? ordenById.get(m.orden_activa_id) || null : null;
+      return {
+        ...m,
+        orden_activa: ordAct,
+        caja_ocupante: ordAct?.caja_nombre || m.caja_ocupante || null,
+      };
+    });
+
+    const cajasAbiertasHoySet = new Set<string>();
+    cajasAbiertasHoySet.add(cajaNombre);
+    for (const s of sesiones || []) {
+      if (s.estado === 'ABIERTA' && s.caja_nombre) cajasAbiertasHoySet.add(String(s.caja_nombre));
+    }
+    for (const o of ordenesEnriquecidas) {
+      if (o.estado === 'FACTURADA' && o.caja_nombre) cajasAbiertasHoySet.add(String(o.caja_nombre));
+    }
+    const cajasAbiertasHoy = Array.from(cajasAbiertasHoySet);
 
     const sesionActiva =
       (sesiones || []).find(
@@ -374,6 +405,7 @@ export async function GET(request: Request) {
       categorias: categoriasRows || [],
       zonas: zonasRows || [],
       clientes: clientesRows || [],
+      cajasAbiertasHoy,
     });
   } catch (err: any) {
     console.error('Error en GET /api/pos:', err);
@@ -392,24 +424,38 @@ export async function POST(request: NextRequest) {
     const cajaNombre = body.caja_nombre || 'Caja 1';
     const cajeroNombre = body.cajero_nombre || 'CAJERO';
 
-    // 1. Abrir turno de caja (con validación estricta de doble nivel + Bloqueo tras Cierre Total)
+    // 1. Abrir turno de caja (por Caja + Contraseña de Caja vinculada al equipo, o fallback usuario)
     if (action === 'ABRIR_TURNO_CAJA') {
       const efectivoInicial = Number(body.efectivo_inicial ?? body.base_inicial ?? 0);
+      const cajaId = String(body.caja_id || '').trim();
+      const deviceId = String(body.device_id || '').trim();
+      const ipLocal = String(body.ip_local || '').trim();
+      const rawPass = String(body.password || body.password_caja || body.password_pin || '').trim();
       const rawUser = String(body.username || body.usuario_username || '').trim();
-      const rawPass = String(body.password || body.password_pin || '').trim();
 
-      if (!rawUser || !rawPass) {
+      if (!rawPass) {
         return NextResponse.json(
-          { success: false, error: 'Debes ingresar usuario y contraseña POS para abrir turno.' },
+          { success: false, error: 'Debes ingresar la contraseña de la caja para abrir turno.' },
           { status: 400 }
         );
       }
 
-      // Verificar sesión principal firmada del equipo (doble nivel estricto)
-      const mainToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-      const mainSession = await verifyAuthToken(mainToken);
+      // Resolver caja desde pos_cajas (por caja_id, device_id o nombre)
+      let targetCajaRow: any = null;
+      if (cajaId) {
+        const { data } = await supabase.from('pos_cajas').select('*').eq('id', cajaId).eq('activa', true).maybeSingle();
+        targetCajaRow = data;
+      } else if (deviceId) {
+        const { data } = await supabase.from('pos_cajas').select('*').eq('device_id', deviceId).eq('activa', true).maybeSingle();
+        targetCajaRow = data;
+      } else if (cajaNombre) {
+        const { data } = await supabase.from('pos_cajas').select('*').ilike('nombre', cajaNombre).eq('activa', true).maybeSingle();
+        targetCajaRow = data;
+      }
 
-      // Verificar si la jornada de hoy ya tuvo Cierre Total (Corte Z)
+      const effectiveCajaNombre = targetCajaRow?.nombre || cajaNombre;
+
+      // Verificar si la jornada de hoy ya tuvo Cierre Total (Corte Z) para esta caja
       const [{ data: prevSesiones }, { data: diarioHoy }] = await Promise.all([
         supabase
           .from('libro_caja_sesiones')
@@ -425,11 +471,11 @@ export async function POST(request: NextRequest) {
       ]);
 
       const sesionesCaja = (prevSesiones || []).filter(
-        (s: any) => (s.caja_nombre || 'Caja 1').toLowerCase() === cajaNombre.toLowerCase()
+        (s: any) => (s.caja_nombre || 'Caja 1').toLowerCase() === effectiveCajaNombre.toLowerCase()
       );
       const abiertaActual = sesionesCaja.find((s: any) => s.estado === 'ABIERTA');
       if (abiertaActual) {
-        return NextResponse.json({ success: true, sesion: abiertaActual });
+        return NextResponse.json({ success: true, sesion: abiertaActual, caja: targetCajaRow });
       }
       const ultimaCaja = sesionesCaja[0];
       if (diarioHoy?.estado === 'CERRADA' || ultimaCaja?.estado === 'CERRADA_TOTAL') {
@@ -437,52 +483,65 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             error:
-              'La caja ya realizó su Cierre Total del Día (Corte Z) hoy. Para abrir un nuevo turno hoy, un Administrador debe autorizar "Reabrir (Admin)" en Libro de Caja.',
+              'Esta caja ya realizó su Cierre Total del Día (Corte Z) hoy. Para abrir un nuevo turno hoy, un Administrador debe autorizar "Reabrir (Admin)" en Libro de Caja.',
           },
           { status: 403 }
         );
       }
 
-      let resolvedCajeroNombre = '';
-      let resolvedUsername = '';
+      let resolvedCajeroNombre = effectiveCajaNombre;
+      let resolvedUsername = effectiveCajaNombre.toLowerCase().replace(/\s+/g, '_');
 
-      const { data: dbCandidates } = await supabase
-        .from('libro_caja_usuarios')
-        .select('*')
-        .ilike('username', rawUser)
-        .eq('activo', true)
-        .limit(1);
-
-      const cajaUser = dbCandidates?.[0];
-      if (cajaUser) {
-        const expectedPosPass = String(cajaUser.pos_pin || cajaUser.password_pin || '').trim();
-        if (expectedPosPass && expectedPosPass === rawPass) {
-          resolvedCajeroNombre = cajaUser.nombre_cajero || cajaUser.nombre_completo || cajaUser.username;
-          resolvedUsername = String(cajaUser.username).trim().toLowerCase();
-        }
-      }
-
-      if (!resolvedUsername) {
-        const adminValid = validateAdminCredentials(rawUser, rawPass);
-        if (!adminValid) {
+      if (targetCajaRow) {
+        if (String(targetCajaRow.password_caja) !== rawPass) {
           return NextResponse.json(
-            { success: false, error: 'Usuario o contraseña POS incorrectos para abrir turno.' },
+            { success: false, error: 'Contraseña de caja incorrecta.' },
             { status: 401 }
           );
         }
-        resolvedCajeroNombre = adminValid.name;
-        resolvedUsername = adminValid.username.toLowerCase();
-      }
+        // Vincular equipo si venía libre
+        if (deviceId && (!targetCajaRow.device_id || targetCajaRow.device_id === deviceId)) {
+          await supabase
+            .from('pos_cajas')
+            .update({
+              device_id: deviceId,
+              ip_local: ipLocal || targetCajaRow.ip_local || '',
+              ultima_conexion_at: new Date().toISOString(),
+            })
+            .eq('id', targetCajaRow.id);
+        }
+        const mainToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+        const mainSession = await verifyAuthToken(mainToken);
+        resolvedCajeroNombre = mainSession?.name || effectiveCajaNombre;
+        resolvedUsername = mainSession?.username || resolvedUsername;
+      } else if (rawUser) {
+        // Fallback legacy por usuario
+        const { data: dbCandidates } = await supabase
+          .from('libro_caja_usuarios')
+          .select('*')
+          .ilike('username', rawUser)
+          .eq('activo', true)
+          .limit(1);
 
-      // REGLA ESTRICTA DE DOBLE NIVEL: las credenciales POS deben pertenecer al usuario de la sesión principal
-      if (mainSession && mainSession.username.toLowerCase() !== resolvedUsername.toLowerCase()) {
+        const cajaUser = dbCandidates?.[0];
+        if (cajaUser && String(cajaUser.pos_pin || cajaUser.password_pin || '').trim() === rawPass) {
+          resolvedCajeroNombre = cajaUser.nombre_cajero || cajaUser.username;
+          resolvedUsername = String(cajaUser.username).trim().toLowerCase();
+        } else {
+          const adminValid = validateAdminCredentials(rawUser, rawPass);
+          if (!adminValid) {
+            return NextResponse.json(
+              { success: false, error: 'Credenciales incorrectas para abrir turno.' },
+              { status: 401 }
+            );
+          }
+          resolvedCajeroNombre = adminValid.name;
+          resolvedUsername = adminValid.username.toLowerCase();
+        }
+      } else {
         return NextResponse.json(
-          {
-            success: false,
-            code: 'SESSION_USER_MISMATCH',
-            error: `Sesión principal incorrecta: las credenciales POS corresponden a "${resolvedUsername}", pero este equipo tiene iniciada la sesión principal de "${mainSession.username}". Cierra la sesión principal, ingresa con tu usuario y luego abre tu turno en POS.`,
-          },
-          { status: 403 }
+          { success: false, error: 'No se encontró la caja seleccionada.' },
+          { status: 404 }
         );
       }
 
@@ -492,7 +551,7 @@ export async function POST(request: NextRequest) {
         .from('libro_caja_sesiones')
         .insert({
           fecha: todayStr,
-          caja_nombre: cajaNombre,
+          caja_nombre: effectiveCajaNombre,
           cajero_nombre: resolvedCajeroNombre.toUpperCase(),
           usuario_username: resolvedUsername,
           efectivo_inicial: efectivoInicial,
@@ -505,7 +564,7 @@ export async function POST(request: NextRequest) {
 
       if (error) throw error;
       await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
-      return NextResponse.json({ success: true, sesion });
+      return NextResponse.json({ success: true, sesion, caja: targetCajaRow });
     }
 
     // 2. Abrir o agregar ítems a una orden (Mesa, Domicilio o Mostrador)
@@ -758,6 +817,7 @@ export async function POST(request: NextRequest) {
         efectivo_recibido = 0,
         cliente_nombre = '',
         cliente_telefono = '',
+        pagos_detalle = [],
       } = body;
 
       const { data: ord } = await supabase.from('pos_ordenes').select('*').eq('id', orden_id).single();
@@ -780,15 +840,47 @@ export async function POST(request: NextRequest) {
       const isConsumoInterno = metodo_pago === 'CONSUMO_INTERNO';
       const areaConsumo = String(body.area_consumo || 'Personal / Interno').trim();
 
+      const pagosArray = Array.isArray(pagos_detalle) ? pagos_detalle : [];
       let pEf = isConsumoInterno ? 0 : Number(pago_efectivo || 0);
       let pDat = isConsumoInterno ? 0 : Number(pago_datafono || 0);
       let pTr = isConsumoInterno ? 0 : Number(pago_transferencia || 0);
       let pCred = isConsumoInterno ? 0 : Number(pago_credito || 0);
-      if (!isConsumoInterno) {
+      let efRecibidoTotal = Number(efectivo_recibido || 0);
+      let cambioTotal = 0;
+
+      if (!isConsumoInterno && pagosArray.length > 0) {
+        pEf = 0;
+        pDat = 0;
+        pTr = 0;
+        pCred = 0;
+        efRecibidoTotal = 0;
+        cambioTotal = 0;
+        for (const pg of pagosArray) {
+          const app = Number(pg.monto_aplicado || 0);
+          const rec = Number(pg.monto_recibido || app);
+          const cam = Number(pg.cambio_devuelto || Math.max(0, rec - app));
+          if (pg.metodo_pago === 'EFECTIVO') {
+            pEf += app;
+            efRecibidoTotal += rec;
+            cambioTotal += cam;
+          } else if (pg.metodo_pago === 'DATAFONO') {
+            pDat += app;
+          } else if (pg.metodo_pago === 'TRANSFERENCIA') {
+            pTr += app;
+          } else if (pg.metodo_pago === 'CREDITO') {
+            pCred += app;
+          }
+        }
+      } else if (!isConsumoInterno) {
         if (metodo_pago === 'EFECTIVO' && pEf === 0) pEf = granTotal;
         if (metodo_pago === 'DATAFONO' && pDat === 0) pDat = granTotal;
         if ((metodo_pago === 'TRANSFERENCIA' || metodo_pago === 'TRANSFERENCIA_NEQUI') && pTr === 0) pTr = granTotal;
         if (metodo_pago === 'CREDITO' && pCred === 0) pCred = granTotal;
+        cambioTotal =
+          metodo_pago === 'EFECTIVO' && Number(efectivo_recibido) > granTotal
+            ? Math.round(Number(efectivo_recibido) - granTotal)
+            : 0;
+        efRecibidoTotal = Number(efectivo_recibido || granTotal);
       }
 
       const finalClienteNombre = (cliente_nombre || ord.cliente_nombre || '').trim();
@@ -803,11 +895,6 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-
-      const cambio =
-        !isConsumoInterno && metodo_pago === 'EFECTIVO' && Number(efectivo_recibido) > granTotal
-          ? Math.round(Number(efectivo_recibido) - granTotal)
-          : 0;
 
       const nowIso = new Date().toISOString();
       const { data: facturada, error: errFac } = await supabase
@@ -828,8 +915,8 @@ export async function POST(request: NextRequest) {
           cliente_nombre: finalClienteNombre || ord.cliente_nombre || null,
           cliente_telefono: (cliente_telefono || ord.cliente_telefono || '').trim() || null,
           observaciones: isConsumoInterno ? `CONSUMO INTERNO (${areaConsumo})` : ord.observaciones || null,
-          efectivo_recibido: isConsumoInterno ? 0 : Number(efectivo_recibido || granTotal),
-          cambio_entregado: cambio,
+          efectivo_recibido: isConsumoInterno ? 0 : efRecibidoTotal,
+          cambio_entregado: isConsumoInterno ? 0 : cambioTotal,
           estado: 'FACTURADA',
           ...(ord.canal_venta === 'DOMICILIO' ? { estado_domicilio: 'ENTREGADO' } : {}),
           closed_at: nowIso,
@@ -838,6 +925,25 @@ export async function POST(request: NextRequest) {
         .eq('id', orden_id)
         .select('*')
         .single();
+      if (errFac) throw errFac;
+
+      // Persistir desglose de transacciones individuales en pos_orden_pagos
+      if (pagosArray.length > 0) {
+        await supabase.from('pos_orden_pagos').insert(
+          pagosArray.map((pg: any, idx: number) => ({
+            orden_id,
+            fecha: todayStr,
+            caja_nombre: cajaNombre,
+            numero_pago: Number(pg.numero_pago || idx + 1),
+            metodo_pago: pg.metodo_pago,
+            monto_aplicado: Number(pg.monto_aplicado || 0),
+            monto_recibido: Number(pg.monto_recibido || pg.monto_aplicado || 0),
+            cambio_devuelto: Number(pg.cambio_devuelto || 0),
+            items_pagados: Array.isArray(pg.items_pagados) ? pg.items_pagados : [],
+            nota: pg.nota || '',
+          }))
+        );
+      }
 
       if (errFac) throw errFac;
 

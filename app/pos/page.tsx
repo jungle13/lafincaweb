@@ -69,9 +69,15 @@ import PosSalesHistoryView from '@/components/pos/PosSalesHistoryView';
 import PosTerminalSettingsModal from '@/components/pos/PosTerminalSettingsModal';
 import PosProductsModule from '@/components/pos/PosProductsModule';
 import PosInventoryModule from '@/components/pos/PosInventoryModule';
+import PosCheckoutModal from '@/components/pos/PosCheckoutModal';
 import { PosExitConfirmModal, PosOpenShiftGate } from '@/components/pos/PosShiftGateModal';
 import ElianaBrandLogo from '@/components/brand/ElianaBrandLogo';
 import { formatDurationHMS, isTauriDesktop } from '@/lib/empresaConfig';
+import {
+  getLocalIpAddress,
+  getOrCreateDeviceId,
+  setBoundTerminalCajaNombre,
+} from '@/lib/terminalIdentity';
 import type {
   CierreResumen,
   ClienteCreditoResumen,
@@ -81,10 +87,12 @@ import type {
   FlujoEfectivoRow,
   InventarioMovimiento,
   OperarioPos,
+  PosCaja,
   PosCategoria,
   PosMesa,
   PosOrden,
   PosOrdenItem,
+  PosOrdenPago,
   PosTab,
   ProductoVenta,
   SesionCaja,
@@ -181,22 +189,13 @@ export default function ElianaPosPage() {
     consecutivo: '',
   });
 
-  // Modales
+  // Modales y Terminal Multi-Caja
   const [showCobroModal, setShowCobroModal] = useState(false);
-  const [metodoPago, setMetodoPago] = useState<
-    'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO' | 'CONSUMO_INTERNO'
-  >('EFECTIVO');
-  const [pagoConEfectivo, setPagoConEfectivo] = useState(0);
-  const [pagoEfectivo, setPagoEfectivo] = useState(0);
-  const [pagoDatafono, setPagoDatafono] = useState(0);
-  const [pagoTransferencia, setPagoTransferencia] = useState(0);
-  const [pagoCredito, setPagoCredito] = useState(0);
-  const [comisionTarjeta, setComisionTarjeta] = useState(0);
-  const [clienteCreditoNombre, setClienteCreditoNombre] = useState('');
-  const [clienteCreditoTel, setClienteCreditoTel] = useState('');
-  const [areaConsumo, setAreaConsumo] = useState('Personal Cocina');
-  const [propinaValor, setPropinaValor] = useState(0);
-  const [descuentoValor, setDescuentoValor] = useState(0);
+  const [deviceId, setDeviceId] = useState('');
+  const [ipLocal, setIpLocal] = useState('127.0.0.1');
+  const [boundCaja, setBoundCaja] = useState<PosCaja | null>(null);
+  const [cajasLibres, setCajasLibres] = useState<PosCaja[]>([]);
+  const [cajasAbiertasHoy, setCajasAbiertasHoy] = useState<string[]>([]);
 
   const [showAsignarClienteModal, setShowAsignarClienteModal] = useState(false);
   const [asignarNombre, setAsignarNombre] = useState('');
@@ -241,15 +240,10 @@ export default function ElianaPosPage() {
   const [focusedMeseroIdx, setFocusedMeseroIdx] = useState(0);
   const [showReenviarComandaModal, setShowReenviarComandaModal] = useState(false);
   const [reenviarComandaFocusBtn, setReenviarComandaFocusBtn] = useState<'CANCEL' | 'CONFIRM'>('CONFIRM');
-  const [cobroFocusSection, setCobroFocusSection] = useState<
-    'PROPINA' | 'METODO' | 'EFECTIVO_INPUT' | 'BILLETES' | 'CONSUMO_AREA' | 'CONSUMO_PERSONA' | 'CONFIRMAR'
-  >('EFECTIVO_INPUT');
-  const [cobroBilleteIdx, setCobroBilleteIdx] = useState(0);
   const [domDistanciaInfo, setDomDistanciaInfo] = useState<string>('');
   const [calcDomLoading, setCalcDomLoading] = useState(false);
   const [notaItemTarget, setNotaItemTarget] = useState<PosOrdenItem | null>(null);
   const [notaItemText, setNotaItemText] = useState('');
-  const [consumoNota, setConsumoNota] = useState('');
 
   const [cashFlowModal, setCashFlowModal] = useState<'ENTRADA' | 'SALIDA' | null>(null);
   const [cashFlowMonto, setCashFlowMonto] = useState('');
@@ -260,7 +254,7 @@ export default function ElianaPosPage() {
   const buscarInputRef = useRef<HTMLInputElement | null>(null);
   const verificadorInputRef = useRef<HTMLInputElement | null>(null);
 
-  const cajaNombre = posConfig.nombreCaja || 'Caja 1';
+  const cajaNombre = boundCaja?.nombre || posConfig.nombreCaja || 'CAJA PRINCIPAL';
   const cajeroNombre = sesionActiva?.cajero_nombre || fallbackUser;
   const noSpinnerClass =
     '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
@@ -283,8 +277,31 @@ export default function ElianaPosPage() {
     }
   };
 
+  const refreshTerminalCajas = useCallback(async (devId: string, ip: string) => {
+    try {
+      const res = await fetch(`/api/pos/cajas?device_id=${encodeURIComponent(devId)}&ip=${encodeURIComponent(ip)}`);
+      const data = await res.json();
+      if (data.success) {
+        const bound = (data.boundCaja as PosCaja | null) || null;
+        setBoundCaja(bound);
+        setCajasLibres((data.cajasLibres as PosCaja[]) || []);
+        if (bound?.nombre) {
+          setBoundTerminalCajaNombre(bound.nombre);
+        }
+      }
+    } catch {
+      // ignore offline error
+    }
+  }, []);
+
   useEffect(() => {
     setPosConfig(loadElianaPosConfig());
+    const dId = getOrCreateDeviceId();
+    setDeviceId(dId);
+    getLocalIpAddress().then((ip) => {
+      setIpLocal(ip);
+      void refreshTerminalCajas(dId, ip);
+    });
     try {
       const savedQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
       if (savedQ) setOfflineQueue(JSON.parse(savedQ));
@@ -293,7 +310,7 @@ export default function ElianaPosPage() {
     } catch {
       // ignore storage errors
     }
-  }, []);
+  }, [refreshTerminalCajas]);
 
   const applyPosPayload = useCallback((data: Record<string, unknown>) => {
     setMesas((data.mesas as PosMesa[]) || []);
@@ -314,6 +331,7 @@ export default function ElianaPosPage() {
     setMovimientosInventario((data.movimientosInventario as InventarioMovimiento[]) || []);
     if (Array.isArray(data.operarios)) setOperarios(data.operarios as OperarioPos[]);
     if (Array.isArray(data.categorias)) setCategorias(data.categorias as PosCategoria[]);
+    if (Array.isArray(data.cajasAbiertasHoy)) setCajasAbiertasHoy(data.cajasAbiertasHoy as string[]);
     setJornadaCerradaTotal(Boolean(data.jornadaCerradaTotal));
   }, []);
 
@@ -347,6 +365,17 @@ export default function ElianaPosPage() {
   useEffect(() => {
     fetchPosState();
   }, [fetchPosState]);
+
+  // Sincronización periódica multi-caja en vistas compartidas (Mesas, Domicilios, Ventas)
+  useEffect(() => {
+    if (activeTab !== 'MESAS' && activeTab !== 'DOMICILIOS' && activeTab !== 'VENTAS_DIA') return;
+    const timer = setInterval(() => {
+      if (navigator.onLine) {
+        void fetchPosState();
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [activeTab, fetchPosState]);
 
   const executePosAction = useCallback(
     async (action: string, payload: Record<string, unknown>) => {
@@ -921,123 +950,69 @@ export default function ElianaPosPage() {
       notify('err', 'Agrega al menos un artículo antes de cobrar.');
       return;
     }
-    const propSug =
-      posConfig.habilitaPropinas && ordenActiva.canal_venta === 'SALON_MESA'
-        ? Math.round(ordenActiva.subtotal_bruto * (posConfig.porcentajePropinaSugerida / 100))
-        : 0;
-    const baseTotal =
-      Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0) + propSug;
-    setPropinaValor(propSug);
-    setDescuentoValor(0);
-    setMetodoPago('EFECTIVO');
-    setPagoEfectivo(baseTotal);
-    setPagoConEfectivo(baseTotal);
-    setPagoDatafono(0);
-    setPagoTransferencia(0);
-    setPagoCredito(0);
-    setComisionTarjeta(0);
-    setClienteCreditoNombre(ordenActiva.cliente_nombre || '');
-    setClienteCreditoTel(ordenActiva.cliente_telefono || '');
     setShowCobroModal(true);
-  }, [ordenActiva, itemsActivos.length, posConfig, notify]);
+  }, [ordenActiva, itemsActivos.length, notify]);
 
-  const totalFinalCobro = useMemo(() => {
-    if (!ordenActiva) return 0;
-    if (metodoPago === 'CONSUMO_INTERNO') return Number(ordenActiva.subtotal_bruto || 0);
-    return Math.max(
-      0,
-      Number(ordenActiva.subtotal_bruto || 0) +
-        Number(ordenActiva.costo_domicilio || 0) -
-        descuentoValor +
-        propinaValor
-    );
-  }, [ordenActiva, descuentoValor, propinaValor, metodoPago]);
-
-  const cambioCalculado = useMemo(() => {
-    if (metodoPago !== 'EFECTIVO') return 0;
-    return Math.max(0, pagoConEfectivo - totalFinalCobro);
-  }, [metodoPago, pagoConEfectivo, totalFinalCobro]);
-
-  const handleConfirmarCobro = async () => {
+  const handleConfirmarCobro = async (payload: {
+    metodo_pago: 'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO' | 'CONSUMO_INTERNO';
+    propina: number;
+    descuento: number;
+    pago_efectivo: number;
+    pago_datafono: number;
+    pago_transferencia: number;
+    pago_credito: number;
+    efectivo_recibido: number;
+    comision_tarjeta: number;
+    cliente_nombre: string;
+    cliente_telefono: string;
+    area_consumo: string;
+    pagos_detalle: PosOrdenPago[];
+  }) => {
     if (!ordenActiva) return;
-    let ef = 0;
-    let dat = 0;
-    let trf = 0;
-    let cred = 0;
-
-    if (metodoPago === 'CONSUMO_INTERNO') {
-      if (areaConsumo === 'Cortesía / Degustación') {
-        if (!consumoNota.trim() && !clienteCreditoNombre.trim()) {
-          return notify('err', 'Ingresa una nota explicando la cortesía o degustación.');
-        }
-      } else if (!clienteCreditoNombre.trim()) {
-        return notify('err', 'Selecciona o indica el personal beneficiario del Consumo Interno.');
-      }
-    } else if (metodoPago === 'EFECTIVO') {
-      ef = totalFinalCobro;
-      if (pagoConEfectivo > 0 && pagoConEfectivo < totalFinalCobro) {
-        return notify('err', 'El monto recibido en efectivo es menor al total.');
-      }
-    } else if (metodoPago === 'DATAFONO') {
-      dat = totalFinalCobro;
-    } else if (metodoPago === 'TRANSFERENCIA') {
-      trf = totalFinalCobro;
-    } else if (metodoPago === 'CREDITO') {
-      if (!clienteCreditoNombre.trim()) {
-        return notify('err', 'Ingresa el nombre del cliente para ventas a crédito.');
-      }
-      cred = totalFinalCobro;
-    } else {
-      ef = pagoEfectivo;
-      dat = pagoDatafono;
-      trf = pagoTransferencia;
-      cred = pagoCredito;
-      if (Math.abs(ef + dat + trf + cred - totalFinalCobro) > 100) {
-        return notify('err', 'La suma de pagos mixtos debe coincidir con el total.');
-      }
-      if (cred > 0 && !clienteCreditoNombre.trim()) {
-        return notify('err', 'Ingresa el cliente para la parte a crédito.');
-      }
-    }
+    const isConsumo = payload.metodo_pago === 'CONSUMO_INTERNO';
+    const totalFinal = isConsumo
+      ? Number(ordenActiva.subtotal_bruto || 0)
+      : Math.max(
+          0,
+          Number(ordenActiva.subtotal_bruto || 0) +
+            Number(ordenActiva.costo_domicilio || 0) -
+            payload.descuento +
+            payload.propina
+        );
+    const cambioEntregado = isConsumo
+      ? 0
+      : Math.max(0, payload.efectivo_recibido - payload.pago_efectivo);
 
     setBusyAction(true);
     try {
       await executePosAction('FACTURAR_ORDEN', {
         orden_id: ordenActiva.id,
-        metodo_pago: metodoPago,
-        pago_efectivo: ef,
-        pago_datafono: dat,
-        pago_transferencia: trf,
-        pago_credito: cred,
-        comision_tarjeta: comisionTarjeta,
-        cliente_nombre:
-          metodoPago === 'CONSUMO_INTERNO' && areaConsumo === 'Cortesía / Degustación'
-            ? (consumoNota.trim() || clienteCreditoNombre.trim())
-            : (clienteCreditoNombre.trim() || ordenActiva.cliente_nombre),
-        cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono,
-        area_consumo: areaConsumo,
-        propina: metodoPago === 'CONSUMO_INTERNO' ? 0 : propinaValor,
-        descuento: metodoPago === 'CONSUMO_INTERNO' ? 0 : descuentoValor,
-        efectivo_recibido:
-          metodoPago === 'EFECTIVO'
-            ? Math.max(pagoConEfectivo, totalFinalCobro)
-            : metodoPago === 'CONSUMO_INTERNO'
-              ? 0
-              : totalFinalCobro,
+        metodo_pago: payload.metodo_pago,
+        pago_efectivo: payload.pago_efectivo,
+        pago_datafono: payload.pago_datafono,
+        pago_transferencia: payload.pago_transferencia,
+        pago_credito: payload.pago_credito,
+        comision_tarjeta: payload.comision_tarjeta,
+        cliente_nombre: payload.cliente_nombre || ordenActiva.cliente_nombre,
+        cliente_telefono: payload.cliente_telefono || ordenActiva.cliente_telefono,
+        area_consumo: payload.area_consumo,
+        propina: isConsumo ? 0 : payload.propina,
+        descuento: isConsumo ? 0 : payload.descuento,
+        efectivo_recibido: payload.efectivo_recibido,
+        pagos_detalle: payload.pagos_detalle,
       });
 
-      const isConsumo = metodoPago === 'CONSUMO_INTERNO';
       const ticketData: ThermalTicketData = {
         titulo: isConsumo ? 'VALE DE CONSUMO INTERNO' : 'FACTURA DE VENTA POS',
-        subtitulo: isConsumo ? `SIN COBRO EN CAJA (${areaConsumo})` : undefined,
+        subtitulo: isConsumo ? `SIN COBRO EN CAJA (${payload.area_consumo})` : undefined,
         consecutivo: ordenActiva.consecutivo,
         fecha: new Date().toLocaleString('es-CO'),
         caja: cajaNombre,
         cajero: cajeroNombre,
         canal: ordenActiva.canal_venta,
         mesaNumero: ordenActiva.mesa_numero,
-        clienteNombre: clienteCreditoNombre.trim() || ordenActiva.cliente_nombre,
-        clienteTelefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono,
+        clienteNombre: payload.cliente_nombre || ordenActiva.cliente_nombre,
+        clienteTelefono: payload.cliente_telefono || ordenActiva.cliente_telefono,
         clienteDireccion: ordenActiva.cliente_direccion,
         items: itemsActivos.map((it) => ({
           nombre: it.nombre_producto,
@@ -1047,21 +1022,21 @@ export default function ElianaPosPage() {
           notas: it.notas_comanda,
         })),
         subtotal: ordenActiva.subtotal_bruto,
-        descuento: isConsumo ? 0 : descuentoValor,
-        propina: isConsumo ? 0 : propinaValor,
+        descuento: isConsumo ? 0 : payload.descuento,
+        propina: isConsumo ? 0 : payload.propina,
         costoDomicilio: ordenActiva.costo_domicilio,
-        total: totalFinalCobro,
-        metodoPago: isConsumo ? 'CONSUMO INTERNO ($0 EN CAJA)' : metodoPago,
-        efectivoRecibido: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : undefined,
-        cambio: metodoPago === 'EFECTIVO' ? cambioCalculado : undefined,
+        total: totalFinal,
+        metodoPago: isConsumo ? 'CONSUMO INTERNO ($0 EN CAJA)' : payload.metodo_pago,
+        efectivoRecibido: payload.pago_efectivo > 0 ? payload.efectivo_recibido : undefined,
+        cambio: payload.pago_efectivo > 0 ? cambioEntregado : undefined,
         footer: isConsumo ? 'Firma Beneficiario: ___________________' : undefined,
       };
 
       if (!isConsumo) {
         const memory: LastPaymentMemory = {
-          total: totalFinalCobro,
-          pagoCon: metodoPago === 'EFECTIVO' ? Math.max(pagoConEfectivo, totalFinalCobro) : totalFinalCobro,
-          cambio: cambioCalculado,
+          total: totalFinal,
+          pagoCon: payload.efectivo_recibido || totalFinal,
+          cambio: cambioEntregado,
           consecutivo: ordenActiva.consecutivo,
           ticketData,
         };
@@ -1070,7 +1045,7 @@ export default function ElianaPosPage() {
       }
 
       await printThermalTicket(ticketData);
-      if (ef > 0) await openCashDrawer();
+      if (payload.pago_efectivo > 0) await openCashDrawer();
 
       setShowCobroModal(false);
       setOrdenActivaId(null);
@@ -1079,7 +1054,7 @@ export default function ElianaPosPage() {
       notify(
         'ok',
         isConsumo
-          ? `Consumo interno registrado (${formatMoney(totalFinalCobro)}) sin cobro en caja.`
+          ? `Consumo interno registrado (${formatMoney(totalFinal)}) sin cobro en caja.`
           : `Factura ${ordenActiva.consecutivo} cobrada.`
       );
     } catch (e: unknown) {
@@ -1389,99 +1364,8 @@ export default function ElianaPosPage() {
         return;
       }
 
-      // Navegación por teclado dentro del modal F12 Cobrar
+      // PosCheckoutModal maneja su propia navegación por teclado
       if (showCobroModal && ordenActiva) {
-        const metodosOrder: Array<'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO' | 'CONSUMO_INTERNO'> = [
-          'EFECTIVO',
-          'DATAFONO',
-          'TRANSFERENCIA',
-          'CREDITO',
-          'MIXTO',
-          'CONSUMO_INTERNO',
-        ];
-        const areasOrder: Array<'Personal Cocina' | 'Personal Caja / Servicio' | 'Dueño / Gerencia' | 'Cortesía / Degustación'> = [
-          'Personal Cocina',
-          'Personal Caja / Servicio',
-          'Dueño / Gerencia',
-          'Cortesía / Degustación',
-        ];
-        const billetesList = [totalFinalCobro, 2000, 5000, 10000, 20000, 50000, 100000, 200000];
-        const sectionsForMetodo: Array<typeof cobroFocusSection> =
-          metodoPago === 'EFECTIVO'
-            ? [...(posConfig.habilitaPropinas ? (['PROPINA'] as const) : []), 'METODO', 'EFECTIVO_INPUT', 'BILLETES', 'CONFIRMAR']
-            : metodoPago === 'CONSUMO_INTERNO'
-              ? ['METODO', 'CONSUMO_AREA', ...(areaConsumo !== 'Cortesía / Degustación' ? (['CONSUMO_PERSONA'] as const) : []), 'CONFIRMAR']
-              : [...(posConfig.habilitaPropinas ? (['PROPINA'] as const) : []), 'METODO', 'CONFIRMAR'];
-
-        if (e.ctrlKey && e.key === 'Enter') {
-          e.preventDefault();
-          void handleConfirmarCobro();
-          return;
-        }
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          const cur = sectionsForMetodo.indexOf(cobroFocusSection);
-          const nextSec = sectionsForMetodo[Math.min(sectionsForMetodo.length - 1, cur < 0 ? 0 : cur + 1)];
-          setCobroFocusSection(nextSec);
-          return;
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          const cur = sectionsForMetodo.indexOf(cobroFocusSection);
-          const prevSec = sectionsForMetodo[Math.max(0, cur < 0 ? 0 : cur - 1)];
-          setCobroFocusSection(prevSec);
-          return;
-        }
-        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-          const dir = e.key === 'ArrowRight' ? 1 : -1;
-          if (cobroFocusSection === 'METODO') {
-            e.preventDefault();
-            const cur = metodosOrder.indexOf(metodoPago);
-            const nextM = metodosOrder[(cur + dir + metodosOrder.length) % metodosOrder.length];
-            setMetodoPago(nextM);
-            return;
-          }
-          if (cobroFocusSection === 'PROPINA') {
-            e.preventDefault();
-            const pcts = [0, 0.05, 0.1];
-            const curVal = propinaValor;
-            const curIdx = pcts.findIndex((p) => Math.round(ordenActiva.subtotal_bruto * p) === curVal);
-            const nextPct = pcts[((curIdx < 0 ? 0 : curIdx) + dir + pcts.length) % pcts.length];
-            setPropinaValor(Math.round(ordenActiva.subtotal_bruto * nextPct));
-            return;
-          }
-          if (cobroFocusSection === 'BILLETES') {
-            e.preventDefault();
-            const nextIdx = (cobroBilleteIdx + dir + billetesList.length) % billetesList.length;
-            setCobroBilleteIdx(nextIdx);
-            setPagoConEfectivo(billetesList[nextIdx]);
-            return;
-          }
-          if (cobroFocusSection === 'CONSUMO_AREA') {
-            e.preventDefault();
-            const curA = areasOrder.indexOf(areaConsumo as typeof areasOrder[number]);
-            const nextA = areasOrder[((curA < 0 ? 0 : curA) + dir + areasOrder.length) % areasOrder.length];
-            setAreaConsumo(nextA);
-            setClienteCreditoNombre('');
-            setConsumoNota('');
-            return;
-          }
-          if (cobroFocusSection === 'CONSUMO_PERSONA') {
-            const opsArea = operarios.filter((op) => op.cargo_area === areaConsumo);
-            if (opsArea.length > 0) {
-              e.preventDefault();
-              const curP = opsArea.findIndex((op) => op.nombre_cajero === clienteCreditoNombre);
-              const nextP = opsArea[((curP < 0 ? 0 : curP) + dir + opsArea.length) % opsArea.length];
-              setClienteCreditoNombre(nextP.nombre_cajero);
-              return;
-            }
-          }
-        }
-        if (e.key === 'Enter' && cobroFocusSection === 'CONFIRMAR') {
-          e.preventDefault();
-          void handleConfirmarCobro();
-          return;
-        }
         return;
       }
 
@@ -1911,10 +1795,9 @@ export default function ElianaPosPage() {
     showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
     showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
     showSettingsModal, showExitModal, showCancelarTicketModal, showAsignarMeseroModal, showReenviarComandaModal,
-    reenviarComandaFocusBtn, focusedMeseroIdx, operarios, cobroFocusSection, cobroBilleteIdx, metodoPago,
-    propinaValor, pagoConEfectivo, areaConsumo, clienteCreditoNombre, totalFinalCobro,
+    reenviarComandaFocusBtn, focusedMeseroIdx, operarios,
     notaItemTarget, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo, executePosAction, fetchPosState, notify,
-    handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem, handleConfirmarCobro,
+    handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem,
     handleCambiarSiguienteTicket, handleCambiarTicketDireccion, handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
 
@@ -2011,6 +1894,10 @@ export default function ElianaPosPage() {
     return (
       <PosOpenShiftGate
         cajaNombre={cajaNombre}
+        boundCaja={boundCaja}
+        cajasLibres={cajasLibres}
+        deviceId={deviceId}
+        ipLocal={ipLocal}
         jornadaCerradaTotal={jornadaCerradaTotal}
         errorMsg={shiftError}
         busyAction={busyAction}
@@ -2026,6 +1913,11 @@ export default function ElianaPosPage() {
             });
             const data = await res.json();
             if (!data.success) throw new Error(data.error || 'Error abriendo turno');
+            setBoundTerminalCajaNombre(payload.caja_nombre);
+            const nextCfg = { ...posConfig, nombreCaja: payload.caja_nombre };
+            setPosConfig(nextCfg);
+            saveElianaPosConfig(nextCfg);
+            await refreshTerminalCajas(payload.device_id, payload.ip_local);
             await fetchPosState();
             notify('ok', `Turno abierto en ${payload.caja_nombre}.`);
           } catch (e: unknown) {
@@ -2036,46 +1928,6 @@ export default function ElianaPosPage() {
           }
         }}
       />
-    );
-  }
-
-  // Bloqueo de doble nivel si otro usuario dejó turno abierto en este equipo y el actual no es ADMIN
-  const isDifferentShiftOwner =
-    Boolean(sesionActiva.usuario_username) &&
-    Boolean(user?.username) &&
-    sesionActiva.usuario_username!.toLowerCase() !== user!.username.toLowerCase() &&
-    user?.role !== 'ADMIN' &&
-    user?.username?.toLowerCase() !== 'admin';
-
-  if (isDifferentShiftOwner) {
-    return (
-      <div className="fixed inset-0 z-[10000] w-screen h-screen bg-zinc-100 flex items-center justify-center p-4 select-none">
-        <div className="bg-white rounded-xl border border-red-200 max-w-md w-full p-6 space-y-4 shadow-xl">
-          <div className="flex items-center gap-3 text-red-700">
-            <ShieldAlert className="w-6 h-6 shrink-0" />
-            <div>
-              <h2 className="font-bold text-base">Turno abierto por otro usuario</h2>
-              <p className="text-xs text-zinc-500">Control estricto de sesión por cajero</p>
-            </div>
-          </div>
-          <p className="text-xs text-zinc-700 leading-relaxed">
-            En esta terminal (<b>{cajaNombre}</b>) existe un turno de caja abierto a nombre de{' '}
-            <b>{sesionActiva.cajero_nombre}</b> (usuario <b>{sesionActiva.usuario_username}</b>), pero tu sesión principal actual es <b>{user?.username}</b>.
-          </p>
-          <p className="text-xs text-zinc-600 leading-relaxed">
-            Para evitar mezcla de turnos, <b>{sesionActiva.cajero_nombre}</b> debe ingresar con su sesión principal y realizar Cierre Parcial (X) o Total (Z) antes de que puedas abrir tu turno.
-          </p>
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => router.push('/')}
-              className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold cursor-pointer"
-            >
-              Volver al Inicio
-            </button>
-          </div>
-        </div>
-      </div>
     );
   }
 
@@ -2778,6 +2630,11 @@ export default function ElianaPosPage() {
                     <div className="mt-2 pt-2 border-t border-zinc-200">
                       <div className="font-bold tabular-nums text-zinc-950">{formatMoney(m.orden_activa.gran_total)}</div>
                       <div className="text-[11px] text-zinc-500">{m.orden_activa.items?.length || 0} ítems • {m.mesero_actual || cajeroNombre}</div>
+                      {(m.caja_ocupante || m.orden_activa.caja_nombre) && (
+                        <div className="mt-1 inline-block px-1.5 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-bold text-zinc-700">
+                          Caja: {m.caja_ocupante || m.orden_activa.caja_nombre}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="mt-2 text-xs text-zinc-500 font-medium">Clic para abrir</div>
@@ -2805,9 +2662,16 @@ export default function ElianaPosPage() {
             {ordenesDomicilio.map((dom) => (
               <div key={dom.id} className="bg-white rounded-lg border border-zinc-200 p-4 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-sm text-zinc-900">{dom.consecutivo}</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700">{dom.estado_domicilio || dom.estado}</span>
+                    <div className="flex items-center gap-1.5">
+                      {dom.caja_nombre && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-800">
+                          Caja: {dom.caja_nombre}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700">{dom.estado_domicilio || dom.estado}</span>
+                    </div>
                   </div>
                   <div className="mt-2 text-xs font-semibold text-zinc-800">{dom.cliente_nombre}</div>
                   <div className="text-xs text-zinc-600">{dom.cliente_telefono}</div>
@@ -2930,217 +2794,16 @@ export default function ElianaPosPage() {
 
       {/* ==================== MODAL F12: COBRAR O CONSUMO INTERNO ==================== */}
       {showCobroModal && ordenActiva && (
-        <div className="fixed inset-0 z-[10000] bg-zinc-200 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-zinc-300 max-w-xl w-full p-5 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
-              <h3 className="font-bold text-base text-zinc-950">F12 — Cobrar / Cerrar {getOrdenTabLabel(ordenActiva)}</h3>
-              <button onClick={() => setShowCobroModal(false)} className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-500 cursor-pointer"><X className="w-4 h-4" /></button>
-            </div>
-
-            <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-4 flex items-center justify-between">
-              <div>
-                <div className="text-xs text-zinc-500">
-                  {metodoPago === 'CONSUMO_INTERNO' ? 'Valor Comercial Referencial (No entra a caja)' : 'Subtotal + Domicilio'}
-                </div>
-                <div className="font-bold text-base tabular-nums text-zinc-900">
-                  {formatMoney(Number(ordenActiva.subtotal_bruto || 0) + Number(ordenActiva.costo_domicilio || 0))}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">
-                  {metodoPago === 'CONSUMO_INTERNO' ? 'Cobro en Caja' : 'Total a Cobrar'}
-                </div>
-                <div className="text-3xl font-extrabold tabular-nums text-zinc-950">
-                  {metodoPago === 'CONSUMO_INTERNO' ? '$0' : formatMoney(totalFinalCobro)}
-                </div>
-              </div>
-            </div>
-
-            {metodoPago !== 'CONSUMO_INTERNO' && (
-              <div className={`grid ${posConfig.habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs p-2 rounded-xl transition ${cobroFocusSection === 'PROPINA' ? 'ring-2 ring-blue-500 bg-blue-50/40' : ''}`}>
-                {posConfig.habilitaPropinas && (
-                  <div>
-                    <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
-                    <div className="flex gap-1 mb-1.5">
-                      {[0, 0.05, 0.1].map((pct) => (
-                        <button key={pct} onClick={() => setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pct))} className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 font-bold text-zinc-700 cursor-pointer">
-                          {pct * 100}%
-                        </button>
-                      ))}
-                    </div>
-                    <input type="number" value={propinaValor} onChange={(e) => setPropinaValor(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`} />
-                  </div>
-                )}
-                <div>
-                  <label className="font-semibold text-zinc-700 block mb-1">Descuento Global ($)</label>
-                  {posConfig.habilitaPropinas && <div className="h-[30px]" />}
-                  <input type="number" value={descuentoValor} onChange={(e) => setDescuentoValor(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 border border-zinc-300 rounded-md font-semibold tabular-nums text-zinc-900 ${noSpinnerClass}`} />
-                </div>
-              </div>
-            )}
-
-            <div className={`grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1.5 rounded-xl border transition ${cobroFocusSection === 'METODO' ? 'ring-2 ring-blue-500 border-blue-400' : 'border-zinc-200'}`}>
-              {[
-                { id: 'EFECTIVO' as const, label: 'EFECTIVO' },
-                { id: 'DATAFONO' as const, label: 'DATÁFONO' },
-                { id: 'TRANSFERENCIA' as const, label: 'TRANSF.' },
-                { id: 'CREDITO' as const, label: 'CRÉDITO' },
-                { id: 'MIXTO' as const, label: 'MIXTO' },
-                { id: 'CONSUMO_INTERNO' as const, label: 'CONSUMO' },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setMetodoPago(m.id)}
-                  className={`py-2.5 rounded-lg text-xs font-bold cursor-pointer ${
-                    metodoPago === m.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-950'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-
-            {metodoPago === 'EFECTIVO' && (
-              <div className={`bg-zinc-50 border rounded-xl p-3.5 space-y-2.5 transition ${cobroFocusSection === 'EFECTIVO_INPUT' || cobroFocusSection === 'BILLETES' ? 'border-blue-400 ring-2 ring-blue-500/40' : 'border-zinc-200'}`}>
-                <div className="flex items-center justify-between text-xs font-semibold text-zinc-700">
-                  <span>Pagó con (Efectivo recibido):</span>
-                  <span className="text-base font-bold tabular-nums text-blue-700">Cambio: {formatMoney(cambioCalculado)}</span>
-                </div>
-                <input autoFocus type="number" value={pagoConEfectivo} onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))} className={`w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-md text-xl font-bold tabular-nums text-zinc-950 outline-none ${noSpinnerClass}`} />
-                <div className={`flex gap-1.5 flex-wrap p-1 rounded-lg ${cobroFocusSection === 'BILLETES' ? 'ring-2 ring-blue-500 bg-blue-50/60' : ''}`}>
-                  <button onClick={() => { setCobroBilleteIdx(0); setPagoConEfectivo(totalFinalCobro); }} className={`px-3.5 py-2 rounded-lg border text-xs font-bold cursor-pointer ${cobroFocusSection === 'BILLETES' && cobroBilleteIdx === 0 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'}`}>Exacto</button>
-                  {[2000, 5000, 10000, 20000, 50000, 100000, 200000].map((billete, bIdx) => (
-                    <button key={billete} onClick={() => { setCobroBilleteIdx(bIdx + 1); setPagoConEfectivo(billete); }} className={`px-3.5 py-2 rounded-lg border text-xs font-bold tabular-nums cursor-pointer ${cobroFocusSection === 'BILLETES' && cobroBilleteIdx === bIdx + 1 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'}`}>{formatMoney(billete)}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {metodoPago === 'DATAFONO' && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-xs">
-                <label className="font-semibold text-zinc-700 block mb-1">Comisión Bancaria Datáfono (opcional $)</label>
-                <input type="number" value={comisionTarjeta} onChange={(e) => setComisionTarjeta(Number(e.target.value || 0))} className={`w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-md font-bold ${noSpinnerClass}`} />
-              </div>
-            )}
-
-            {metodoPago === 'CONSUMO_INTERNO' && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3.5 space-y-3 text-xs">
-                <div className="font-bold text-zinc-900">
-                  Consumo Interno — Selecciona Cargo / Área (No afecta el cuadre de caja)
-                </div>
-
-                {/* 4 Cards táctiles de Cargo */}
-                <div className="grid grid-cols-2 gap-2">
-                  {(['Personal Cocina', 'Personal Caja / Servicio', 'Dueño / Gerencia', 'Cortesía / Degustación'] as const).map((area) => {
-                    const active = areaConsumo === area;
-                    return (
-                      <button
-                        key={area}
-                        type="button"
-                        onClick={() => {
-                          setAreaConsumo(area);
-                          setClienteCreditoNombre('');
-                          setConsumoNota('');
-                        }}
-                        className={`py-2.5 px-3 rounded-xl border text-xs font-bold text-left cursor-pointer transition ${
-                          active
-                            ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs'
-                            : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-100'
-                        }`}
-                      >
-                        {area}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {areaConsumo === 'Cortesía / Degustación' ? (
-                  <div>
-                    <label className="font-bold text-zinc-700 block mb-1">Nota de Cortesía / Degustación</label>
-                    <textarea
-                      rows={3}
-                      autoFocus
-                      value={consumoNota}
-                      onChange={(e) => setConsumoNota(e.target.value)}
-                      placeholder="Ej: Cortesía para visita de ingenieros / degustación mesa especial..."
-                      className="w-full px-3 py-2.5 bg-white border border-zinc-300 focus:border-blue-500 rounded-xl text-sm font-medium outline-none"
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="font-semibold text-zinc-600">Selecciona la persona ({areaConsumo}):</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-                      {operarios
-                        .filter((op) => op.cargo_area === areaConsumo)
-                        .map((op) => {
-                          const selected = clienteCreditoNombre === op.nombre_cajero;
-                          return (
-                            <button
-                              key={op.id}
-                              type="button"
-                              onClick={() => setClienteCreditoNombre(op.nombre_cajero)}
-                              className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                                selected
-                                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                  : 'bg-white text-zinc-800 border-zinc-300 hover:bg-blue-50'
-                              }`}
-                            >
-                              <div className="font-bold text-xs truncate">{op.nombre_cajero}</div>
-                              <div className={`text-[10px] truncate ${selected ? 'text-blue-100' : 'text-zinc-500'}`}>
-                                @{op.username}
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                    {operarios.filter((op) => op.cargo_area === areaConsumo).length === 0 && (
-                      <input
-                        type="text"
-                        value={clienteCreditoNombre}
-                        onChange={(e) => setClienteCreditoNombre(e.target.value)}
-                        placeholder={`Nombre de ${areaConsumo}`}
-                        className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-xl text-sm font-semibold"
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(metodoPago === 'CREDITO' || (metodoPago === 'MIXTO' && pagoCredito > 0)) && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 space-y-2 text-xs">
-                <div className="font-bold text-zinc-800">Cliente para Cargo a Crédito (Libro Mayor)</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={clienteCreditoNombre}
-                    onChange={(e) => setClienteCreditoNombre(e.target.value)}
-                    placeholder="Nombre completo del cliente"
-                    list="clientes-credito-list"
-                    className="px-2.5 py-2 bg-white border border-zinc-300 rounded-lg font-semibold"
-                  />
-                  <datalist id="clientes-credito-list">
-                    {creditosClientes.map((c) => <option key={c.cliente_nombre} value={c.cliente_nombre} />)}
-                  </datalist>
-                  <input type="text" value={clienteCreditoTel} onChange={(e) => setClienteCreditoTel(e.target.value)} placeholder="Teléfono (opcional)" className="px-2.5 py-2 bg-white border border-zinc-300 rounded-lg" />
-                </div>
-              </div>
-            )}
-
-            {metodoPago === 'MIXTO' && (
-              <div className="grid grid-cols-4 gap-2 text-xs">
-                <div><label className="font-semibold text-zinc-700">Efectivo</label><input type="number" value={pagoEfectivo} onChange={(e) => setPagoEfectivo(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
-                <div><label className="font-semibold text-zinc-700">Datáfono</label><input type="number" value={pagoDatafono} onChange={(e) => setPagoDatafono(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
-                <div><label className="font-semibold text-zinc-700">Transf.</label><input type="number" value={pagoTransferencia} onChange={(e) => setPagoTransferencia(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
-                <div><label className="font-semibold text-zinc-700">Crédito</label><input type="number" value={pagoCredito} onChange={(e) => setPagoCredito(Number(e.target.value || 0))} className={`w-full px-2 py-1.5 border border-zinc-300 rounded-md font-bold mt-1 ${noSpinnerClass}`} /></div>
-              </div>
-            )}
-
-            <button onClick={handleConfirmarCobro} disabled={busyAction} className={`w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm cursor-pointer transition ${cobroFocusSection === 'CONFIRMAR' ? 'ring-4 ring-blue-300' : ''}`}>
-              {metodoPago === 'CONSUMO_INTERNO' ? 'Registrar Consumo Interno ($0 Caja)' : 'Confirmar Cobro e Imprimir Ticket (Ctrl+Enter)'}
-            </button>
-          </div>
-        </div>
+        <PosCheckoutModal
+          ordenActiva={ordenActiva}
+          itemsActivos={itemsActivos}
+          operarios={operarios}
+          creditosClientes={creditosClientes}
+          habilitaPropinas={posConfig.habilitaPropinas}
+          busyAction={busyAction}
+          onClose={() => setShowCobroModal(false)}
+          onConfirmarCobro={handleConfirmarCobro}
+        />
       )}
 
       {/* Modal Asignar Cliente / Personal */}
@@ -3371,6 +3034,8 @@ export default function ElianaPosPage() {
       {/* ==================== F5: VENTAS Y DEVOLUCIONES (INTEGRADO) ==================== */}
       {activeTab === 'VENTAS_DIA' && (
         <PosSalesHistoryView
+          currentCajaNombre={cajaNombre}
+          cajasAbiertasHoy={cajasAbiertasHoy}
           ordenesFacturadas={ordenesFacturadasHoy}
           consumosInternosHoy={consumosInternosHoy}
           devolucionesDia={devolucionesDia}

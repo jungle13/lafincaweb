@@ -19,6 +19,8 @@ import { formatColombiaTime } from '@/lib/dateUtils';
 import type { DevolucionDia, PosOrden, PosOrdenItem } from './types';
 
 interface PosSalesHistoryViewProps {
+  currentCajaNombre: string;
+  cajasAbiertasHoy: string[];
   ordenesFacturadas: PosOrden[];
   consumosInternosHoy: PosOrden[];
   devolucionesDia: DevolucionDia[];
@@ -61,6 +63,8 @@ function getChannelBadge(o: PosOrden) {
 }
 
 export default function PosSalesHistoryView({
+  currentCajaNombre,
+  cajasAbiertasHoy,
   ordenesFacturadas,
   consumosInternosHoy,
   devolucionesDia,
@@ -70,6 +74,7 @@ export default function PosSalesHistoryView({
   onDevolverTicketCompleto,
 }: PosSalesHistoryViewProps) {
   const [subTab, setSubTab] = useState<SubTab>('FACTURAS');
+  const [cajaFilter, setCajaFilter] = useState<string>(currentCajaNombre || 'TODAS');
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('TODOS');
   const [metodoFilter, setMetodoFilter] = useState<string>('TODOS');
@@ -84,14 +89,33 @@ export default function PosSalesHistoryView({
   const [devMetodo, setDevMetodo] = useState<'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO'>('EFECTIVO');
   const [devMotivo, setDevMotivo] = useState('Devolución en caja');
 
+  const cajasDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    if (currentCajaNombre) set.add(currentCajaNombre);
+    cajasAbiertasHoy.forEach((c) => { if (c) set.add(c); });
+    ordenesFacturadas.forEach((o) => { if (o.caja_nombre) set.add(o.caja_nombre); });
+    consumosInternosHoy.forEach((o) => { if (o.caja_nombre) set.add(o.caja_nombre); });
+    return Array.from(set).sort();
+  }, [currentCajaNombre, cajasAbiertasHoy, ordenesFacturadas, consumosInternosHoy]);
+
+  const ordenesPorCaja = useMemo(() => {
+    if (cajaFilter === 'TODAS') return ordenesFacturadas;
+    return ordenesFacturadas.filter((o) => (o.caja_nombre || currentCajaNombre) === cajaFilter);
+  }, [ordenesFacturadas, cajaFilter, currentCajaNombre]);
+
+  const consumosPorCaja = useMemo(() => {
+    if (cajaFilter === 'TODAS') return consumosInternosHoy;
+    return consumosInternosHoy.filter((o) => (o.caja_nombre || currentCajaNombre) === cajaFilter);
+  }, [consumosInternosHoy, cajaFilter, currentCajaNombre]);
+
   const allTickets = useMemo(() => {
     const map = new Map<string, PosOrden>();
-    for (const o of ordenesFacturadas) map.set(o.id, o);
-    for (const c of consumosInternosHoy) map.set(c.id, c);
+    for (const o of ordenesPorCaja) map.set(o.id, o);
+    for (const c of consumosPorCaja) map.set(c.id, c);
     return Array.from(map.values()).sort((a, b) =>
       String(b.pagado_at || b.created_at || '').localeCompare(String(a.pagado_at || a.created_at || ''))
     );
-  }, [ordenesFacturadas, consumosInternosHoy]);
+  }, [ordenesPorCaja, consumosPorCaja]);
 
   const devolucionesPorOrden = useMemo(() => {
     const map = new Map<string, DevolucionDia[]>();
@@ -119,15 +143,18 @@ export default function PosSalesHistoryView({
   }, [allTickets]);
 
   const totales = useMemo(() => {
-    const comerciales = ordenesFacturadas.filter((o) => o.metodo_pago !== 'CONSUMO_INTERNO');
+    const comerciales = ordenesPorCaja.filter((o) => o.metodo_pago !== 'CONSUMO_INTERNO');
     const totalComercial = comerciales.reduce((acc, o) => acc + Number(o.gran_total || 0), 0);
     const efectivo = comerciales.reduce((acc, o) => acc + Number(o.pago_efectivo || 0), 0);
     const datafono = comerciales.reduce((acc, o) => acc + Number(o.pago_datafono || 0), 0);
     const transferencia = comerciales.reduce((acc, o) => acc + Number(o.pago_transferencia || 0), 0);
     const credito = comerciales.reduce((acc, o) => acc + Number(o.pago_credito || 0), 0);
     const propinas = comerciales.reduce((acc, o) => acc + Number(o.propina || 0), 0);
-    const totalDevoluciones = devolucionesDia.reduce((acc, d) => acc + Number(d.valor_devuelto || 0), 0);
-    const totalConsumo = consumosInternosHoy.reduce(
+    const idsCaja = new Set(allTickets.map((t) => t.id));
+    const totalDevoluciones = devolucionesDia
+      .filter((d) => cajaFilter === 'TODAS' || idsCaja.has(d.orden_id))
+      .reduce((acc, d) => acc + Number(d.valor_devuelto || 0), 0);
+    const totalConsumo = consumosPorCaja.reduce(
       (acc, o) => acc + Number(o.subtotal_bruto || o.gran_total || 0),
       0
     );
@@ -142,7 +169,7 @@ export default function PosSalesHistoryView({
       totalDevoluciones,
       totalConsumo,
     };
-  }, [ordenesFacturadas, devolucionesDia, consumosInternosHoy]);
+  }, [ordenesPorCaja, devolucionesDia, consumosPorCaja, allTickets, cajaFilter]);
 
   const ticketsFiltrados = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -171,6 +198,10 @@ export default function PosSalesHistoryView({
     () => allTickets.find((o) => o.id === selectedOrdenId) || ticketsFiltrados[0] || null,
     [allTickets, ticketsFiltrados, selectedOrdenId]
   );
+
+  const isReadOnlyOtherCaja =
+    cajaFilter !== currentCajaNombre ||
+    Boolean(ordenActiva?.caja_nombre && currentCajaNombre && ordenActiva.caja_nombre !== currentCajaNombre);
 
   // Totalizados por Mesa/Canal y por Mesero
   const resumenPorMesa = useMemo(() => {
@@ -324,6 +355,19 @@ export default function PosSalesHistoryView({
             <span className="h-5 w-px bg-zinc-200 mx-1" />
 
             <select
+              value={cajaFilter}
+              onChange={(e) => setCajaFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold border border-zinc-300 bg-zinc-50 text-zinc-900 outline-none focus:border-zinc-900 cursor-pointer"
+            >
+              <option value="TODAS">Caja: Todas</option>
+              {cajasDisponibles.map((c) => (
+                <option key={c} value={c}>
+                  Caja: {c}{c === currentCajaNombre ? ' (Esta PC)' : ''}
+                </option>
+              ))}
+            </select>
+
+            <select
               value={metodoFilter}
               onChange={(e) => setMetodoFilter(e.target.value)}
               className="px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-300 bg-blue-50/70 text-blue-950 outline-none focus:border-blue-500 cursor-pointer"
@@ -436,6 +480,13 @@ export default function PosSalesHistoryView({
 
           {/* Detalle Derecho Completo del Ticket */}
           <div className="lg:col-span-7 bg-white border border-zinc-200 rounded-xl flex flex-col min-h-0 overflow-hidden">
+            {isReadOnlyOtherCaja && (
+              <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs font-semibold text-amber-900 flex items-center justify-between shrink-0">
+                <span>
+                  Visualizando ventas de {cajaFilter === 'TODAS' ? (ordenActiva?.caja_nombre || 'otra caja') : cajaFilter} — Solo consulta (devoluciones deshabilitadas)
+                </span>
+              </div>
+            )}
             {ordenActiva ? (
               <>
                 <div className="p-4 border-b border-zinc-200 bg-zinc-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
@@ -471,7 +522,7 @@ export default function PosSalesHistoryView({
                       <Printer className="w-4 h-4" />
                       Reimprimir
                     </button>
-                    {ordenActiva.metodo_pago !== 'CONSUMO_INTERNO' && (
+                    {ordenActiva.metodo_pago !== 'CONSUMO_INTERNO' && !isReadOnlyOtherCaja && (
                       <button
                         type="button"
                         disabled={busyAction}
@@ -551,7 +602,7 @@ export default function PosSalesHistoryView({
                           </div>
                         )}
                       </div>
-                      {ordenActiva.metodo_pago !== 'CONSUMO_INTERNO' && (
+                      {ordenActiva.metodo_pago !== 'CONSUMO_INTERNO' && !isReadOnlyOtherCaja && (
                         <button
                           type="button"
                           onClick={() => {
@@ -568,6 +619,54 @@ export default function PosSalesHistoryView({
                       )}
                     </div>
                   ))}
+
+                  {ordenActiva.pagos_detalle && ordenActiva.pagos_detalle.length > 0 && (
+                    <div className="pt-2">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                        Desglose de Transacciones y Devueltas ({ordenActiva.pagos_detalle.length})
+                      </div>
+                      <div className="space-y-1.5">
+                        {ordenActiva.pagos_detalle.map((pg, idx) => (
+                          <div
+                            key={pg.id || idx}
+                            className="p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/80 text-xs space-y-1"
+                          >
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-white text-[10px] font-bold">
+                                  Pago #{pg.numero_pago}
+                                </span>
+                                <span className="font-bold text-zinc-900">{pg.metodo_pago}</span>
+                                {pg.nota && (
+                                  <span className="text-zinc-500">· {pg.nota}</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 tabular-nums">
+                                <span className="font-extrabold text-zinc-900">
+                                  Aplicado: {formatMoney(pg.monto_aplicado)}
+                                </span>
+                                {pg.metodo_pago === 'EFECTIVO' && (
+                                  <>
+                                    <span className="text-zinc-600">
+                                      Recibido: <b>{formatMoney(pg.monto_recibido)}</b>
+                                    </span>
+                                    <span className="text-blue-700 font-bold">
+                                      Devuelta: {formatMoney(pg.cambio_devuelto)}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            {pg.items_pagados && pg.items_pagados.length > 0 && (
+                              <div className="text-[11px] text-zinc-600">
+                                Insumos: {pg.items_pagados.map((ip) => `${ip.cantidad}x ${ip.nombre_producto}`).join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

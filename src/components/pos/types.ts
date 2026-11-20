@@ -26,6 +26,35 @@ export interface PosOrdenItem {
   estado_comanda: 'PENDIENTE' | 'COMANDADO' | 'ENTREGADO' | 'ANULADO';
 }
 
+export interface PosOrdenPago {
+  id?: string;
+  orden_id?: string;
+  numero_pago: number;
+  metodo_pago: 'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'CONSUMO_INTERNO';
+  monto_aplicado: number;
+  monto_recibido: number;
+  cambio_devuelto: number;
+  items_pagados: Array<{
+    item_id: string;
+    nombre_producto: string;
+    cantidad: number;
+    subtotal: number;
+  }>;
+  nota?: string;
+}
+
+export interface PosCaja {
+  id: string;
+  nombre: string;
+  es_principal: boolean;
+  device_id?: string | null;
+  ip_local?: string;
+  ultima_conexion_at?: string | null;
+  activa?: boolean;
+  vinculada?: boolean;
+  turno_abierto?: boolean;
+}
+
 export interface PosOrden {
   id: string;
   consecutivo: string;
@@ -60,6 +89,7 @@ export interface PosOrden {
   pagado_at?: string | null;
   closed_at?: string | null;
   items: PosOrdenItem[];
+  pagos_detalle?: PosOrdenPago[];
 }
 
 export interface PosMesa {
@@ -71,6 +101,7 @@ export interface PosMesa {
   estado: 'LIBRE' | 'OCUPADA' | 'PRECUENTA_IMPRESA';
   orden_activa_id: string | null;
   mesero_actual: string | null;
+  caja_ocupante?: string | null;
   abierta_at: string | null;
   orden_activa?: PosOrden | null;
 }

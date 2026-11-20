@@ -37,6 +37,11 @@ import {
   isTauriDesktop,
 } from '@/lib/empresaConfig';
 import { getColombiaDateStr } from '@/lib/dateUtils';
+import {
+  getLocalIpAddress,
+  getOrCreateDeviceId,
+  setBoundTerminalCajaNombre,
+} from '@/lib/terminalIdentity';
 
 interface QuickModule {
   title: string;
@@ -250,8 +255,28 @@ export default function WelcomePage() {
 
     const fetchLocalShift = async () => {
       try {
+        let resolvedCaja = caja;
+        try {
+          const deviceId = getOrCreateDeviceId();
+          const ip = await getLocalIpAddress();
+          const cajasRes = await fetch(
+            `/api/pos/cajas?device_id=${encodeURIComponent(deviceId)}&ip=${encodeURIComponent(ip)}`,
+            { cache: 'no-store' }
+          );
+          if (cajasRes.ok) {
+            const cajasData = await cajasRes.json();
+            if (cajasData?.boundCaja?.nombre) {
+              resolvedCaja = String(cajasData.boundCaja.nombre);
+              setTerminalCaja(resolvedCaja);
+              setBoundTerminalCajaNombre(resolvedCaja);
+            }
+          }
+        } catch {
+          // ignore offline error
+        }
+
         const fecha = getColombiaDateStr();
-        const res = await fetch(`/api/pos?fecha=${encodeURIComponent(fecha)}&caja=${encodeURIComponent(caja)}`, {
+        const res = await fetch(`/api/pos?fecha=${encodeURIComponent(fecha)}&caja=${encodeURIComponent(resolvedCaja)}`, {
           cache: 'no-store',
         });
         if (res.ok) {
