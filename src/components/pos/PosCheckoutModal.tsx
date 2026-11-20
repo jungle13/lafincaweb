@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Plus, Trash2, X } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
 import type { ClienteCreditoResumen, OperarioPos, PosOrden, PosOrdenItem, PosOrdenPago } from './types';
@@ -13,6 +13,10 @@ interface PosCheckoutModalProps {
   habilitaPropinas: boolean;
   busyAction: boolean;
   onClose: () => void;
+  onRegistrarPagoParcial?: (
+    pago: Omit<PosOrdenPago, 'numero_pago' | 'id' | 'orden_id'>
+  ) => Promise<PosOrdenPago | null>;
+  onEliminarPagoParcial?: (pagoId: string) => Promise<void>;
   onConfirmarCobro: (payload: {
     metodo_pago: 'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO' | 'CONSUMO_INTERNO';
     propina: number;
@@ -31,7 +35,17 @@ interface PosCheckoutModalProps {
 }
 
 const BILLETES = [2000, 5000, 10000, 20000, 50000, 100000, 200000];
+const PARTIAL_METODOS = ['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'CREDITO'] as const;
 const AREAS_CONSUMO = ['Personal Cocina', 'Personal Caja / Servicio', 'Dueño / Gerencia', 'Cortesía / Degustación'] as const;
+
+type FocusZone =
+  | 'ITEMS'
+  | 'PARTIAL_METODO'
+  | 'PARTIAL_EFECTIVO_INPUT'
+  | 'PARTIAL_BILLETES'
+  | 'PARTIAL_NOTA'
+  | 'PARTIAL_CONFIRM'
+  | 'FINAL_CONFIRM';
 
 export default function PosCheckoutModal({
   ordenActiva,
@@ -41,6 +55,8 @@ export default function PosCheckoutModal({
   habilitaPropinas,
   busyAction,
   onClose,
+  onRegistrarPagoParcial,
+  onEliminarPagoParcial,
   onConfirmarCobro,
 }: PosCheckoutModalProps) {
   const [propinaValor, setPropinaValor] = useState(0);
@@ -49,31 +65,47 @@ export default function PosCheckoutModal({
     'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO' | 'MIXTO' | 'CONSUMO_INTERNO'
   >('EFECTIVO');
 
-  // Estado de cobro directo / mixto
+  // Estado de cobro directo / saldo restante / mixto
   const [pagoConEfectivo, setPagoConEfectivo] = useState(0);
-  const [mixEf, setMixEf] = useState(0);
   const [mixDat, setMixDat] = useState(0);
   const [mixTrf, setMixTrf] = useState(0);
   const [mixCred, setMixCred] = useState(0);
   const [comisionTarjeta, setComisionTarjeta] = useState(0);
 
   // Estado de Consumo Interno / Crédito
-  const [clienteCreditoNombre, setClienteCreditoNombre] = useState('');
-  const [clienteCreditoTel, setClienteCreditoTel] = useState('');
+  const [clienteCreditoNombre, setClienteCreditoNombre] = useState(ordenActiva.cliente_nombre || '');
+  const [clienteCreditoTel, setClienteCreditoTel] = useState(ordenActiva.cliente_telefono || '');
   const [areaConsumo, setAreaConsumo] = useState<string>('Personal Cocina');
   const [consumoNota, setConsumoNota] = useState('');
 
-  // División por insumos y múltiples transacciones
+  // División por insumos y múltiples transacciones (inicializado con pagos persistidos en BD)
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [pagosRegistrados, setPagosRegistrados] = useState<PosOrdenPago[]>([]);
-  const [pagoParcialMetodo, setPagoParcialMetodo] = useState<'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO'>('EFECTIVO');
+  const [pagosRegistrados, setPagosRegistrados] = useState<PosOrdenPago[]>(
+    () => ordenActiva.pagos_detalle || []
+  );
+  const [pagoParcialMetodo, setPagoParcialMetodo] =
+    useState<'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO'>('EFECTIVO');
   const [pagoParcialMonto, setPagoParcialMonto] = useState(0);
   const [pagoParcialRecibido, setPagoParcialRecibido] = useState(0);
   const [pagoParcialNota, setPagoParcialNota] = useState('');
 
-  // Navegación teclado izquierda/derecha
-  const [activeCol, setActiveCol] = useState<'ITEMS' | 'PAGO'>('PAGO');
+  // Navegación teclado continua con flechas
+  const [focusZone, setFocusZone] = useState<FocusZone>('ITEMS');
   const [focusedItemIdx, setFocusedItemIdx] = useState(0);
+  const [partialBilleteIdx, setPartialBilleteIdx] = useState(0);
+
+  const itemRowRefs = useRef<Array<HTMLLabelElement | null>>([]);
+  const partialEfInputRef = useRef<HTMLInputElement | null>(null);
+  const partialNotaRef = useRef<HTMLInputElement | null>(null);
+  const partialConfirmRef = useRef<HTMLButtonElement | null>(null);
+  const finalConfirmRef = useRef<HTMLButtonElement | null>(null);
+
+  // Sincronizar pagos si ordenActiva.pagos_detalle cambia externamente
+  useEffect(() => {
+    if (Array.isArray(ordenActiva.pagos_detalle)) {
+      setPagosRegistrados(ordenActiva.pagos_detalle);
+    }
+  }, [ordenActiva.pagos_detalle]);
 
   const totalFinalCobro = useMemo(() => {
     if (metodoPago === 'CONSUMO_INTERNO') return Number(ordenActiva.subtotal_bruto || 0);
@@ -86,11 +118,10 @@ export default function PosCheckoutModal({
     );
   }, [ordenActiva, descuentoValor, propinaValor, metodoPago]);
 
-  // Mapa de ítems ya cubiertos por pagosRegistrados
   const itemPagoMap = useMemo(() => {
     const map = new Map<string, { numero: number; metodo: string }>();
     for (const pg of pagosRegistrados) {
-      for (const it of pg.items_pagados) {
+      for (const it of pg.items_pagados || []) {
         map.set(it.item_id, { numero: pg.numero_pago, metodo: pg.metodo_pago });
       }
     }
@@ -103,6 +134,7 @@ export default function PosCheckoutModal({
   );
 
   const faltaPorCobrar = Math.max(0, totalFinalCobro - totalPagadoMulti);
+  const montoObjetivoDerecha = pagosRegistrados.length > 0 ? faltaPorCobrar : totalFinalCobro;
 
   const sumaSeleccionados = useMemo(
     () =>
@@ -112,30 +144,327 @@ export default function PosCheckoutModal({
     [itemsActivos, selectedItemIds]
   );
 
-  // Faltante en modo MIXTO simple (cuando no hay pagosRegistrados)
+  // Faltante en modo MIXTO sobre el monto objetivo de la derecha
   const sumaMixNoEfectivo = mixDat + mixTrf + mixCred;
-  const faltaMixEfectivo = Math.max(0, totalFinalCobro - sumaMixNoEfectivo);
+  const faltaMixEfectivo = Math.max(0, montoObjetivoDerecha - sumaMixNoEfectivo);
 
   useEffect(() => {
-    setPagoConEfectivo(totalFinalCobro);
-  }, [totalFinalCobro]);
+    setPagoConEfectivo(montoObjetivoDerecha);
+  }, [montoObjetivoDerecha]);
 
   useEffect(() => {
     if (selectedItemIds.length > 0) {
       setPagoParcialMonto(sumaSeleccionados);
       setPagoParcialRecibido(sumaSeleccionados);
-    } else if (pagosRegistrados.length > 0) {
+      setPartialBilleteIdx(0);
+    } else {
       setPagoParcialMonto(faltaPorCobrar);
       setPagoParcialRecibido(faltaPorCobrar);
     }
-  }, [selectedItemIds, sumaSeleccionados, pagosRegistrados.length, faltaPorCobrar]);
+  }, [selectedItemIds, sumaSeleccionados, faltaPorCobrar]);
 
-  // Navegación por teclado dentro del modal
+  // Enfocar inputs/botones automáticamente según focusZone
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isInput = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
+    if (focusZone === 'PARTIAL_EFECTIVO_INPUT') {
+      setTimeout(() => {
+        partialEfInputRef.current?.focus();
+        partialEfInputRef.current?.select();
+      }, 15);
+    } else if (focusZone === 'PARTIAL_NOTA') {
+      setTimeout(() => partialNotaRef.current?.focus(), 15);
+    } else if (focusZone === 'PARTIAL_CONFIRM') {
+      setTimeout(() => partialConfirmRef.current?.focus(), 15);
+    } else if (focusZone === 'FINAL_CONFIRM') {
+      setTimeout(() => finalConfirmRef.current?.focus(), 15);
+    } else if (focusZone === 'ITEMS') {
+      itemRowRefs.current[focusedItemIdx]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [focusZone, focusedItemIdx]);
 
+  const partialEfInsuficiente =
+    pagoParcialMetodo === 'EFECTIVO' && pagoParcialRecibido < pagoParcialMonto;
+  const partialCambio = Math.max(0, pagoParcialRecibido - pagoParcialMonto);
+  const partialFalta = Math.max(0, pagoParcialMonto - pagoParcialRecibido);
+
+  const handleAgregarTransaccion = useCallback(async () => {
+    const montoAplicado = Math.min(
+      faltaPorCobrar || totalFinalCobro,
+      Math.max(0, Number(pagoParcialMonto || 0))
+    );
+    if (montoAplicado <= 0) return;
+    if (pagoParcialMetodo === 'EFECTIVO' && pagoParcialRecibido < montoAplicado) return;
+
+    const recibido =
+      pagoParcialMetodo === 'EFECTIVO'
+        ? Number(pagoParcialRecibido || montoAplicado)
+        : montoAplicado;
+    const cambio = pagoParcialMetodo === 'EFECTIVO' ? Math.max(0, recibido - montoAplicado) : 0;
+
+    const itemsCovered = itemsActivos
+      .filter((it) => selectedItemIds.includes(it.id))
+      .map((it) => ({
+        item_id: it.id,
+        nombre_producto: it.nombre_producto,
+        cantidad: Number(it.cantidad || 1),
+        subtotal: Number(it.subtotal || 0),
+      }));
+
+    const payloadBase: Omit<PosOrdenPago, 'numero_pago' | 'id' | 'orden_id'> = {
+      metodo_pago: pagoParcialMetodo,
+      monto_aplicado: montoAplicado,
+      monto_recibido: recibido,
+      cambio_devuelto: cambio,
+      items_pagados: itemsCovered,
+      nota: pagoParcialNota.trim(),
+    };
+
+    if (onRegistrarPagoParcial) {
+      const saved = await onRegistrarPagoParcial(payloadBase);
+      if (saved) {
+        setPagosRegistrados((prev) => [...prev, saved]);
+      }
+    } else {
+      const nuevoPago: PosOrdenPago = {
+        numero_pago: pagosRegistrados.length + 1,
+        ...payloadBase,
+      };
+      setPagosRegistrados((prev) => [...prev, nuevoPago]);
+    }
+
+    const coveredSet = new Set(itemsCovered.map((i) => i.item_id));
+    const nextPendingIdx = itemsActivos.findIndex(
+      (it) => !itemPagoMap.has(it.id) && !coveredSet.has(it.id)
+    );
+
+    setSelectedItemIds([]);
+    setPagoParcialNota('');
+    if (nextPendingIdx >= 0) {
+      setFocusedItemIdx(nextPendingIdx);
+      setFocusZone('ITEMS');
+    } else {
+      setFocusZone('FINAL_CONFIRM');
+    }
+  }, [
+    faltaPorCobrar,
+    totalFinalCobro,
+    pagoParcialMonto,
+    pagoParcialMetodo,
+    pagoParcialRecibido,
+    itemsActivos,
+    selectedItemIds,
+    pagoParcialNota,
+    onRegistrarPagoParcial,
+    pagosRegistrados.length,
+    itemPagoMap,
+  ]);
+
+  const handleEliminarPago = async (pg: PosOrdenPago, idx: number) => {
+    if (pg.id && onEliminarPagoParcial) {
+      await onEliminarPagoParcial(pg.id);
+    }
+    setPagosRegistrados((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const buildRemainingPayments = useCallback(
+    (startNum: number): PosOrdenPago[] => {
+      const monto = montoObjetivoDerecha;
+      if (monto <= 0) return [];
+      const pendingItems = itemsActivos
+        .filter((it) => !itemPagoMap.has(it.id))
+        .map((it) => ({
+          item_id: it.id,
+          nombre_producto: it.nombre_producto,
+          cantidad: Number(it.cantidad || 1),
+          subtotal: Number(it.subtotal || 0),
+        }));
+
+      if (metodoPago === 'MIXTO') {
+        const list: PosOrdenPago[] = [];
+        let n = startNum;
+        if (faltaMixEfectivo > 0) {
+          const rec = Math.max(faltaMixEfectivo, pagoConEfectivo || faltaMixEfectivo);
+          list.push({
+            numero_pago: n++,
+            metodo_pago: 'EFECTIVO',
+            monto_aplicado: faltaMixEfectivo,
+            monto_recibido: rec,
+            cambio_devuelto: Math.max(0, rec - faltaMixEfectivo),
+            items_pagados: list.length === 0 ? pendingItems : [],
+            nota: 'Mixto Efectivo',
+          });
+        }
+        if (mixDat > 0) {
+          list.push({
+            numero_pago: n++,
+            metodo_pago: 'DATAFONO',
+            monto_aplicado: mixDat,
+            monto_recibido: mixDat,
+            cambio_devuelto: 0,
+            items_pagados: list.length === 0 ? pendingItems : [],
+            nota: 'Mixto Datáfono',
+          });
+        }
+        if (mixTrf > 0) {
+          list.push({
+            numero_pago: n++,
+            metodo_pago: 'TRANSFERENCIA',
+            monto_aplicado: mixTrf,
+            monto_recibido: mixTrf,
+            cambio_devuelto: 0,
+            items_pagados: list.length === 0 ? pendingItems : [],
+            nota: 'Mixto Transferencia',
+          });
+        }
+        if (mixCred > 0) {
+          list.push({
+            numero_pago: n++,
+            metodo_pago: 'CREDITO',
+            monto_aplicado: mixCred,
+            monto_recibido: mixCred,
+            cambio_devuelto: 0,
+            items_pagados: list.length === 0 ? pendingItems : [],
+            nota: 'Mixto Crédito',
+          });
+        }
+        return list;
+      }
+
+      if (metodoPago === 'CONSUMO_INTERNO') return [];
+
+      const recibido = metodoPago === 'EFECTIVO' ? Math.max(monto, pagoConEfectivo) : monto;
+      return [
+        {
+          numero_pago: startNum,
+          metodo_pago: metodoPago,
+          monto_aplicado: monto,
+          monto_recibido: recibido,
+          cambio_devuelto: metodoPago === 'EFECTIVO' ? Math.max(0, recibido - monto) : 0,
+          items_pagados: pendingItems,
+          nota: pagosRegistrados.length > 0 ? 'Saldo restante' : '',
+        },
+      ];
+    },
+    [
+      montoObjetivoDerecha,
+      itemsActivos,
+      itemPagoMap,
+      metodoPago,
+      faltaMixEfectivo,
+      pagoConEfectivo,
+      mixDat,
+      mixTrf,
+      mixCred,
+      pagosRegistrados.length,
+    ]
+  );
+
+  const rightEfInsuficiente =
+    metodoPago !== 'CONSUMO_INTERNO' &&
+    montoObjetivoDerecha > 0 &&
+    ((metodoPago === 'EFECTIVO' && pagoConEfectivo < montoObjetivoDerecha) ||
+      (metodoPago === 'MIXTO' && faltaMixEfectivo > 0 && pagoConEfectivo < faltaMixEfectivo));
+
+  const handleFinalConfirm = useCallback(async () => {
+    if (busyAction || rightEfInsuficiente) return;
+
+    if (metodoPago === 'CONSUMO_INTERNO' && pagosRegistrados.length === 0) {
+      await onConfirmarCobro({
+        metodo_pago: 'CONSUMO_INTERNO',
+        propina: 0,
+        descuento: 0,
+        pago_efectivo: 0,
+        pago_datafono: 0,
+        pago_transferencia: 0,
+        pago_credito: 0,
+        efectivo_recibido: 0,
+        comision_tarjeta: 0,
+        cliente_nombre:
+          areaConsumo === 'Cortesía / Degustación'
+            ? consumoNota.trim() || clienteCreditoNombre.trim()
+            : clienteCreditoNombre.trim() || ordenActiva.cliente_nombre || '',
+        cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono || '',
+        area_consumo: areaConsumo,
+        pagos_detalle: [],
+      });
+      return;
+    }
+
+    const extraPagos = faltaPorCobrar > 0 ? buildRemainingPayments(pagosRegistrados.length + 1) : [];
+    const todosPagos = [...pagosRegistrados, ...extraPagos];
+
+    const sumEf = todosPagos
+      .filter((p) => p.metodo_pago === 'EFECTIVO')
+      .reduce((a, b) => a + Number(b.monto_aplicado || 0), 0);
+    const sumDat = todosPagos
+      .filter((p) => p.metodo_pago === 'DATAFONO')
+      .reduce((a, b) => a + Number(b.monto_aplicado || 0), 0);
+    const sumTrf = todosPagos
+      .filter((p) => p.metodo_pago === 'TRANSFERENCIA')
+      .reduce((a, b) => a + Number(b.monto_aplicado || 0), 0);
+    const sumCred = todosPagos
+      .filter((p) => p.metodo_pago === 'CREDITO')
+      .reduce((a, b) => a + Number(b.monto_aplicado || 0), 0);
+    const sumEfRec = todosPagos
+      .filter((p) => p.metodo_pago === 'EFECTIVO')
+      .reduce((a, b) => a + Number(b.monto_recibido || b.monto_aplicado || 0), 0);
+
+    const metodosActivos = [sumEf > 0, sumDat > 0, sumTrf > 0, sumCred > 0].filter(Boolean).length;
+    const metodoFinal:
+      | 'EFECTIVO'
+      | 'DATAFONO'
+      | 'TRANSFERENCIA'
+      | 'CREDITO'
+      | 'MIXTO' =
+      metodosActivos > 1 || todosPagos.length > 1
+        ? 'MIXTO'
+        : sumDat > 0
+          ? 'DATAFONO'
+          : sumTrf > 0
+            ? 'TRANSFERENCIA'
+            : sumCred > 0
+              ? 'CREDITO'
+              : 'EFECTIVO';
+
+    await onConfirmarCobro({
+      metodo_pago: metodoFinal,
+      propina: propinaValor,
+      descuento: descuentoValor,
+      pago_efectivo: sumEf,
+      pago_datafono: sumDat,
+      pago_transferencia: sumTrf,
+      pago_credito: sumCred,
+      efectivo_recibido: sumEf > 0 ? sumEfRec : totalFinalCobro,
+      comision_tarjeta: comisionTarjeta,
+      cliente_nombre: clienteCreditoNombre.trim() || ordenActiva.cliente_nombre || '',
+      cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono || '',
+      area_consumo: areaConsumo,
+      pagos_detalle: todosPagos,
+    });
+  }, [
+    busyAction,
+    rightEfInsuficiente,
+    metodoPago,
+    pagosRegistrados,
+    faltaPorCobrar,
+    buildRemainingPayments,
+    onConfirmarCobro,
+    areaConsumo,
+    consumoNota,
+    clienteCreditoNombre,
+    clienteCreditoTel,
+    ordenActiva.cliente_nombre,
+    ordenActiva.cliente_telefono,
+    propinaValor,
+    descuentoValor,
+    totalFinalCobro,
+    comisionTarjeta,
+  ]);
+
+  // Navegación continua con teclas de flecha
+  useEffect(() => {
+    const partialBilletesOpts = [pagoParcialMonto, ...BILLETES];
+
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
@@ -148,16 +477,15 @@ export default function PosCheckoutModal({
         return;
       }
 
-      if (e.key === 'Tab' && !isInput) {
-        e.preventDefault();
-        setActiveCol((c) => (c === 'ITEMS' ? 'PAGO' : 'ITEMS'));
-        return;
-      }
-
-      if (activeCol === 'ITEMS' && !isInput && itemsActivos.length > 0) {
+      if (focusZone === 'ITEMS') {
+        if (itemsActivos.length === 0) return;
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setFocusedItemIdx((i) => Math.min(itemsActivos.length - 1, i + 1));
+          if (focusedItemIdx < itemsActivos.length - 1) {
+            setFocusedItemIdx((i) => i + 1);
+          } else if (selectedItemIds.length > 0) {
+            setFocusZone('PARTIAL_METODO');
+          }
           return;
         }
         if (e.key === 'ArrowUp') {
@@ -175,171 +503,112 @@ export default function PosCheckoutModal({
           }
           return;
         }
-        if (e.key === 'ArrowRight') {
+      }
+
+      if (focusZone === 'PARTIAL_METODO') {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault();
-          setActiveCol('PAGO');
+          const cur = PARTIAL_METODOS.indexOf(pagoParcialMetodo);
+          const dir = e.key === 'ArrowRight' ? 1 : -1;
+          setPagoParcialMetodo(
+            PARTIAL_METODOS[(cur + dir + PARTIAL_METODOS.length) % PARTIAL_METODOS.length]
+          );
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setFocusZone('ITEMS');
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setFocusZone(pagoParcialMetodo === 'EFECTIVO' ? 'PARTIAL_EFECTIVO_INPUT' : 'PARTIAL_NOTA');
+          return;
+        }
+      }
+
+      if (focusZone === 'PARTIAL_BILLETES') {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          const dir = e.key === 'ArrowRight' ? 1 : -1;
+          const nextIdx =
+            (partialBilleteIdx + dir + partialBilletesOpts.length) % partialBilletesOpts.length;
+          setPartialBilleteIdx(nextIdx);
+          setPagoParcialRecibido(partialBilletesOpts[nextIdx]);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setFocusZone('PARTIAL_EFECTIVO_INPUT');
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setFocusZone('PARTIAL_NOTA');
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          setFocusZone('PARTIAL_CONFIRM');
+          return;
+        }
+      }
+
+      if (focusZone === 'PARTIAL_CONFIRM') {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setFocusZone('PARTIAL_NOTA');
+          return;
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          void handleAgregarTransaccion();
+          return;
+        }
+      }
+
+      if (focusZone === 'FINAL_CONFIRM') {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setFocusZone('ITEMS');
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          void handleFinalConfirm();
           return;
         }
       }
     };
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
-
-  const handleAgregarTransaccion = () => {
-    const montoAplicado = Math.min(faltaPorCobrar || totalFinalCobro, Math.max(0, Number(pagoParcialMonto || 0)));
-    if (montoAplicado <= 0) return;
-
-    const recibido =
-      pagoParcialMetodo === 'EFECTIVO'
-        ? Math.max(montoAplicado, Number(pagoParcialRecibido || montoAplicado))
-        : montoAplicado;
-    const cambio = pagoParcialMetodo === 'EFECTIVO' ? Math.max(0, recibido - montoAplicado) : 0;
-
-    const itemsCovered = itemsActivos
-      .filter((it) => selectedItemIds.includes(it.id))
-      .map((it) => ({
-        item_id: it.id,
-        nombre_producto: it.nombre_producto,
-        cantidad: Number(it.cantidad || 1),
-        subtotal: Number(it.subtotal || 0),
-      }));
-
-    const nuevoPago: PosOrdenPago = {
-      numero_pago: pagosRegistrados.length + 1,
-      metodo_pago: pagoParcialMetodo,
-      monto_aplicado: montoAplicado,
-      monto_recibido: recibido,
-      cambio_devuelto: cambio,
-      items_pagados: itemsCovered,
-      nota: pagoParcialNota.trim(),
-    };
-
-    setPagosRegistrados((prev) => [...prev, nuevoPago]);
-    setSelectedItemIds([]);
-    setPagoParcialNota('');
-    setMetodoPago('MIXTO');
-  };
-
-  const handleFinalConfirm = async () => {
-    // Si hay transacciones registradas en división de cuenta
-    if (pagosRegistrados.length > 0 && metodoPago !== 'CONSUMO_INTERNO') {
-      const sumEf = pagosRegistrados.filter((p) => p.metodo_pago === 'EFECTIVO').reduce((a, b) => a + b.monto_aplicado, 0);
-      const sumDat = pagosRegistrados.filter((p) => p.metodo_pago === 'DATAFONO').reduce((a, b) => a + b.monto_aplicado, 0);
-      const sumTrf = pagosRegistrados.filter((p) => p.metodo_pago === 'TRANSFERENCIA').reduce((a, b) => a + b.monto_aplicado, 0);
-      const sumCred = pagosRegistrados.filter((p) => p.metodo_pago === 'CREDITO').reduce((a, b) => a + b.monto_aplicado, 0);
-      const sumRec = pagosRegistrados.filter((p) => p.metodo_pago === 'EFECTIVO').reduce((a, b) => a + b.monto_recibido, 0);
-
-      await onConfirmarCobro({
-        metodo_pago: 'MIXTO',
-        propina: propinaValor,
-        descuento: descuentoValor,
-        pago_efectivo: sumEf,
-        pago_datafono: sumDat,
-        pago_transferencia: sumTrf,
-        pago_credito: sumCred,
-        efectivo_recibido: sumRec,
-        comision_tarjeta: comisionTarjeta,
-        cliente_nombre: clienteCreditoNombre.trim() || ordenActiva.cliente_nombre || '',
-        cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono || '',
-        area_consumo: areaConsumo,
-        pagos_detalle: pagosRegistrados,
-      });
-      return;
-    }
-
-    // Flujo directo o mixto simple
-    const efAplicado = metodoPago === 'MIXTO' ? mixEf || faltaMixEfectivo : metodoPago === 'EFECTIVO' ? totalFinalCobro : 0;
-    const efRecibido =
-      metodoPago === 'EFECTIVO'
-        ? Math.max(totalFinalCobro, pagoConEfectivo)
-        : metodoPago === 'MIXTO'
-          ? Math.max(efAplicado, pagoConEfectivo || efAplicado)
-          : totalFinalCobro;
-
-    const singleDetalle: PosOrdenPago[] =
-      metodoPago === 'MIXTO'
-        ? ([
-            efAplicado > 0 && {
-              numero_pago: 1,
-              metodo_pago: 'EFECTIVO' as const,
-              monto_aplicado: efAplicado,
-              monto_recibido: efRecibido,
-              cambio_devuelto: Math.max(0, efRecibido - efAplicado),
-              items_pagados: [],
-              nota: 'Mixto Efectivo',
-            },
-            mixDat > 0 && {
-              numero_pago: 2,
-              metodo_pago: 'DATAFONO' as const,
-              monto_aplicado: mixDat,
-              monto_recibido: mixDat,
-              cambio_devuelto: 0,
-              items_pagados: [],
-              nota: 'Mixto Datáfono',
-            },
-            mixTrf > 0 && {
-              numero_pago: 3,
-              metodo_pago: 'TRANSFERENCIA' as const,
-              monto_aplicado: mixTrf,
-              monto_recibido: mixTrf,
-              cambio_devuelto: 0,
-              items_pagados: [],
-              nota: 'Mixto Transferencia',
-            },
-            mixCred > 0 && {
-              numero_pago: 4,
-              metodo_pago: 'CREDITO' as const,
-              monto_aplicado: mixCred,
-              monto_recibido: mixCred,
-              cambio_devuelto: 0,
-              items_pagados: [],
-              nota: 'Mixto Crédito',
-            },
-          ].filter(Boolean) as PosOrdenPago[])
-        : metodoPago !== 'CONSUMO_INTERNO'
-          ? [
-              {
-                numero_pago: 1,
-                metodo_pago: metodoPago,
-                monto_aplicado: totalFinalCobro,
-                monto_recibido: efRecibido,
-                cambio_devuelto: metodoPago === 'EFECTIVO' ? Math.max(0, efRecibido - totalFinalCobro) : 0,
-                items_pagados: itemsActivos.map((it) => ({
-                  item_id: it.id,
-                  nombre_producto: it.nombre_producto,
-                  cantidad: Number(it.cantidad || 1),
-                  subtotal: Number(it.subtotal || 0),
-                })),
-              },
-            ]
-          : [];
-
-    await onConfirmarCobro({
-      metodo_pago: metodoPago,
-      propina: metodoPago === 'CONSUMO_INTERNO' ? 0 : propinaValor,
-      descuento: metodoPago === 'CONSUMO_INTERNO' ? 0 : descuentoValor,
-      pago_efectivo: metodoPago === 'EFECTIVO' ? totalFinalCobro : metodoPago === 'MIXTO' ? efAplicado : 0,
-      pago_datafono: metodoPago === 'DATAFONO' ? totalFinalCobro : metodoPago === 'MIXTO' ? mixDat : 0,
-      pago_transferencia: metodoPago === 'TRANSFERENCIA' ? totalFinalCobro : metodoPago === 'MIXTO' ? mixTrf : 0,
-      pago_credito: metodoPago === 'CREDITO' ? totalFinalCobro : metodoPago === 'MIXTO' ? mixCred : 0,
-      efectivo_recibido: metodoPago === 'CONSUMO_INTERNO' ? 0 : efRecibido,
-      comision_tarjeta: metodoPago === 'CONSUMO_INTERNO' ? 0 : comisionTarjeta,
-      cliente_nombre:
-        metodoPago === 'CONSUMO_INTERNO' && areaConsumo === 'Cortesía / Degustación'
-          ? consumoNota.trim() || clienteCreditoNombre.trim()
-          : clienteCreditoNombre.trim() || ordenActiva.cliente_nombre || '',
-      cliente_telefono: clienteCreditoTel.trim() || ordenActiva.cliente_telefono || '',
-      area_consumo: areaConsumo,
-      pagos_detalle: singleDetalle,
-    });
-  };
+  }, [
+    focusZone,
+    focusedItemIdx,
+    itemsActivos,
+    selectedItemIds.length,
+    itemPagoMap,
+    pagoParcialMetodo,
+    pagoParcialMonto,
+    partialBilleteIdx,
+    onClose,
+    handleFinalConfirm,
+    handleAgregarTransaccion,
+  ]);
 
   const cambioDirecto =
     metodoPago === 'EFECTIVO'
-      ? Math.max(0, pagoConEfectivo - totalFinalCobro)
+      ? Math.max(0, pagoConEfectivo - montoObjetivoDerecha)
       : metodoPago === 'MIXTO'
-        ? Math.max(0, (pagoConEfectivo || 0) - (mixEf || faltaMixEfectivo))
+        ? Math.max(0, (pagoConEfectivo || 0) - faltaMixEfectivo)
+        : 0;
+
+  const faltaDirecto =
+    metodoPago === 'EFECTIVO'
+      ? Math.max(0, montoObjetivoDerecha - pagoConEfectivo)
+      : metodoPago === 'MIXTO'
+        ? Math.max(0, faltaMixEfectivo - (pagoConEfectivo || 0))
         : 0;
 
   return (
@@ -352,7 +621,7 @@ export default function PosCheckoutModal({
               F12 — Cobrar / Cerrar {ordenActiva.mesa_numero ? `Mesa ${ordenActiva.mesa_numero}` : ordenActiva.consecutivo}
             </h3>
             <p className="text-[11px] text-zinc-500">
-              Marca los insumos con checkbox para dividir pagos por persona (Datáfono, Transferencia o Efectivo con devuelta individual).
+              Usa ↑/↓ y Espacio para marcar insumos, baja al método/billetes o cobra el saldo a la derecha.
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-200 cursor-pointer">
@@ -362,12 +631,10 @@ export default function PosCheckoutModal({
 
         {/* Cuerpo en 2 Columnas */}
         <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 min-h-0 overflow-hidden">
-          {/* COLUMNA IZQUIERDA: Listado de Insumos + Impuestos + Checkboxes */}
+          {/* COLUMNA IZQUIERDA: Listado de Insumos + Pago Parcial */}
           <div
-            onClick={() => setActiveCol('ITEMS')}
-            className={`lg:col-span-6 border-b lg:border-b-0 lg:border-r border-zinc-200 flex flex-col min-h-0 overflow-hidden ${
-              activeCol === 'ITEMS' ? 'bg-sky-50/20' : 'bg-white'
-            }`}
+            onClick={() => setFocusZone('ITEMS')}
+            className="lg:col-span-6 border-b lg:border-b-0 lg:border-r border-zinc-200 flex flex-col min-h-0 overflow-hidden bg-white"
           >
             <div className="px-4 py-2.5 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between gap-2 shrink-0">
               <span className="text-xs font-bold text-zinc-800">
@@ -400,19 +667,25 @@ export default function PosCheckoutModal({
                 const impo = sub - base;
                 const pagoInfo = itemPagoMap.get(it.id);
                 const checked = selectedItemIds.includes(it.id);
-                const isFocused = activeCol === 'ITEMS' && focusedItemIdx === idx;
+                const isFocused = focusZone === 'ITEMS' && focusedItemIdx === idx;
 
                 return (
                   <label
                     key={it.id}
-                    onClick={() => setFocusedItemIdx(idx)}
+                    ref={(el) => {
+                      itemRowRefs.current[idx] = el;
+                    }}
+                    onClick={() => {
+                      setFocusedItemIdx(idx);
+                      setFocusZone('ITEMS');
+                    }}
                     className={`px-4 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition ${
                       pagoInfo
                         ? 'bg-emerald-50/60 opacity-80'
                         : checked
                           ? 'bg-blue-50/90'
                           : isFocused
-                            ? 'bg-zinc-100'
+                            ? 'bg-zinc-100 ring-1 ring-inset ring-blue-400'
                             : 'hover:bg-zinc-50'
                     }`}
                   >
@@ -453,18 +726,28 @@ export default function PosCheckoutModal({
             </div>
 
             {selectedItemIds.length > 0 && (
-              <div className="p-3 border-t border-blue-200 bg-blue-50 space-y-2.5 shrink-0">
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="p-3 border-t border-blue-200 bg-blue-50 space-y-2.5 shrink-0"
+              >
                 <div className="flex items-center justify-between text-xs font-bold text-blue-950">
                   <span>Insumos seleccionados ({selectedItemIds.length}):</span>
                   <span className="text-base tabular-nums">{formatMoney(sumaSeleccionados)}</span>
                 </div>
 
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(['EFECTIVO', 'DATAFONO', 'TRANSFERENCIA', 'CREDITO'] as const).map((m) => (
+                <div
+                  className={`grid grid-cols-4 gap-1.5 p-1 rounded-xl transition ${
+                    focusZone === 'PARTIAL_METODO' ? 'ring-2 ring-blue-600 bg-white/70' : ''
+                  }`}
+                >
+                  {PARTIAL_METODOS.map((m) => (
                     <button
                       key={m}
                       type="button"
-                      onClick={() => setPagoParcialMetodo(m)}
+                      onClick={() => {
+                        setPagoParcialMetodo(m);
+                        setFocusZone(m === 'EFECTIVO' ? 'PARTIAL_EFECTIVO_INPUT' : 'PARTIAL_NOTA');
+                      }}
                       className={`py-2 rounded-lg text-[11px] font-bold border cursor-pointer ${
                         pagoParcialMetodo === m
                           ? 'bg-blue-600 text-white border-blue-600'
@@ -477,27 +760,83 @@ export default function PosCheckoutModal({
                 </div>
 
                 {pagoParcialMetodo === 'EFECTIVO' && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs font-semibold text-zinc-700">
-                      <span>Billete entregado:</span>
-                      <span className="font-extrabold text-emerald-700 tabular-nums">
-                        Devolver: {formatMoney(Math.max(0, pagoParcialRecibido - pagoParcialMonto))}
-                      </span>
+                      <span>Dinero entregado ($):</span>
+                      {partialEfInsuficiente ? (
+                        <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-extrabold tabular-nums">
+                          Falta: {formatMoney(partialFalta)}
+                        </span>
+                      ) : partialCambio === 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold tabular-nums">
+                          Exacto · Devolver: $0
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-extrabold tabular-nums">
+                          Devolver: {formatMoney(partialCambio)}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
+
+                    <input
+                      ref={partialEfInputRef}
+                      type="number"
+                      value={pagoParcialRecibido || ''}
+                      onFocus={() => setFocusZone('PARTIAL_EFECTIVO_INPUT')}
+                      onChange={(e) => {
+                        setPagoParcialRecibido(Number(e.target.value || 0));
+                        setPartialBilleteIdx(-1);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setFocusZone('PARTIAL_METODO');
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setFocusZone('PARTIAL_BILLETES');
+                        } else if (e.key === 'Enter' && !partialEfInsuficiente) {
+                          e.preventDefault();
+                          setFocusZone('PARTIAL_NOTA');
+                        }
+                      }}
+                      placeholder="Ingresa el monto en efectivo..."
+                      className="w-full px-3 py-1.5 bg-white border border-blue-300 focus:border-blue-600 rounded-lg text-base font-extrabold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+
+                    <div
+                      className={`flex gap-1.5 flex-wrap p-1 rounded-lg ${
+                        focusZone === 'PARTIAL_BILLETES' ? 'ring-2 ring-blue-600 bg-white/80' : ''
+                      }`}
+                    >
                       <button
                         type="button"
-                        onClick={() => setPagoParcialRecibido(pagoParcialMonto)}
-                        className="px-2.5 py-1 rounded-md bg-white border border-zinc-300 text-[11px] font-bold cursor-pointer"
+                        onClick={() => {
+                          setPagoParcialRecibido(pagoParcialMonto);
+                          setPartialBilleteIdx(0);
+                        }}
+                        className={`px-2.5 py-1 rounded-md border text-[11px] font-bold cursor-pointer ${
+                          (focusZone === 'PARTIAL_BILLETES' && partialBilleteIdx === 0) ||
+                          pagoParcialRecibido === pagoParcialMonto
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white border-zinc-300 text-zinc-800 hover:bg-zinc-100'
+                        }`}
                       >
                         Exacto
                       </button>
-                      {BILLETES.map((b) => (
+                      {BILLETES.map((b, bIdx) => (
                         <button
                           key={b}
                           type="button"
-                          onClick={() => setPagoParcialRecibido(b)}
-                          className="px-2.5 py-1 rounded-md bg-white border border-zinc-300 text-[11px] font-bold tabular-nums cursor-pointer"
+                          onClick={() => {
+                            setPagoParcialRecibido(b);
+                            setPartialBilleteIdx(bIdx + 1);
+                          }}
+                          className={`px-2.5 py-1 rounded-md border text-[11px] font-bold tabular-nums cursor-pointer ${
+                            (focusZone === 'PARTIAL_BILLETES' && partialBilleteIdx === bIdx + 1) ||
+                            pagoParcialRecibido === b
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white border-zinc-300 text-zinc-800 hover:bg-zinc-100'
+                          }`}
                         >
                           {formatMoney(b)}
                         </button>
@@ -508,16 +847,33 @@ export default function PosCheckoutModal({
 
                 <div className="flex gap-2">
                   <input
+                    ref={partialNotaRef}
                     type="text"
                     value={pagoParcialNota}
+                    onFocus={() => setFocusZone('PARTIAL_NOTA')}
                     onChange={(e) => setPagoParcialNota(e.target.value)}
-                    placeholder="Nota / Persona (opcional)"
-                    className="flex-1 px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs bg-white"
+                    onKeyDown={(e) => {
+                      if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setFocusZone(
+                          pagoParcialMetodo === 'EFECTIVO' ? 'PARTIAL_BILLETES' : 'PARTIAL_METODO'
+                        );
+                      } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                        e.preventDefault();
+                        setFocusZone('PARTIAL_CONFIRM');
+                      }
+                    }}
+                    placeholder="Observación / Persona (opcional)"
+                    className="flex-1 px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs bg-white outline-none focus:border-blue-600"
                   />
                   <button
+                    ref={partialConfirmRef}
                     type="button"
-                    onClick={handleAgregarTransaccion}
-                    className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    disabled={busyAction || partialEfInsuficiente || pagoParcialMonto <= 0}
+                    onClick={() => void handleAgregarTransaccion()}
+                    className={`px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 disabled:opacity-45 text-white text-xs font-bold flex items-center gap-1 cursor-pointer ${
+                      focusZone === 'PARTIAL_CONFIRM' ? 'ring-2 ring-blue-600' : ''
+                    }`}
                   >
                     <Plus className="w-3.5 h-3.5" /> Registrar Pago
                   </button>
@@ -526,11 +882,8 @@ export default function PosCheckoutModal({
             )}
           </div>
 
-          {/* COLUMNA DERECHA: Totales, Faltante, Métodos, Billetes y Pagos Registrados */}
-          <div
-            onClick={() => setActiveCol('PAGO')}
-            className="lg:col-span-6 p-4 overflow-y-auto space-y-3.5"
-          >
+          {/* COLUMNA DERECHA: Totales, Propina, Pagos Registrados y Cobro de Saldo */}
+          <div className="lg:col-span-6 p-4 overflow-y-auto space-y-3.5">
             {/* Cuadre en Vivo */}
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="p-2.5 rounded-xl bg-zinc-100 border border-zinc-200">
@@ -559,51 +912,8 @@ export default function PosCheckoutModal({
               </div>
             </div>
 
-            {/* Lista de Pagos Registrados (División de Cuenta) */}
-            {pagosRegistrados.length > 0 && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2">
-                <div className="text-xs font-bold text-zinc-800">
-                  Transacciones Registradas en este Ticket ({pagosRegistrados.length})
-                </div>
-                <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                  {pagosRegistrados.map((pg, idx) => (
-                    <div
-                      key={idx}
-                      className="px-3 py-2 rounded-lg bg-white border border-zinc-200 flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <span className="font-bold text-zinc-900">
-                          Pago #{pg.numero_pago} · {pg.metodo_pago}
-                        </span>
-                        {pg.cambio_devuelto > 0 && (
-                          <span className="ml-2 text-blue-700 font-semibold">
-                            (Pagó {formatMoney(pg.monto_recibido)} · Devuelta {formatMoney(pg.cambio_devuelto)})
-                          </span>
-                        )}
-                        {pg.items_pagados.length > 0 && (
-                          <div className="text-[11px] text-zinc-500">
-                            {pg.items_pagados.map((i) => `${i.cantidad}x ${i.nombre_producto}`).join(', ')}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold tabular-nums">{formatMoney(pg.monto_aplicado)}</span>
-                        <button
-                          type="button"
-                          onClick={() => setPagosRegistrados((prev) => prev.filter((_, i) => i !== idx))}
-                          className="p-1 text-zinc-400 hover:text-red-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Propina y Descuento */}
-            {metodoPago !== 'CONSUMO_INTERNO' && pagosRegistrados.length === 0 && (
+            {/* Propina y Descuento SIEMPRE visibles */}
+            {metodoPago !== 'CONSUMO_INTERNO' && (
               <div className={`grid ${habilitaPropinas ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-xs`}>
                 {habilitaPropinas && (
                   <div>
@@ -624,7 +934,7 @@ export default function PosCheckoutModal({
                       type="number"
                       value={propinaValor}
                       onChange={(e) => setPropinaValor(Number(e.target.value || 0))}
-                      className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold tabular-nums"
+                      className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </div>
                 )}
@@ -635,222 +945,298 @@ export default function PosCheckoutModal({
                     type="number"
                     value={descuentoValor}
                     onChange={(e) => setDescuentoValor(Number(e.target.value || 0))}
-                    className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold tabular-nums"
+                    className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
                 </div>
               </div>
             )}
 
-            {/* Selector de Método */}
-            {pagosRegistrados.length === 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
-                {(
-                  [
-                    { id: 'EFECTIVO', label: 'EFECTIVO' },
-                    { id: 'DATAFONO', label: 'DATÁFONO' },
-                    { id: 'TRANSFERENCIA', label: 'TRANSF.' },
-                    { id: 'CREDITO', label: 'CRÉDITO' },
-                    { id: 'MIXTO', label: 'MIXTO' },
-                    { id: 'CONSUMO_INTERNO', label: 'CONSUMO' },
-                  ] as const
-                ).map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setMetodoPago(m.id)}
-                    className={`py-2 rounded-lg text-[11px] font-bold cursor-pointer ${
-                      metodoPago === m.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-950'
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Pago Efectivo Directo o Mixto */}
-            {(metodoPago === 'EFECTIVO' || metodoPago === 'MIXTO') && pagosRegistrados.length === 0 && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2.5 text-xs">
-                {metodoPago === 'MIXTO' && (
-                  <>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="font-semibold text-zinc-700">Datáfono</label>
-                        <input
-                          type="number"
-                          value={mixDat}
-                          onChange={(e) => setMixDat(Number(e.target.value || 0))}
-                          className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold mt-1 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-zinc-700">Transferencia</label>
-                        <input
-                          type="number"
-                          value={mixTrf}
-                          onChange={(e) => setMixTrf(Number(e.target.value || 0))}
-                          className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold mt-1 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-zinc-700">Crédito</label>
-                        <input
-                          type="number"
-                          value={mixCred}
-                          onChange={(e) => setMixCred(Number(e.target.value || 0))}
-                          className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold mt-1 bg-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between font-bold text-amber-950">
-                      <span>Falta para completar en Efectivo:</span>
-                      <span className="text-sm tabular-nums">{formatMoney(faltaMixEfectivo)}</span>
-                    </div>
-                  </>
-                )}
-
-                <div className="flex items-center justify-between font-semibold text-zinc-700">
-                  <span>Efectivo recibido del cliente:</span>
-                  <span className="text-base font-extrabold tabular-nums text-blue-700">
-                    Cambio: {formatMoney(cambioDirecto)}
-                  </span>
+            {/* Lista de Pagos Registrados */}
+            {pagosRegistrados.length > 0 && (
+              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2">
+                <div className="text-xs font-bold text-zinc-800">
+                  Transacciones Registradas en este Ticket ({pagosRegistrados.length})
                 </div>
-                <input
-                  type="number"
-                  value={pagoConEfectivo}
-                  onChange={(e) => {
-                    setPagoConEfectivo(Number(e.target.value || 0));
-                    if (metodoPago === 'MIXTO') setMixEf(faltaMixEfectivo);
-                  }}
-                  className="w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-xl text-lg font-extrabold tabular-nums outline-none"
-                />
-                <div className="flex gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setPagoConEfectivo(metodoPago === 'MIXTO' ? faltaMixEfectivo : totalFinalCobro)}
-                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 font-bold cursor-pointer"
-                  >
-                    Exacto
-                  </button>
-                  {BILLETES.map((b) => (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => setPagoConEfectivo(b)}
-                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 border border-zinc-300 font-bold tabular-nums cursor-pointer"
+                <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                  {pagosRegistrados.map((pg, idx) => (
+                    <div
+                      key={pg.id || idx}
+                      className="px-3 py-2 rounded-lg bg-white border border-zinc-200 flex items-center justify-between text-xs"
                     >
-                      {formatMoney(b)}
-                    </button>
+                      <div className="min-w-0">
+                        <span className="font-bold text-zinc-900">
+                          Pago #{pg.numero_pago} · {pg.metodo_pago}
+                        </span>
+                        {pg.nota && <span className="ml-1.5 text-zinc-500">({pg.nota})</span>}
+                        {pg.metodo_pago === 'EFECTIVO' && (
+                          <span className="ml-2 text-blue-700 font-semibold">
+                            Pagó {formatMoney(pg.monto_recibido)} · Devuelta {formatMoney(pg.cambio_devuelto)}
+                          </span>
+                        )}
+                        {pg.items_pagados && pg.items_pagados.length > 0 && (
+                          <div className="text-[11px] text-zinc-500 truncate">
+                            {pg.items_pagados.map((i) => `${i.cantidad}x ${i.nombre_producto}`).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-extrabold tabular-nums">{formatMoney(pg.monto_aplicado)}</span>
+                        <button
+                          type="button"
+                          onClick={() => void handleEliminarPago(pg, idx)}
+                          className="p-1 text-zinc-400 hover:text-red-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {metodoPago === 'DATAFONO' && pagosRegistrados.length === 0 && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-xs">
-                <label className="font-semibold text-zinc-700 block mb-1">Comisión Bancaria Datáfono (opcional $)</label>
-                <input
-                  type="number"
-                  value={comisionTarjeta}
-                  onChange={(e) => setComisionTarjeta(Number(e.target.value || 0))}
-                  className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg font-bold"
-                />
-              </div>
-            )}
-
-            {(metodoPago === 'CREDITO' || (metodoPago === 'MIXTO' && mixCred > 0)) && pagosRegistrados.length === 0 && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2 text-xs">
-                <div className="font-bold text-zinc-800">Cliente para Cargo a Crédito</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={clienteCreditoNombre}
-                    onChange={(e) => setClienteCreditoNombre(e.target.value)}
-                    placeholder="Nombre del cliente"
-                    list="clientes-credito-list-modal"
-                    className="px-3 py-2 bg-white border border-zinc-300 rounded-lg font-semibold"
-                  />
-                  <datalist id="clientes-credito-list-modal">
-                    {creditosClientes.map((c) => (
-                      <option key={c.cliente_nombre} value={c.cliente_nombre} />
-                    ))}
-                  </datalist>
-                  <input
-                    type="text"
-                    value={clienteCreditoTel}
-                    onChange={(e) => setClienteCreditoTel(e.target.value)}
-                    placeholder="Teléfono (opcional)"
-                    className="px-3 py-2 bg-white border border-zinc-300 rounded-lg"
-                  />
-                </div>
-              </div>
-            )}
-
-            {metodoPago === 'CONSUMO_INTERNO' && (
-              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2.5 text-xs">
-                <div className="font-bold text-zinc-900">Consumo Interno — Selecciona Cargo / Área ($0 Caja)</div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {AREAS_CONSUMO.map((area) => (
+            {/* Cobro del Total o Saldo Restante SIEMPRE visible mientras falte por cobrar */}
+            {(pagosRegistrados.length === 0 || faltaPorCobrar > 0) && (
+              <>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
+                  {(
+                    [
+                      { id: 'EFECTIVO' as const, label: 'EFECTIVO' },
+                      { id: 'DATAFONO' as const, label: 'DATÁFONO' },
+                      { id: 'TRANSFERENCIA' as const, label: 'TRANSF.' },
+                      { id: 'CREDITO' as const, label: 'CRÉDITO' },
+                      { id: 'MIXTO' as const, label: 'MIXTO' },
+                      ...(pagosRegistrados.length === 0
+                        ? [{ id: 'CONSUMO_INTERNO' as const, label: 'CONSUMO' }]
+                        : []),
+                    ]
+                  ).map((m) => (
                     <button
-                      key={area}
+                      key={m.id}
                       type="button"
-                      onClick={() => {
-                        setAreaConsumo(area);
-                        setClienteCreditoNombre('');
-                        setConsumoNota('');
-                      }}
-                      className={`py-2 px-2.5 rounded-xl border font-bold text-left cursor-pointer ${
-                        areaConsumo === area ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'
+                      onClick={() => setMetodoPago(m.id)}
+                      className={`py-2 rounded-lg text-[11px] font-bold cursor-pointer ${
+                        metodoPago === m.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-950'
                       }`}
                     >
-                      {area}
+                      {m.label}
                     </button>
                   ))}
                 </div>
-                {areaConsumo === 'Cortesía / Degustación' ? (
-                  <textarea
-                    rows={3}
-                    value={consumoNota}
-                    onChange={(e) => setConsumoNota(e.target.value)}
-                    placeholder="Ej: Cortesía visita ingenieros / degustación..."
-                    className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-xl text-xs"
-                  />
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-32 overflow-y-auto">
-                    {operarios
-                      .filter((op) => op.cargo_area === areaConsumo)
-                      .map((op) => (
+
+                {(metodoPago === 'EFECTIVO' || metodoPago === 'MIXTO') && (
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2.5 text-xs">
+                    {metodoPago === 'MIXTO' && (
+                      <>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="font-semibold text-zinc-700">Datáfono</label>
+                            <input
+                              type="number"
+                              value={mixDat}
+                              onChange={(e) => setMixDat(Number(e.target.value || 0))}
+                              className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold mt-1 bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-zinc-700">Transferencia</label>
+                            <input
+                              type="number"
+                              value={mixTrf}
+                              onChange={(e) => setMixTrf(Number(e.target.value || 0))}
+                              className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold mt-1 bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-zinc-700">Crédito</label>
+                            <input
+                              type="number"
+                              value={mixCred}
+                              onChange={(e) => setMixCred(Number(e.target.value || 0))}
+                              className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold mt-1 bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between font-bold text-amber-950">
+                          <span>Falta para completar en Efectivo:</span>
+                          <span className="text-sm tabular-nums">{formatMoney(faltaMixEfectivo)}</span>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="flex items-center justify-between font-semibold text-zinc-700">
+                      <span>
+                        {pagosRegistrados.length > 0
+                          ? `Efectivo recibido para saldo (${formatMoney(montoObjetivoDerecha)}):`
+                          : 'Efectivo recibido del cliente:'}
+                      </span>
+                      {faltaDirecto > 0 ? (
+                        <span className="text-sm font-extrabold tabular-nums text-rose-700">
+                          Falta: {formatMoney(faltaDirecto)}
+                        </span>
+                      ) : (
+                        <span className="text-base font-extrabold tabular-nums text-blue-700">
+                          Cambio: {formatMoney(cambioDirecto)}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      value={pagoConEfectivo || ''}
+                      onChange={(e) => setPagoConEfectivo(Number(e.target.value || 0))}
+                      placeholder="Ingresa monto entregado..."
+                      className="w-full px-3 py-2 bg-white border border-zinc-300 focus:border-blue-600 rounded-xl text-lg font-extrabold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <div className="flex gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPagoConEfectivo(metodoPago === 'MIXTO' ? faltaMixEfectivo : montoObjetivoDerecha)
+                        }
+                        className={`px-3 py-1.5 rounded-lg border font-bold cursor-pointer ${
+                          pagoConEfectivo === (metodoPago === 'MIXTO' ? faltaMixEfectivo : montoObjetivoDerecha)
+                            ? 'bg-zinc-900 text-white border-zinc-900'
+                            : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'
+                        }`}
+                      >
+                        Exacto
+                      </button>
+                      {BILLETES.map((b) => (
                         <button
-                          key={op.id}
+                          key={b}
                           type="button"
-                          onClick={() => setClienteCreditoNombre(op.nombre_cajero)}
-                          className={`p-2 rounded-xl border text-left cursor-pointer ${
-                            clienteCreditoNombre === op.nombre_cajero
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-white text-zinc-800 border-zinc-300'
+                          onClick={() => setPagoConEfectivo(b)}
+                          className={`px-3 py-1.5 rounded-lg border font-bold tabular-nums cursor-pointer ${
+                            pagoConEfectivo === b
+                              ? 'bg-zinc-900 text-white border-zinc-900'
+                              : 'bg-white hover:bg-zinc-100 border-zinc-300 text-zinc-800'
                           }`}
                         >
-                          <div className="font-bold truncate">{op.nombre_cajero}</div>
+                          {formatMoney(b)}
                         </button>
                       ))}
+                    </div>
                   </div>
                 )}
-              </div>
+
+                {metodoPago === 'DATAFONO' && (
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-xs">
+                    <label className="font-semibold text-zinc-700 block mb-1">
+                      Comisión Bancaria Datáfono (opcional $)
+                    </label>
+                    <input
+                      type="number"
+                      value={comisionTarjeta}
+                      onChange={(e) => setComisionTarjeta(Number(e.target.value || 0))}
+                      className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg font-bold"
+                    />
+                  </div>
+                )}
+
+                {(metodoPago === 'CREDITO' || (metodoPago === 'MIXTO' && mixCred > 0)) && (
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2 text-xs">
+                    <div className="font-bold text-zinc-800">Cliente para Cargo a Crédito</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={clienteCreditoNombre}
+                        onChange={(e) => setClienteCreditoNombre(e.target.value)}
+                        placeholder="Nombre del cliente"
+                        list="clientes-credito-list-modal"
+                        className="px-3 py-2 bg-white border border-zinc-300 rounded-lg font-semibold"
+                      />
+                      <datalist id="clientes-credito-list-modal">
+                        {creditosClientes.map((c) => (
+                          <option key={c.cliente_nombre} value={c.cliente_nombre} />
+                        ))}
+                      </datalist>
+                      <input
+                        type="text"
+                        value={clienteCreditoTel}
+                        onChange={(e) => setClienteCreditoTel(e.target.value)}
+                        placeholder="Teléfono (opcional)"
+                        className="px-3 py-2 bg-white border border-zinc-300 rounded-lg"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {metodoPago === 'CONSUMO_INTERNO' && pagosRegistrados.length === 0 && (
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 space-y-2.5 text-xs">
+                    <div className="font-bold text-zinc-900">
+                      Consumo Interno — Selecciona Cargo / Área ($0 Caja)
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {AREAS_CONSUMO.map((area) => (
+                        <button
+                          key={area}
+                          type="button"
+                          onClick={() => {
+                            setAreaConsumo(area);
+                            setClienteCreditoNombre('');
+                            setConsumoNota('');
+                          }}
+                          className={`py-2 px-2.5 rounded-xl border font-bold text-left cursor-pointer ${
+                            areaConsumo === area
+                              ? 'bg-zinc-900 text-white border-zinc-900'
+                              : 'bg-white text-zinc-700 border-zinc-300'
+                          }`}
+                        >
+                          {area}
+                        </button>
+                      ))}
+                    </div>
+                    {areaConsumo === 'Cortesía / Degustación' ? (
+                      <textarea
+                        rows={3}
+                        value={consumoNota}
+                        onChange={(e) => setConsumoNota(e.target.value)}
+                        placeholder="Ej: Cortesía visita ingenieros / degustación..."
+                        className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-xl text-xs"
+                      />
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-32 overflow-y-auto">
+                        {operarios
+                          .filter((op) => op.cargo_area === areaConsumo)
+                          .map((op) => (
+                            <button
+                              key={op.id}
+                              type="button"
+                              onClick={() => setClienteCreditoNombre(op.nombre_cajero)}
+                              className={`p-2 rounded-xl border text-left cursor-pointer ${
+                                clienteCreditoNombre === op.nombre_cajero
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-white text-zinc-800 border-zinc-300'
+                              }`}
+                            >
+                              <div className="font-bold truncate">{op.nombre_cajero}</div>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             <button
+              ref={finalConfirmRef}
               type="button"
-              disabled={busyAction || (pagosRegistrados.length > 0 && faltaPorCobrar > 0)}
+              disabled={busyAction || rightEfInsuficiente}
               onClick={() => void handleFinalConfirm()}
-              className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-45 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
+              className={`w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-45 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer ${
+                focusZone === 'FINAL_CONFIRM' ? 'ring-4 ring-blue-300' : ''
+              }`}
             >
               <Check className="w-4 h-4" />
-              {metodoPago === 'CONSUMO_INTERNO'
+              {metodoPago === 'CONSUMO_INTERNO' && pagosRegistrados.length === 0
                 ? 'Registrar Consumo Interno ($0 Caja)'
-                : pagosRegistrados.length > 0 && faltaPorCobrar > 0
-                  ? `Falta ${formatMoney(faltaPorCobrar)} para cerrar el ticket`
-                  : 'Confirmar Cobro e Imprimir Ticket (Ctrl+Enter)'}
+                : rightEfInsuficiente
+                  ? `Falta ${formatMoney(faltaDirecto)} en efectivo para cerrar`
+                  : pagosRegistrados.length > 0 && faltaPorCobrar > 0
+                    ? `Cobrar Saldo (${formatMoney(faltaPorCobrar)}) e Imprimir Ticket (Ctrl+Enter)`
+                    : 'Confirmar Cobro e Imprimir Ticket (Ctrl+Enter)'}
             </button>
           </div>
         </div>

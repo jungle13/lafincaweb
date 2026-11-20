@@ -43,6 +43,19 @@ interface PosSalesHistoryViewProps {
 type SubTab = 'FACTURAS' | 'TOTALIZADOS' | 'CONSUMOS';
 type QuickFilter = 'TODOS' | 'CONSUMO' | 'DEVOLUCIONES' | 'CREDITO';
 
+function formatElapsedDuration(startIso?: string | null, endIso?: string | null): string | null {
+  if (!startIso || !endIso) return null;
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  const totalSec = Math.floor((end - start) / 1000);
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if (hrs > 0) return `${hrs}h ${String(mins).padStart(2, '0')}m`;
+  return `${mins}m ${String(secs).padStart(2, '0')}s`;
+}
+
 function getChannelBadge(o: PosOrden) {
   if (o.canal_venta === 'SALON_MESA' && o.mesa_numero) {
     return {
@@ -459,6 +472,12 @@ export default function PosSalesHistoryView({
                         </div>
                         <div className="text-[11px] text-zinc-400">
                           {o.metodo_pago} · Pagado: {formatColombiaTime(o.pagado_at || o.closed_at || o.created_at)}
+                          {(() => {
+                            const dur = formatElapsedDuration(o.created_at, o.pagado_at || o.closed_at);
+                            return dur ? (
+                              <span className="ml-1.5 text-amber-700 font-semibold">· ⏱ {dur}</span>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -509,6 +528,17 @@ export default function PosSalesHistoryView({
                         <Clock className="w-3.5 h-3.5 text-zinc-400" />
                         Pedido: <b>{formatColombiaTime(ordenActiva.created_at)}</b> · Pago:{' '}
                         <b>{formatColombiaTime(ordenActiva.pagado_at || ordenActiva.closed_at || ordenActiva.created_at)}</b>
+                        {(() => {
+                          const dur = formatElapsedDuration(
+                            ordenActiva.created_at,
+                            ordenActiva.pagado_at || ordenActiva.closed_at
+                          );
+                          return dur ? (
+                            <span className="ml-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900">
+                              Duración: {dur}
+                            </span>
+                          ) : null;
+                        })()}
                       </span>
                     </div>
                   </div>

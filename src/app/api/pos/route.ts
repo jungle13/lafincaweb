@@ -801,6 +801,62 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, orden: data });
     }
 
+    // 6b. Registrar Pago Parcial Persistente (permite salir del modal sin perder abonos)
+    if (action === 'REGISTRAR_PAGO_PARCIAL') {
+      const {
+        orden_id,
+        metodo_pago = 'EFECTIVO',
+        monto_aplicado = 0,
+        monto_recibido = 0,
+        cambio_devuelto = 0,
+        items_pagados = [],
+        nota = '',
+      } = body;
+      if (!orden_id) {
+        return NextResponse.json({ success: false, error: 'Falta orden_id' }, { status: 400 });
+      }
+      const { data: prevPagos } = await supabase
+        .from('pos_orden_pagos')
+        .select('numero_pago')
+        .eq('orden_id', orden_id)
+        .order('numero_pago', { ascending: false })
+        .limit(1);
+      const nextNum = prevPagos && prevPagos.length > 0 ? Number(prevPagos[0].numero_pago || 0) + 1 : 1;
+      const { data: inserted, error: errIns } = await supabase
+        .from('pos_orden_pagos')
+        .insert({
+          orden_id,
+          fecha: todayStr,
+          caja_nombre: cajaNombre,
+          numero_pago: nextNum,
+          metodo_pago,
+          monto_aplicado: Number(monto_aplicado || 0),
+          monto_recibido: Number(monto_recibido || monto_aplicado || 0),
+          cambio_devuelto: Number(cambio_devuelto || 0),
+          items_pagados: Array.isArray(items_pagados) ? items_pagados : [],
+          nota: String(nota || '').trim(),
+        })
+        .select('*')
+        .single();
+      if (errIns) throw errIns;
+      return NextResponse.json({ success: true, pago: inserted });
+    }
+
+    // 6c. Eliminar Pago Parcial Persistente
+    if (action === 'ELIMINAR_PAGO_PARCIAL') {
+      const { pago_id, orden_id } = body;
+      if (!pago_id || !orden_id) {
+        return NextResponse.json({ success: false, error: 'Falta pago_id u orden_id' }, { status: 400 });
+      }
+      const { error: errDel } = await supabase
+        .from('pos_orden_pagos')
+        .delete()
+        .eq('id', pago_id)
+        .eq('orden_id', orden_id);
+      if (errDel) throw errDel;
+      return NextResponse.json({ success: true });
+    }
+
     // 7. Facturar / Cobrar Orden (con Propina, Descuento, Pago Mixto e Impacto en Ventas + Caja)
     if (action === 'FACTURAR_ORDEN') {
       const {
@@ -927,8 +983,9 @@ export async function POST(request: NextRequest) {
         .single();
       if (errFac) throw errFac;
 
-      // Persistir desglose de transacciones individuales en pos_orden_pagos
+      // Persistir desglose de transacciones individuales en pos_orden_pagos (reemplazando parciales previos)
       if (pagosArray.length > 0) {
+        await supabase.from('pos_orden_pagos').delete().eq('orden_id', orden_id);
         await supabase.from('pos_orden_pagos').insert(
           pagosArray.map((pg: any, idx: number) => ({
             orden_id,

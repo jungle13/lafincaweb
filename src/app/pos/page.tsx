@@ -2204,6 +2204,11 @@ export default function ElianaPosPage() {
                     : isSelected
                       ? 'bg-amber-100 text-amber-950 border-amber-400 shadow-xs'
                       : 'bg-amber-50/80 text-amber-800 border-amber-200 hover:bg-amber-100/70';
+              const pagadoParcialOrd = (ord.pagos_detalle || []).reduce(
+                (acc, p) => acc + Number(p.monto_aplicado || 0),
+                0
+              );
+              const faltaOrd = Math.max(0, Number(ord.gran_total || 0) - pagadoParcialOrd);
               return (
                 <button
                   key={ord.id}
@@ -2212,6 +2217,11 @@ export default function ElianaPosPage() {
                 >
                   <span>{getOrdenTabLabel(ord)}</span>
                   <span className="text-xs font-extrabold tabular-nums">{formatMoney(ord.gran_total)}</span>
+                  {pagadoParcialOrd > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold tabular-nums">
+                      Abono {formatMoney(pagadoParcialOrd)} · Falta {formatMoney(faltaOrd)}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -2250,6 +2260,24 @@ export default function ElianaPosPage() {
                           Cliente: {ordenActiva.cliente_nombre}
                         </span>
                       )}
+                      {ordenActiva.created_at && (
+                        <span className="px-2 py-0.5 rounded-md bg-white/80 border border-black/10 text-xs font-bold tabular-nums inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDurationHMS(ordenActiva.created_at, shiftNowMs)}
+                        </span>
+                      )}
+                      {(ordenActiva.pagos_detalle?.length || 0) > 0 && (() => {
+                        const abonado = (ordenActiva.pagos_detalle || []).reduce(
+                          (a, p) => a + Number(p.monto_aplicado || 0),
+                          0
+                        );
+                        const falta = Math.max(0, Number(ordenActiva.gran_total || 0) - abonado);
+                        return (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-xs font-bold tabular-nums">
+                            Pagos ({ordenActiva.pagos_detalle?.length}): {formatMoney(abonado)} · Falta {formatMoney(falta)}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       {posConfig.habilitaMesas && (
@@ -2628,13 +2656,35 @@ export default function ElianaPosPage() {
                   <div className="text-[11px] text-zinc-500">{m.zona}</div>
                   {ocupada && m.orden_activa ? (
                     <div className="mt-2 pt-2 border-t border-zinc-200">
-                      <div className="font-bold tabular-nums text-zinc-950">{formatMoney(m.orden_activa.gran_total)}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-bold tabular-nums text-zinc-950">{formatMoney(m.orden_activa.gran_total)}</div>
+                        {(m.abierta_at || m.orden_activa.created_at) && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-bold tabular-nums text-amber-900">
+                            <Clock className="w-3 h-3" />
+                            {formatDurationHMS(m.abierta_at || m.orden_activa.created_at!, shiftNowMs)}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-zinc-500">{m.orden_activa.items?.length || 0} ítems • {m.mesero_actual || cajeroNombre}</div>
-                      {(m.caja_ocupante || m.orden_activa.caja_nombre) && (
-                        <div className="mt-1 inline-block px-1.5 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-bold text-zinc-700">
-                          Caja: {m.caja_ocupante || m.orden_activa.caja_nombre}
-                        </div>
-                      )}
+                      <div className="mt-1 flex items-center gap-1 flex-wrap">
+                        {(m.caja_ocupante || m.orden_activa.caja_nombre) && (
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[10px] font-bold text-zinc-700">
+                            Caja: {m.caja_ocupante || m.orden_activa.caja_nombre}
+                          </span>
+                        )}
+                        {(m.orden_activa.pagos_detalle?.length || 0) > 0 && (() => {
+                          const abonado = (m.orden_activa.pagos_detalle || []).reduce(
+                            (a, p) => a + Number(p.monto_aplicado || 0),
+                            0
+                          );
+                          const falta = Math.max(0, Number(m.orden_activa.gran_total || 0) - abonado);
+                          return (
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-200 text-[10px] font-bold tabular-nums text-emerald-900">
+                              Pagado {formatMoney(abonado)} · Falta {formatMoney(falta)}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                   ) : (
                     <div className="mt-2 text-xs text-zinc-500 font-medium">Clic para abrir</div>
@@ -2665,6 +2715,12 @@ export default function ElianaPosPage() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-sm text-zinc-900">{dom.consecutivo}</span>
                     <div className="flex items-center gap-1.5">
+                      {dom.estado !== 'FACTURADA' && dom.created_at && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-900 tabular-nums inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDurationHMS(dom.created_at, shiftNowMs)}
+                        </span>
+                      )}
                       {dom.caja_nombre && (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-800">
                           Caja: {dom.caja_nombre}
@@ -2802,6 +2858,32 @@ export default function ElianaPosPage() {
           habilitaPropinas={posConfig.habilitaPropinas}
           busyAction={busyAction}
           onClose={() => setShowCobroModal(false)}
+          onRegistrarPagoParcial={async (pago) => {
+            try {
+              const res = await executePosAction('REGISTRAR_PAGO_PARCIAL', {
+                orden_id: ordenActiva.id,
+                ...pago,
+              });
+              await fetchPosState();
+              notify('ok', `Pago parcial de ${formatMoney(pago.monto_aplicado)} guardado.`);
+              return res?.pago || null;
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error guardando pago parcial');
+              return null;
+            }
+          }}
+          onEliminarPagoParcial={async (pagoId) => {
+            try {
+              await executePosAction('ELIMINAR_PAGO_PARCIAL', {
+                orden_id: ordenActiva.id,
+                pago_id: pagoId,
+              });
+              await fetchPosState();
+              notify('ok', 'Pago parcial eliminado.');
+            } catch (e: unknown) {
+              notify('err', e instanceof Error ? e.message : 'Error eliminando pago parcial');
+            }
+          }}
           onConfirmarCobro={handleConfirmarCobro}
         />
       )}
