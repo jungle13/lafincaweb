@@ -1277,16 +1277,13 @@ export default function ElianaPosPage() {
         return;
       }
 
-      // Flecha Derecha: categorías automáticas / grilla de productos
+      // Flecha Derecha: entra a categorías / avanza categorías / avanza en grilla / vuelve de ticket a categorías
       if (e.key === 'ArrowRight') {
         if (navZone === 'SEARCH' && caretAtEnd && touchMode && categoriasProductos.length > 0) {
           e.preventDefault();
           captureInputRef.current?.blur();
-          const nextCatIdx = Math.min(categoriasProductos.length - 1, catIdx + 1);
-          setCatFiltro(categoriasProductos[nextCatIdx]);
-          setFocusedProductIndex(0);
           setNavZone('CATEGORIES');
-          categoryBtnRefs.current[nextCatIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+          categoryBtnRefs.current[catIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
           return;
         }
         if (navZone === 'CATEGORIES' && categoriasProductos.length > 0) {
@@ -1304,14 +1301,10 @@ export default function ElianaPosPage() {
           productCardRefs.current[nextIdx]?.scrollIntoView({ block: 'nearest' });
           return;
         }
-        if (navZone === 'TICKET' && touchMode) {
+        if (navZone === 'TICKET' && touchMode && categoriasProductos.length > 0) {
           e.preventDefault();
-          if (productosFiltrados.length > 0) {
-            setNavZone('PRODUCTS');
-            productCardRefs.current[focusedProductIndex]?.scrollIntoView({ block: 'nearest' });
-          } else {
-            setNavZone('CATEGORIES');
-          }
+          setNavZone('CATEGORIES');
+          categoryBtnRefs.current[catIdx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
           return;
         }
       }
@@ -1953,9 +1946,11 @@ export default function ElianaPosPage() {
                         }}
                         className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer border transition-all ${
                           isCatActive
-                            ? 'bg-zinc-900 text-white border-zinc-900'
+                            ? isCatFocused
+                              ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-400 ring-offset-1 shadow-sm'
+                              : 'bg-zinc-900 text-white border-zinc-900'
                             : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'
-                        } ${isCatFocused ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}
+                        }`}
                       >
                         {c}
                       </button>
