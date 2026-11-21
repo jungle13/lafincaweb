@@ -675,6 +675,11 @@ export default function PosSalesHistoryView({
                                 <span className="font-extrabold text-zinc-900">
                                   Aplicado: {formatMoney(pg.monto_aplicado)}
                                 </span>
+                                {Number(pg.propina_monto || 0) > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                    Propina: +{formatMoney(pg.propina_monto || 0)}
+                                  </span>
+                                )}
                                 {pg.metodo_pago === 'EFECTIVO' && (
                                   <>
                                     <span className="text-zinc-600">

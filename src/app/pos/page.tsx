@@ -235,6 +235,8 @@ export default function ElianaPosPage() {
   const [categorias, setCategorias] = useState<PosCategoria[]>([]);
   const [showMoreToolsMenu, setShowMoreToolsMenu] = useState(false);
   const [showAsignarMesaModal, setShowAsignarMesaModal] = useState(false);
+  const [focusedAsignarMesaIdx, setFocusedAsignarMesaIdx] = useState(0);
+  const asignarMesaBtnRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [domModoConversion, setDomModoConversion] = useState(false);
   const [showAsignarMeseroModal, setShowAsignarMeseroModal] = useState(false);
   const [focusedMeseroIdx, setFocusedMeseroIdx] = useState(0);
@@ -1045,7 +1047,6 @@ export default function ElianaPosPage() {
       }
 
       await printThermalTicket(ticketData);
-      if (payload.pago_efectivo > 0) await openCashDrawer();
 
       setShowCobroModal(false);
       setOrdenActivaId(null);
@@ -1063,6 +1064,39 @@ export default function ElianaPosPage() {
       setBusyAction(false);
     }
   };
+
+  const openAsignarMesaModal = useCallback(() => {
+    const firstLibre = mesas.findIndex(
+      (m) => m.estado === 'LIBRE' || (ordenActiva && m.orden_activa_id === ordenActiva.id)
+    );
+    setFocusedAsignarMesaIdx(firstLibre >= 0 ? firstLibre : 0);
+    setShowAsignarMesaModal(true);
+  }, [mesas, ordenActiva]);
+
+  const handleAsignarMesaSeleccionada = useCallback(
+    async (m: PosMesa) => {
+      if (!ordenActiva) return;
+      const libre = m.estado === 'LIBRE' || m.orden_activa_id === ordenActiva.id;
+      if (!libre || busyAction) return;
+      setBusyAction(true);
+      try {
+        await executePosAction('CAMBIAR_CANAL_ORDEN', {
+          orden_id: ordenActiva.id,
+          canal_venta: 'SALON_MESA',
+          mesa_numero: m.numero,
+        });
+        setShowAsignarMesaModal(false);
+        await fetchPosState();
+        focusCapture();
+        notify('ok', `Ticket asignado a ${m.nombre}.`);
+      } catch (err: unknown) {
+        notify('err', err instanceof Error ? err.message : 'Error asignando mesa');
+      } finally {
+        setBusyAction(false);
+      }
+    },
+    [ordenActiva, busyAction, executePosAction, fetchPosState, focusCapture, notify]
+  );
 
   const handleAsignarCliente = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1296,6 +1330,47 @@ export default function ElianaPosPage() {
         return;
       }
 
+      // Navegación 2D por teclado dentro del modal Asignar Mesa (Alt+S)
+      if (showAsignarMesaModal && ordenActiva) {
+        if (mesas.length === 0) return;
+        const cols = typeof window !== 'undefined' && window.innerWidth >= 640 ? 4 : 3;
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const next = Math.min(mesas.length - 1, focusedAsignarMesaIdx + 1);
+          setFocusedAsignarMesaIdx(next);
+          asignarMesaBtnRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const prev = Math.max(0, focusedAsignarMesaIdx - 1);
+          setFocusedAsignarMesaIdx(prev);
+          asignarMesaBtnRefs.current[prev]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const next = Math.min(mesas.length - 1, focusedAsignarMesaIdx + cols);
+          setFocusedAsignarMesaIdx(next);
+          asignarMesaBtnRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prev = Math.max(0, focusedAsignarMesaIdx - cols);
+          setFocusedAsignarMesaIdx(prev);
+          asignarMesaBtnRefs.current[prev]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const m = mesas[focusedAsignarMesaIdx];
+          if (m) void handleAsignarMesaSeleccionada(m);
+          return;
+        }
+        return;
+      }
+
       // Navegación por teclado dentro del modal Reenviar Comanda
       if (showReenviarComandaModal) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
@@ -1448,7 +1523,7 @@ export default function ElianaPosPage() {
       // Atajo rápido: Alt+S (Asignar Mesa) / Alt+D (Pasar a Domicilio)
       if (!isAnyModalOpen && ordenActiva && e.altKey && e.key.toLowerCase() === 's' && posConfig.habilitaMesas) {
         e.preventDefault();
-        setShowAsignarMesaModal(true);
+        openAsignarMesaModal();
         return;
       }
       if (!isAnyModalOpen && ordenActiva && e.altKey && e.key.toLowerCase() === 'd' && posConfig.habilitaDomicilios) {
@@ -1794,9 +1869,9 @@ export default function ElianaPosPage() {
     mesasNavZone, focusedMesaIndex, zonasDisponibles, zonaFiltro, mesasFiltradas,
     showCobroModal, showAsignarClienteModal, showBuscarModal, showVerificadorModal, showVariosModal,
     showMayoreoModal, showArtComunModal, showDomicilioModal, showVentasDiaModal, showCreditosModal,
-    showSettingsModal, showExitModal, showCancelarTicketModal, showAsignarMeseroModal, showReenviarComandaModal,
-    reenviarComandaFocusBtn, focusedMeseroIdx, operarios,
-    notaItemTarget, cashFlowModal, abrirModalCobro, focusCapture, handleAbrirMayoreo, executePosAction, fetchPosState, notify,
+    showSettingsModal, showExitModal, showCancelarTicketModal, showAsignarMeseroModal, showAsignarMesaModal, showReenviarComandaModal,
+    reenviarComandaFocusBtn, focusedMeseroIdx, focusedAsignarMesaIdx, mesas, operarios,
+    notaItemTarget, cashFlowModal, abrirModalCobro, openAsignarMesaModal, handleAsignarMesaSeleccionada, focusCapture, handleAbrirMayoreo, executePosAction, fetchPosState, notify,
     handleAbrirMesa, handleAgregarProducto, handleAnularItem, handleCambiarCantidadItem,
     handleCambiarSiguienteTicket, handleCambiarTicketDireccion, handleEnviarComanda, handleNuevaVentaMostrador,
   ]);
@@ -2283,7 +2358,7 @@ export default function ElianaPosPage() {
                       {posConfig.habilitaMesas && (
                         <button
                           type="button"
-                          onClick={() => setShowAsignarMesaModal(true)}
+                          onClick={openAsignarMesaModal}
                           className="px-2.5 py-1 rounded-lg bg-white/90 hover:bg-white border border-black/15 text-xs font-bold text-zinc-900 flex items-center gap-1 cursor-pointer"
                         >
                           <Utensils className="w-3.5 h-3.5 text-sky-700" />
@@ -3439,42 +3514,33 @@ export default function ElianaPosPage() {
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div>
                 <h3 className="font-bold text-base text-zinc-950">Asignar Mesa a {getOrdenTabLabel(ordenActiva)}</h3>
-                <p className="text-xs text-zinc-500">Todos los productos ya agregados se moverán a la mesa elegida.</p>
+                <p className="text-xs text-zinc-500">Usa ↑ ↓ ← → para elegir mesa y Enter para confirmar.</p>
               </div>
               <button type="button" onClick={() => setShowAsignarMesaModal(false)} className="p-1.5 text-zinc-400 hover:text-zinc-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-80 overflow-y-auto">
-              {mesas.map((m) => {
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-80 overflow-y-auto p-1">
+              {mesas.map((m, idx) => {
                 const libre = m.estado === 'LIBRE' || m.orden_activa_id === ordenActiva.id;
+                const isFocused = focusedAsignarMesaIdx === idx;
                 return (
                   <button
                     key={m.id}
+                    ref={(el) => {
+                      asignarMesaBtnRefs.current[idx] = el;
+                    }}
                     type="button"
                     disabled={!libre || busyAction}
-                    onClick={async () => {
-                      setBusyAction(true);
-                      try {
-                        await executePosAction('CAMBIAR_CANAL_ORDEN', {
-                          orden_id: ordenActiva.id,
-                          canal_venta: 'SALON_MESA',
-                          mesa_numero: m.numero,
-                        });
-                        setShowAsignarMesaModal(false);
-                        await fetchPosState();
-                        focusCapture();
-                        notify('ok', `Ticket asignado a ${m.nombre}.`);
-                      } catch (err: unknown) {
-                        notify('err', err instanceof Error ? err.message : 'Error asignando mesa');
-                      } finally {
-                        setBusyAction(false);
-                      }
-                    }}
+                    onClick={() => void handleAsignarMesaSeleccionada(m)}
                     className={`p-3 rounded-xl border text-left transition ${
                       libre
-                        ? 'bg-sky-50/70 hover:bg-sky-100 border-sky-300 text-sky-950 cursor-pointer'
-                        : 'bg-zinc-100 border-zinc-200 text-zinc-400 opacity-60 cursor-not-allowed'
+                        ? isFocused
+                          ? 'bg-sky-100 border-blue-600 ring-2 ring-blue-600 text-sky-950 cursor-pointer shadow-sm'
+                          : 'bg-sky-50/70 hover:bg-sky-100 border-sky-300 text-sky-950 cursor-pointer'
+                        : isFocused
+                          ? 'bg-zinc-200 border-zinc-400 ring-2 ring-zinc-400 text-zinc-500 opacity-75 cursor-not-allowed'
+                          : 'bg-zinc-100 border-zinc-200 text-zinc-400 opacity-60 cursor-not-allowed'
                     }`}
                   >
                     <div className="font-bold text-sm">{m.nombre}</div>

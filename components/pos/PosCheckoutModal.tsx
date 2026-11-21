@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Plus, Trash2, X } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
+import { openCashDrawer } from '@/lib/posHardwareBridge';
 import type { ClienteCreditoResumen, OperarioPos, PosOrden, PosOrdenItem, PosOrdenPago } from './types';
 
 interface PosCheckoutModalProps {
@@ -89,9 +90,11 @@ export default function PosCheckoutModal({
   );
   const [pagoParcialMetodo, setPagoParcialMetodo] =
     useState<'EFECTIVO' | 'DATAFONO' | 'TRANSFERENCIA' | 'CREDITO'>('EFECTIVO');
+  const [pagoParcialPropina, setPagoParcialPropina] = useState(0);
   const [pagoParcialMonto, setPagoParcialMonto] = useState(0);
   const [pagoParcialRecibido, setPagoParcialRecibido] = useState(0);
   const [pagoParcialNota, setPagoParcialNota] = useState('');
+  const [drawerStepReady, setDrawerStepReady] = useState(false);
 
   // Navegación teclado continua con flechas
   const [focusZone, setFocusZone] = useState<FocusZone>('ITEMS');
@@ -113,17 +116,6 @@ export default function PosCheckoutModal({
     }
   }, [ordenActiva.pagos_detalle]);
 
-  const totalFinalCobro = useMemo(() => {
-    if (metodoPago === 'CONSUMO_INTERNO') return Number(ordenActiva.subtotal_bruto || 0);
-    return Math.max(
-      0,
-      Number(ordenActiva.subtotal_bruto || 0) +
-        Number(ordenActiva.costo_domicilio || 0) -
-        descuentoValor +
-        propinaValor
-    );
-  }, [ordenActiva, descuentoValor, propinaValor, metodoPago]);
-
   const itemPagoMap = useMemo(() => {
     const map = new Map<string, { numero: number; metodo: string }>();
     for (const pg of pagosRegistrados) {
@@ -133,6 +125,32 @@ export default function PosCheckoutModal({
     }
     return map;
   }, [pagosRegistrados]);
+
+  const propinaParcialAcumulada = useMemo(
+    () => pagosRegistrados.reduce((acc, p) => acc + Number(p.propina_monto || 0), 0),
+    [pagosRegistrados]
+  );
+
+  const propinaTotalTicket = propinaParcialAcumulada + propinaValor;
+
+  const totalFinalCobro = useMemo(() => {
+    if (metodoPago === 'CONSUMO_INTERNO') return Number(ordenActiva.subtotal_bruto || 0);
+    return Math.max(
+      0,
+      Number(ordenActiva.subtotal_bruto || 0) +
+        Number(ordenActiva.costo_domicilio || 0) -
+        descuentoValor +
+        propinaTotalTicket
+    );
+  }, [ordenActiva, descuentoValor, propinaTotalTicket, metodoPago]);
+
+  const subtotalPendiente = useMemo(
+    () =>
+      itemsActivos
+        .filter((it) => !itemPagoMap.has(it.id))
+        .reduce((acc, it) => acc + Number(it.subtotal || 0), 0),
+    [itemsActivos, itemPagoMap]
+  );
 
   const totalPagadoMulti = useMemo(
     () => pagosRegistrados.reduce((acc, p) => acc + Number(p.monto_aplicado || 0), 0),
@@ -159,15 +177,33 @@ export default function PosCheckoutModal({
   }, [montoObjetivoDerecha]);
 
   useEffect(() => {
+    setDrawerStepReady(false);
+  }, [
+    metodoPago,
+    pagoConEfectivo,
+    propinaValor,
+    descuentoValor,
+    pagosRegistrados.length,
+    mixDat,
+    mixTrf,
+    mixCred,
+  ]);
+
+  useEffect(() => {
+    setPagoParcialPropina(0);
+  }, [selectedItemIds]);
+
+  useEffect(() => {
     if (selectedItemIds.length > 0) {
-      setPagoParcialMonto(sumaSeleccionados);
-      setPagoParcialRecibido(sumaSeleccionados);
+      const totalConProp = sumaSeleccionados + pagoParcialPropina;
+      setPagoParcialMonto(totalConProp);
+      setPagoParcialRecibido(totalConProp);
       setPartialBilleteIdx(0);
     } else {
       setPagoParcialMonto(faltaPorCobrar);
       setPagoParcialRecibido(faltaPorCobrar);
     }
-  }, [selectedItemIds, sumaSeleccionados, faltaPorCobrar]);
+  }, [selectedItemIds, sumaSeleccionados, pagoParcialPropina, faltaPorCobrar]);
 
   // Enfocar inputs/botones automáticamente según focusZone
   useEffect(() => {
@@ -236,9 +272,14 @@ export default function PosCheckoutModal({
       monto_aplicado: montoAplicado,
       monto_recibido: recibido,
       cambio_devuelto: cambio,
+      propina_monto: pagoParcialPropina,
       items_pagados: itemsCovered,
       nota: pagoParcialNota.trim(),
     };
+
+    if (pagoParcialMetodo === 'EFECTIVO') {
+      await openCashDrawer();
+    }
 
     if (onRegistrarPagoParcial) {
       const saved = await onRegistrarPagoParcial(payloadBase);
@@ -259,6 +300,7 @@ export default function PosCheckoutModal({
     );
 
     setSelectedItemIds([]);
+    setPagoParcialPropina(0);
     setPagoParcialNota('');
     if (nextPendingIdx >= 0) {
       setFocusedItemIdx(nextPendingIdx);
@@ -272,6 +314,7 @@ export default function PosCheckoutModal({
     pagoParcialMonto,
     pagoParcialMetodo,
     pagoParcialRecibido,
+    pagoParcialPropina,
     itemsActivos,
     selectedItemIds,
     pagoParcialNota,
@@ -449,7 +492,7 @@ export default function PosCheckoutModal({
 
     await onConfirmarCobro({
       metodo_pago: metodoFinal,
-      propina: propinaValor,
+      propina: propinaTotalTicket,
       descuento: descuentoValor,
       pago_efectivo: sumEf,
       pago_datafono: sumDat,
@@ -476,10 +519,36 @@ export default function PosCheckoutModal({
     clienteCreditoTel,
     ordenActiva.cliente_nombre,
     ordenActiva.cliente_telefono,
-    propinaValor,
+    propinaTotalTicket,
     descuentoValor,
     totalFinalCobro,
     comisionTarjeta,
+  ]);
+
+  const handlePrimaryRightAction = useCallback(async () => {
+    if (busyAction || rightEfInsuficiente) return;
+    if (metodoPago === 'CONSUMO_INTERNO' && pagosRegistrados.length === 0) {
+      await handleFinalConfirm();
+      return;
+    }
+    if (!drawerStepReady) {
+      const hayEfectivoSaldo =
+        metodoPago === 'EFECTIVO' || (metodoPago === 'MIXTO' && faltaMixEfectivo > 0);
+      if (hayEfectivoSaldo) {
+        await openCashDrawer();
+      }
+      setDrawerStepReady(true);
+      return;
+    }
+    await handleFinalConfirm();
+  }, [
+    busyAction,
+    rightEfInsuficiente,
+    metodoPago,
+    pagosRegistrados.length,
+    drawerStepReady,
+    faltaMixEfectivo,
+    handleFinalConfirm,
   ]);
 
   // Navegación continua con teclas de flecha
@@ -495,7 +564,7 @@ export default function PosCheckoutModal({
 
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        void handleFinalConfirm();
+        void handlePrimaryRightAction();
         return;
       }
 
@@ -618,7 +687,7 @@ export default function PosCheckoutModal({
       if (focusZone === 'RIGHT_PROPINA') {
         const pcts = [0, 0.05, 0.1];
         const curIdx = pcts.findIndex(
-          (p) => Math.round(ordenActiva.subtotal_bruto * p) === propinaValor
+          (p) => Math.round(subtotalPendiente * p) === propinaValor
         );
         const effIdx = curIdx < 0 ? 0 : curIdx;
         if (e.key === 'ArrowLeft') {
@@ -626,14 +695,14 @@ export default function PosCheckoutModal({
           if (effIdx <= 0) {
             setFocusZone('ITEMS');
           } else {
-            setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pcts[effIdx - 1]));
+            setPropinaValor(Math.round(subtotalPendiente * pcts[effIdx - 1]));
           }
           return;
         }
         if (e.key === 'ArrowRight') {
           e.preventDefault();
           const nextIdx = Math.min(pcts.length - 1, effIdx + 1);
-          setPropinaValor(Math.round(ordenActiva.subtotal_bruto * pcts[nextIdx]));
+          setPropinaValor(Math.round(subtotalPendiente * pcts[nextIdx]));
           return;
         }
         if (e.key === 'ArrowDown') {
@@ -726,7 +795,7 @@ export default function PosCheckoutModal({
         }
         if (e.key === 'Enter') {
           e.preventDefault();
-          void handleFinalConfirm();
+          void handlePrimaryRightAction();
           return;
         }
       }
@@ -748,11 +817,11 @@ export default function PosCheckoutModal({
     metodoPago,
     pagosRegistrados.length,
     propinaValor,
-    ordenActiva.subtotal_bruto,
+    subtotalPendiente,
     faltaMixEfectivo,
     montoObjetivoDerecha,
     onClose,
-    handleFinalConfirm,
+    handlePrimaryRightAction,
     handleAgregarTransaccion,
   ]);
 
@@ -891,8 +960,43 @@ export default function PosCheckoutModal({
               >
                 <div className="flex items-center justify-between text-xs font-bold text-blue-950">
                   <span>Insumos seleccionados ({selectedItemIds.length}):</span>
-                  <span className="text-base tabular-nums">{formatMoney(sumaSeleccionados)}</span>
+                  <span className="text-base tabular-nums">
+                    {formatMoney(sumaSeleccionados + pagoParcialPropina)}
+                  </span>
                 </div>
+
+                {habilitaPropinas && (
+                  <div className="flex items-center justify-between gap-2 text-xs bg-white/80 border border-blue-200 rounded-lg px-2.5 py-1.5">
+                    <span className="font-semibold text-zinc-700">Propina cobro:</span>
+                    <div className="flex items-center gap-1">
+                      {[0, 0.05, 0.1].map((pct) => {
+                        const valPct = Math.round(sumaSeleccionados * pct);
+                        const active = pagoParcialPropina === valPct;
+                        return (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setPagoParcialPropina(valPct)}
+                            className={`px-2 py-0.5 rounded border text-[11px] font-bold cursor-pointer ${
+                              active
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-100'
+                            }`}
+                          >
+                            {pct * 100}%
+                          </button>
+                        );
+                      })}
+                      <input
+                        type="number"
+                        value={pagoParcialPropina || ''}
+                        onChange={(e) => setPagoParcialPropina(Math.max(0, Number(e.target.value || 0)))}
+                        placeholder="$0"
+                        className="w-20 px-2 py-0.5 border border-zinc-300 rounded text-[11px] font-bold tabular-nums text-right bg-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div
                   className={`grid grid-cols-4 gap-1.5 p-1 rounded-xl transition ${
@@ -1034,7 +1138,7 @@ export default function PosCheckoutModal({
                       focusZone === 'PARTIAL_CONFIRM' ? 'ring-2 ring-blue-600' : ''
                     }`}
                   >
-                    <Plus className="w-3.5 h-3.5" /> Registrar Pago
+                    <Plus className="w-3.5 h-3.5" /> Cobro Parcial
                   </button>
                 </div>
               </div>
@@ -1080,10 +1184,12 @@ export default function PosCheckoutModal({
               >
                 {habilitaPropinas && (
                   <div>
-                    <label className="font-semibold text-zinc-700 block mb-1">Propina</label>
+                    <label className="font-semibold text-zinc-700 block mb-1">
+                      {pagosRegistrados.length > 0 ? 'Propina (saldo pendiente)' : 'Propina'}
+                    </label>
                     <div className="flex gap-1 mb-1">
                       {[0, 0.05, 0.1].map((pct) => {
-                        const valPct = Math.round(ordenActiva.subtotal_bruto * pct);
+                        const valPct = Math.round(subtotalPendiente * pct);
                         const isAct = propinaValor === valPct;
                         return (
                           <button
@@ -1110,6 +1216,11 @@ export default function PosCheckoutModal({
                       onChange={(e) => setPropinaValor(Number(e.target.value || 0))}
                       className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg font-bold tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
+                    {propinaParcialAcumulada > 0 && (
+                      <div className="text-[10px] text-emerald-700 font-semibold mt-0.5 tabular-nums">
+                        Propinas en abonos: {formatMoney(propinaParcialAcumulada)} · Total mesa: {formatMoney(propinaTotalTicket)}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div>
@@ -1142,6 +1253,11 @@ export default function PosCheckoutModal({
                           Pago #{pg.numero_pago} · {pg.metodo_pago}
                         </span>
                         {pg.nota && <span className="ml-1.5 text-zinc-500">({pg.nota})</span>}
+                        {Number(pg.propina_monto || 0) > 0 && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                            Propina +{formatMoney(pg.propina_monto || 0)}
+                          </span>
+                        )}
                         {pg.metodo_pago === 'EFECTIVO' && (
                           <span className="ml-2 text-blue-700 font-semibold">
                             Pagó {formatMoney(pg.monto_recibido)} · Devuelta {formatMoney(pg.cambio_devuelto)}
@@ -1443,19 +1559,23 @@ export default function PosCheckoutModal({
               ref={finalConfirmRef}
               type="button"
               disabled={busyAction || rightEfInsuficiente}
-              onClick={() => void handleFinalConfirm()}
-              className={`w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-45 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer ${
-                focusZone === 'FINAL_CONFIRM' ? 'ring-4 ring-blue-300' : ''
-              }`}
+              onClick={() => void handlePrimaryRightAction()}
+              className={`w-full py-3.5 rounded-xl disabled:opacity-45 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition ${
+                drawerStepReady
+                  ? 'bg-blue-600 hover:bg-blue-700 ring-2 ring-blue-300'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
+              } ${focusZone === 'FINAL_CONFIRM' ? 'ring-4 ring-blue-300' : ''}`}
             >
               <Check className="w-4 h-4" />
               {metodoPago === 'CONSUMO_INTERNO' && pagosRegistrados.length === 0
                 ? 'Registrar Consumo Interno ($0 Caja)'
                 : rightEfInsuficiente
                   ? `Falta ${formatMoney(faltaDirecto)} en efectivo para cerrar`
-                  : pagosRegistrados.length > 0 && faltaPorCobrar > 0
-                    ? `Cobrar Saldo (${formatMoney(faltaPorCobrar)}) e Imprimir Ticket (Ctrl+Enter)`
-                    : 'Confirmar Cobro e Imprimir Ticket (Ctrl+Enter)'}
+                  : drawerStepReady
+                    ? 'Confirmar Pago e Imprimir Ticket (Enter)'
+                    : pagosRegistrados.length > 0 && faltaPorCobrar > 0
+                      ? `Cobrar Saldo (${formatMoney(faltaPorCobrar)})`
+                      : 'Cobrar'}
             </button>
           </div>
         </div>

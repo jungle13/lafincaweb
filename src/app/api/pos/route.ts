@@ -809,6 +809,7 @@ export async function POST(request: NextRequest) {
         monto_aplicado = 0,
         monto_recibido = 0,
         cambio_devuelto = 0,
+        propina_monto = 0,
         items_pagados = [],
         nota = '',
       } = body;
@@ -833,6 +834,7 @@ export async function POST(request: NextRequest) {
           monto_aplicado: Number(monto_aplicado || 0),
           monto_recibido: Number(monto_recibido || monto_aplicado || 0),
           cambio_devuelto: Number(cambio_devuelto || 0),
+          propina_monto: Number(propina_monto || 0),
           items_pagados: Array.isArray(items_pagados) ? items_pagados : [],
           nota: String(nota || '').trim(),
         })
@@ -996,6 +998,7 @@ export async function POST(request: NextRequest) {
             monto_aplicado: Number(pg.monto_aplicado || 0),
             monto_recibido: Number(pg.monto_recibido || pg.monto_aplicado || 0),
             cambio_devuelto: Number(pg.cambio_devuelto || 0),
+            propina_monto: Number(pg.propina_monto || 0),
             items_pagados: Array.isArray(pg.items_pagados) ? pg.items_pagados : [],
             nota: pg.nota || '',
           }))

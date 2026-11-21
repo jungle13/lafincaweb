@@ -34,6 +34,7 @@ export interface PosOrdenPago {
   monto_aplicado: number;
   monto_recibido: number;
   cambio_devuelto: number;
+  propina_monto?: number;
   items_pagados: Array<{
     item_id: string;
     nombre_producto: string;
