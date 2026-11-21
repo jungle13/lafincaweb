@@ -151,16 +151,13 @@
         statusEl.textContent = 'Conectando con el servidor en la nube...';
 
         try {
-          const res = await fetch(healthUrl, {
+          await fetch(healthUrl, {
+            mode: 'no-cors',
             cache: 'no-store',
             signal: AbortSignal.timeout(5000),
           });
-          if (res.ok || res.status === 503) {
-            window.location.replace(target);
-            return;
-          }
-          statusEl.textContent =
-            'El servidor respondió con estado ' + res.status + '. Reintentando en 10s...';
+          window.location.replace(target);
+          return;
         } catch {
           statusEl.textContent =
             'Sin conexión a internet o servidor inaccesible. Reintentando automáticamente en 10s...';

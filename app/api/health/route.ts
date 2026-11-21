@@ -8,6 +8,16 @@ export const revalidate = 0;
 
 const logger = createLogger('api.health');
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function GET() {
   const startedAt = Date.now();
   const checks = {
@@ -34,7 +44,7 @@ export async function GET() {
           checks,
           timestamp: new Date().toISOString(),
         },
-        { status: 503 }
+        { status: 503, headers: CORS_HEADERS }
       );
     }
 
@@ -46,7 +56,7 @@ export async function GET() {
         checks,
         timestamp: new Date().toISOString(),
       },
-      { status: 200 }
+      { status: 200, headers: CORS_HEADERS }
     );
   } catch (err: unknown) {
     const dbLatencyMs = Date.now() - startedAt;
@@ -60,7 +70,7 @@ export async function GET() {
         checks,
         timestamp: new Date().toISOString(),
       },
-      { status: 503 }
+      { status: 503, headers: CORS_HEADERS }
     );
   }
 }
