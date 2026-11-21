@@ -4,11 +4,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Plus, Trash2, X } from 'lucide-react';
 import { formatMoney } from '@/lib/formatters';
 import { openCashDrawer } from '@/lib/posHardwareBridge';
-import type { ClienteCreditoResumen, OperarioPos, PosOrden, PosOrdenItem, PosOrdenPago } from './types';
+import type { ClienteCreditoResumen, OperarioPos, PosOrden, PosOrdenItem, PosOrdenPago, ProductoVenta } from './types';
 
 interface PosCheckoutModalProps {
   ordenActiva: PosOrden;
   itemsActivos: PosOrdenItem[];
+  productos?: ProductoVenta[];
   operarios: OperarioPos[];
   creditosClientes: ClienteCreditoResumen[];
   habilitaPropinas: boolean;
@@ -50,6 +51,7 @@ type FocusZone =
 export default function PosCheckoutModal({
   ordenActiva,
   itemsActivos,
+  productos = [],
   operarios,
   creditosClientes,
   habilitaPropinas,
@@ -100,6 +102,18 @@ export default function PosCheckoutModal({
   const rightEfInputRef = useRef<HTMLInputElement | null>(null);
   const rightNotaRef = useRef<HTMLInputElement | null>(null);
   const finalConfirmRef = useRef<HTMLButtonElement | null>(null);
+  const submittingRef = useRef(false);
+
+  const prodTaxMap = useMemo(() => {
+    const map = new Map<string, { impo: number; iva: number }>();
+    for (const p of productos) {
+      map.set(p.id, {
+        impo: Number(p.tarifa_impoconsumo ?? 8),
+        iva: Number(p.tarifa_iva ?? 0),
+      });
+    }
+    return map;
+  }, [productos]);
 
   useEffect(() => {
     if (Array.isArray(ordenActiva.pagos_detalle)) {
@@ -253,7 +267,9 @@ export default function PosCheckoutModal({
         : 0;
 
   const handleCobroParcialSeleccion = useCallback(async () => {
-    if (busyAction || !esSeleccionParcial || rightEfInsuficiente || montoACobrarAhora <= 0) return;
+    if (busyAction || submittingRef.current || !esSeleccionParcial || rightEfInsuficiente || montoACobrarAhora <= 0) return;
+    submittingRef.current = true;
+    try {
 
     const hayEfectivo =
       metodoPago === 'EFECTIVO' || (metodoPago === 'MIXTO' && faltaMixEfectivo > 0);
@@ -352,6 +368,9 @@ export default function PosCheckoutModal({
     setMixTrf(0);
     setMixCred(0);
     setFocusZone('ITEMS');
+    } finally {
+      submittingRef.current = false;
+    }
   }, [
     busyAction,
     esSeleccionParcial,
@@ -567,13 +586,18 @@ export default function PosCheckoutModal({
   ]);
 
   const handlePrimaryRightAction = useCallback(async () => {
-    if (busyAction || rightEfInsuficiente || ningunSeleccionado) return;
+    if (busyAction || submittingRef.current || rightEfInsuficiente || ningunSeleccionado) return;
     if (esSeleccionParcial) {
       await handleCobroParcialSeleccion();
       return;
     }
     if (metodoPago === 'CONSUMO_INTERNO' && pagosRegistrados.length === 0) {
-      await handleFinalConfirm();
+      submittingRef.current = true;
+      try {
+        await handleFinalConfirm();
+      } finally {
+        submittingRef.current = false;
+      }
       return;
     }
     if (!drawerStepReady) {
@@ -585,7 +609,12 @@ export default function PosCheckoutModal({
       setDrawerStepReady(true);
       return;
     }
-    await handleFinalConfirm();
+    submittingRef.current = true;
+    try {
+      await handleFinalConfirm();
+    } finally {
+      submittingRef.current = false;
+    }
   }, [
     busyAction,
     rightEfInsuficiente,
@@ -837,8 +866,21 @@ export default function PosCheckoutModal({
             <div className="flex-1 overflow-y-auto divide-y divide-zinc-100">
               {itemsActivos.map((it, idx) => {
                 const sub = Number(it.subtotal || 0);
-                const base = Math.round(sub / 1.08);
+                const taxInfo = it.producto_id ? prodTaxMap.get(it.producto_id) : undefined;
+                const tarifa =
+                  it.tarifa_impuesto !== undefined && it.tarifa_impuesto !== null
+                    ? Number(it.tarifa_impuesto)
+                    : taxInfo
+                      ? taxInfo.impo + taxInfo.iva
+                      : 8;
+                const base = tarifa > 0 ? Math.round(sub / (1 + tarifa / 100)) : sub;
                 const impo = sub - base;
+                const taxLabel =
+                  tarifa === 0
+                    ? 'Exento (0%)'
+                    : taxInfo && taxInfo.iva > 0 && taxInfo.impo === 0
+                      ? `IVA (${tarifa}%)`
+                      : `Impoconsumo (${tarifa}%)`;
                 const pagoInfo = itemPagoMap.get(it.id);
                 const checked = selectedItemIds.includes(it.id);
                 const isFocused = focusZone === 'ITEMS' && focusedItemIdx === idx;
@@ -881,7 +923,7 @@ export default function PosCheckoutModal({
                           {it.cantidad}x {it.nombre_producto}
                         </div>
                         <div className="text-[11px] text-zinc-500 tabular-nums">
-                          Base: {formatMoney(base)} · Impoconsumo (8%): {formatMoney(impo)}
+                          Base: {formatMoney(base)} · {taxLabel}: {formatMoney(impo)}
                         </div>
                         {pagoInfo && (
                           <span className="inline-block mt-0.5 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">

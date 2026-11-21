@@ -66,34 +66,23 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const fecha = searchParams.get('fecha') || getColombiaDateStr();
     const cajaNombre = searchParams.get('caja') || 'Caja 1';
+    const scope = searchParams.get('scope') === 'live' ? 'live' : 'full';
 
     const [
       { data: mesas, error: errM },
       { data: ordenes, error: errO },
-      { data: productos, error: errP },
       { data: sesiones, error: errS },
       { data: salidasCaja },
       { data: alertas },
-      { data: creditosMovs },
       { data: devolucionesDia },
-      { data: movimientosInventario },
       { data: diarioHoy },
-      { data: operariosRows },
-      { data: categoriasRows },
-      { data: zonasRows },
-      { data: clientesRows },
     ] = await Promise.all([
       supabase.from('pos_mesas').select('*').order('numero', { ascending: true }),
       supabase
         .from('pos_ordenes')
-        .select('*')
+        .select('*, items:pos_orden_items(*), pagos_detalle:pos_orden_pagos(*)')
         .or(`fecha.eq.${fecha},estado.in.(ABIERTA,PRECUENTA)`)
         .order('created_at', { ascending: false }),
-      supabase
-        .from('productos_venta')
-        .select('id, codigo, nombre, categoria, subcategoria, precio_total, precio_neto, impoconsumo, activo, costo_unitario, precio_mayoreo, existencia, inv_minimo, inv_maximo, controla_inventario')
-        .eq('activo', true)
-        .order('nombre', { ascending: true }),
       supabase
         .from('libro_caja_sesiones')
         .select('*')
@@ -101,7 +90,7 @@ export async function GET(request: Request) {
         .order('numero_turno', { ascending: false }),
       supabase
         .from('libro_caja_registros')
-        .select('valor_pagado, caja_nombre, responsable_caja, concepto, created_at')
+        .select('valor_pagado, caja_nombre, responsable_caja, concepto, created_at, sesion_id')
         .eq('fecha', fecha)
         .eq('tipo_libro', 'CAJA_MENOR'),
       supabase
@@ -111,80 +100,95 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false })
         .limit(100),
       supabase
-        .from('pos_creditos_movimientos')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500),
-      supabase
         .from('pos_devoluciones')
         .select('*')
         .eq('fecha', fecha)
         .order('created_at', { ascending: false }),
-      supabase
-        .from('pos_inventario_movimientos')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200),
       supabase
         .from('libro_caja_diario')
         .select('estado')
         .eq('fecha', fecha)
         .eq('tipo_libro', 'CAJA_MENOR')
         .maybeSingle(),
-      supabase
-        .from('libro_caja_usuarios')
-        .select('id, username, nombre_cajero, cargo_area, telefono, correo, rol_sistema')
-        .neq('username', 'admin')
-        .eq('activo', true)
-        .order('nombre_cajero', { ascending: true }),
-      supabase.from('pos_categorias').select('id, nombre, es_inventariable, orden').eq('activa', true).order('orden', { ascending: true }),
-      supabase.from('pos_zonas').select('id, nombre, orden').eq('activa', true).order('orden', { ascending: true }),
-      supabase.from('pos_clientes').select('id, nombre, telefono, direccion, barrio').eq('activo', true).order('nombre', { ascending: true }),
     ]);
 
     if (errM) throw errM;
     if (errO) throw errO;
-    if (errP) throw errP;
     if (errS) throw errS;
 
-    const ordenIds = (ordenes || []).map((o: any) => o.id);
-    let itemsAll: any[] = [];
-    let pagosAll: any[] = [];
-    if (ordenIds.length > 0) {
-      const [{ data: itemsRows }, { data: pagosRows }] = await Promise.all([
+    // Cargar catálogos estáticos y saldos SQL solo en scope=full
+    let productos: any[] | null = null;
+    let creditosMovs: any[] = [];
+    let saldosCreditosRpc: any[] = [];
+    let movimientosInventario: any[] | null = null;
+    let operariosRows: any[] | null = null;
+    let categoriasRows: any[] | null = null;
+    let zonasRows: any[] | null = null;
+    let clientesRows: any[] | null = null;
+
+    if (scope === 'full') {
+      const [
+        { data: prodsData, error: errP },
+        { data: credMovsData },
+        { data: saldosRpcData },
+        { data: movsInvData },
+        { data: opsData },
+        { data: catsData },
+        { data: zonasData },
+        { data: clisData },
+      ] = await Promise.all([
         supabase
-          .from('pos_orden_items')
-          .select('*')
-          .in('orden_id', ordenIds)
-          .order('created_at', { ascending: true }),
+          .from('productos_venta')
+          .select('id, codigo, nombre, categoria, subcategoria, precio_total, precio_neto, impoconsumo, tarifa_impoconsumo, tarifa_iva, activo, costo_unitario, precio_mayoreo, existencia, inv_minimo, inv_maximo, controla_inventario')
+          .eq('activo', true)
+          .order('nombre', { ascending: true }),
         supabase
-          .from('pos_orden_pagos')
+          .from('pos_creditos_movimientos')
           .select('*')
-          .in('orden_id', ordenIds)
-          .order('numero_pago', { ascending: true }),
+          .order('created_at', { ascending: false })
+          .limit(150),
+        supabase.rpc('rpc_saldos_creditos_clientes'),
+        supabase
+          .from('pos_inventario_movimientos')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(200),
+        supabase
+          .from('libro_caja_usuarios')
+          .select('id, username, nombre_cajero, cargo_area, telefono, correo, rol_sistema')
+          .neq('username', 'admin')
+          .eq('activo', true)
+          .order('nombre_cajero', { ascending: true }),
+        supabase.from('pos_categorias').select('id, nombre, es_inventariable, orden').eq('activa', true).order('orden', { ascending: true }),
+        supabase.from('pos_zonas').select('id, nombre, orden').eq('activa', true).order('orden', { ascending: true }),
+        supabase.from('pos_clientes').select('id, nombre, telefono, direccion, barrio').eq('activo', true).order('nombre', { ascending: true }),
       ]);
-      itemsAll = itemsRows || [];
-      pagosAll = pagosRows || [];
-    }
-
-    const itemsByOrden = new Map<string, any[]>();
-    for (const it of itemsAll) {
-      const list = itemsByOrden.get(it.orden_id);
-      if (list) list.push(it);
-      else itemsByOrden.set(it.orden_id, [it]);
-    }
-
-    const pagosByOrden = new Map<string, any[]>();
-    for (const pg of pagosAll) {
-      const list = pagosByOrden.get(pg.orden_id);
-      if (list) list.push(pg);
-      else pagosByOrden.set(pg.orden_id, [pg]);
+      if (errP) throw errP;
+      productos = prodsData || [];
+      creditosMovs = credMovsData || [];
+      saldosCreditosRpc = Array.isArray(saldosRpcData) ? saldosRpcData : [];
+      movimientosInventario = movsInvData || [];
+      operariosRows = opsData || [];
+      categoriasRows = catsData || [];
+      zonasRows = zonasData || [];
+      clientesRows = clisData || [];
+    } else {
+      // En modo live solo traemos abonos de hoy para el cuadre de efectivo
+      const { data: credHoy } = await supabase
+        .from('pos_creditos_movimientos')
+        .select('id, fecha, tipo, metodo_pago, monto, cliente_nombre, created_at, sesion_caja_id')
+        .eq('fecha', fecha);
+      creditosMovs = credHoy || [];
     }
 
     const ordenesEnriquecidas = (ordenes || []).map((o: any) => ({
       ...o,
-      items: itemsByOrden.get(o.id) || [],
-      pagos_detalle: pagosByOrden.get(o.id) || [],
+      items: Array.isArray(o.items)
+        ? [...o.items].sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+        : [],
+      pagos_detalle: Array.isArray(o.pagos_detalle)
+        ? [...o.pagos_detalle].sort((a, b) => Number(a.numero_pago || 0) - Number(b.numero_pago || 0))
+        : [],
     }));
 
     const ordenById = new Map<string, any>();
@@ -220,40 +224,28 @@ export async function GET(request: Request) {
       .filter((r: any) => !r.caja_nombre || r.caja_nombre.toLowerCase() === cajaNombre.toLowerCase())
       .reduce((acc: number, r: any) => acc + Number(r.valor_pagado || 0), 0);
 
-    // Libro Mayor de Créditos por Cliente
-    const creditosMap = new Map<string, {
-      cliente_nombre: string;
-      cliente_telefono: string;
-      total_cargos: number;
-      total_abonos: number;
-      saldo: number;
-      movimientos: Record<string, unknown>[];
-    }>();
+    // Libro Mayor de Créditos por Cliente (desde agregación SQL rpc_saldos_creditos_clientes)
+    const movsByCliente = new Map<string, Record<string, unknown>[]>();
     for (const mov of creditosMovs || []) {
-      const key = String(mov.cliente_nombre || 'Cliente General').trim();
-      const entry = creditosMap.get(key) || {
-        cliente_nombre: key,
-        cliente_telefono: mov.cliente_telefono || '',
-        total_cargos: 0,
-        total_abonos: 0,
-        saldo: 0,
-        movimientos: [] as Record<string, unknown>[],
-      };
-      const mVal = Number(mov.monto || 0);
-      if (mov.tipo === 'CARGO_CREDITO' || mov.tipo === 'REVERSO_ABONO') {
-        entry.total_cargos += mVal;
-        entry.saldo += mVal;
-      } else if (mov.tipo === 'ABONO') {
-        entry.total_abonos += mVal;
-        entry.saldo -= mVal;
-      }
-      if (!entry.cliente_telefono && mov.cliente_telefono) {
-        entry.cliente_telefono = mov.cliente_telefono;
-      }
-      entry.movimientos.push(mov);
-      creditosMap.set(key, entry);
+      const key = String(mov.cliente_nombre || 'Cliente General').trim().toLowerCase();
+      const arr = movsByCliente.get(key) || [];
+      arr.push(mov);
+      movsByCliente.set(key, arr);
     }
-    const creditosClientes = Array.from(creditosMap.values()).sort((a, b) => b.saldo - a.saldo);
+    const creditosClientes =
+      scope === 'full'
+        ? saldosCreditosRpc.map((row: any) => {
+            const key = String(row.cliente_nombre || '').trim().toLowerCase();
+            return {
+              cliente_nombre: row.cliente_nombre,
+              cliente_telefono: row.cliente_telefono || '',
+              total_cargos: Number(row.saldo || 0),
+              total_abonos: 0,
+              saldo: Number(row.saldo || 0),
+              movimientos: movsByCliente.get(key) || [],
+            };
+          })
+        : null;
 
     // Corte por Departamentos (solo ventas comerciales, excluyendo CONSUMO_INTERNO)
     const prodCostMap = new Map<string, number>();
@@ -382,10 +374,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
+      scope,
       fecha,
       mesas: mesasEnriquecidas,
       ordenes: ordenesEnriquecidas,
-      productos: productos || [],
+      ...(productos !== null ? { productos } : {}),
       sesiones: sesiones || [],
       sesionActiva,
       jornadaCerradaTotal,
@@ -394,17 +387,17 @@ export async function GET(request: Request) {
       entradasEfectivoHoy,
       devolucionesEfectivoHoy,
       eventosTurno: alertas || [],
-      creditosClientes,
+      ...(creditosClientes !== null ? { creditosClientes } : {}),
       devolucionesDia: devolucionesDia || [],
       corteDepartamentos,
       flujoEfectivoDetallado,
       consumosInternosHoy,
       gananciaEstimadaHoy: Math.round(gananciaEstimadaHoy),
-      movimientosInventario: movimientosInventario || [],
-      operarios: operariosRows || [],
-      categorias: categoriasRows || [],
-      zonas: zonasRows || [],
-      clientes: clientesRows || [],
+      ...(movimientosInventario !== null ? { movimientosInventario } : {}),
+      ...(operariosRows !== null ? { operarios: operariosRows } : {}),
+      ...(categoriasRows !== null ? { categorias: categoriasRows } : {}),
+      ...(zonasRows !== null ? { zonas: zonasRows } : {}),
+      ...(clientesRows !== null ? { clientes: clientesRows } : {}),
       cajasAbiertasHoy,
     });
   } catch (err: any) {
@@ -567,95 +560,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, sesion, caja: targetCajaRow });
     }
 
-    // 2. Abrir o agregar ítems a una orden (Mesa, Domicilio o Mostrador)
+    // 2. Abrir o agregar ítems a una orden (RPC ACID con secuencia lock-free)
     if (action === 'ABRIR_O_AGREGAR_ORDEN') {
-      const {
-        orden_id,
-        canal_venta = 'SALON_MESA',
-        mesa_numero = null,
-        mesero_nombre = null,
-        cliente_nombre = null,
-        cliente_telefono = null,
-        cliente_direccion = null,
-        costo_domicilio = 0,
-        observaciones = null,
-        items = [],
-      } = body;
-
-      let targetOrdenId = orden_id;
-
-      if (!targetOrdenId) {
-        const { count } = await supabase
-          .from('pos_ordenes')
-          .select('*', { count: 'exact', head: true })
-          .eq('fecha', todayStr);
-        const consecutivo = `POS-${todayStr.replace(/-/g, '').slice(2)}-${String((count || 0) + 1).padStart(3, '0')}`;
-
-        const { data: nuevaOrden, error: errIns } = await supabase
-          .from('pos_ordenes')
-          .insert({
-            consecutivo,
-            fecha: todayStr,
-            periodo_id: `per-${todayStr.slice(0, 7)}`,
-            caja_nombre: cajaNombre,
-            cajero_nombre: cajeroNombre,
-            mesero_nombre,
-            canal_venta,
-            mesa_numero: canal_venta === 'SALON_MESA' ? mesa_numero : null,
-            cliente_nombre,
-            cliente_telefono,
-            cliente_direccion,
-            costo_domicilio: Number(costo_domicilio || 0),
-            estado_domicilio: canal_venta === 'DOMICILIO' ? 'RECIBIDO' : null,
-            observaciones,
-            estado: 'ABIERTA',
-          })
-          .select('*')
-          .single();
-
-        if (errIns) throw errIns;
-        targetOrdenId = nuevaOrden.id;
-
-        if (canal_venta === 'SALON_MESA' && mesa_numero) {
-          await supabase
-            .from('pos_mesas')
-            .update({
-              estado: 'OCUPADA',
-              orden_activa_id: targetOrdenId,
-              mesero_actual: mesero_nombre || cajeroNombre,
-              abierta_at: new Date().toISOString(),
-              precuenta_impresa_count: 0,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('numero', mesa_numero);
-        }
-      }
-
-      if (Array.isArray(items) && items.length > 0) {
-        const rows = items.map((it: any) => {
-          const cant = Number(it.cantidad || 1);
-          const precio = Number(it.precio_unitario || 0);
-          return {
-            orden_id: targetOrdenId,
-            producto_id: it.producto_id || null,
-            codigo_producto: String(it.codigo_producto || '000'),
-            nombre_producto: String(it.nombre_producto || 'Producto'),
-            categoria: String(it.categoria || 'PLATOS'),
-            estacion_comanda: inferEstacionComanda(it.categoria || '', it.nombre_producto || ''),
-            cantidad: cant,
-            unidad: it.unidad || 'Und',
-            precio_unitario: precio,
-            subtotal: Math.round(cant * precio),
-            notas_comanda: it.notas_comanda || null,
-            estado_comanda: 'PENDIENTE',
-          };
-        });
-        const { error: errItems } = await supabase.from('pos_orden_items').insert(rows);
-        if (errItems) throw errItems;
-      }
-
-      const recalc = await recalcularTotalesOrden(targetOrdenId);
-      return NextResponse.json({ success: true, ...recalc });
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('rpc_abrir_o_agregar_orden', {
+        p_payload: {
+          ...body,
+          fecha: todayStr,
+          periodo_id: `per-${todayStr.slice(0, 7)}`,
+          caja_nombre: cajaNombre,
+          cajero_nombre: cajeroNombre,
+        },
+      });
+      if (rpcErr) throw rpcErr;
+      return NextResponse.json({
+        success: true,
+        orden: rpcRes?.orden || null,
+        items: rpcRes?.items || [],
+      });
     }
 
     // 3. Enviar Comanda a Cocina / Bar (marca ítems PENDIENTE -> COMANDADO)
@@ -829,6 +750,8 @@ export async function POST(request: NextRequest) {
           orden_id,
           fecha: todayStr,
           caja_nombre: cajaNombre,
+          caja_id: body.caja_id || null,
+          sesion_caja_id: body.sesion_caja_id || body.sesion_id || null,
           numero_pago: nextNum,
           metodo_pago,
           monto_aplicado: Number(monto_aplicado || 0),
@@ -859,323 +782,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // 7. Facturar / Cobrar Orden (con Propina, Descuento, Pago Mixto e Impacto en Ventas + Caja)
+    // 7. Facturar / Cobrar Orden (RPC ACID + Idempotente + Stock Atómico + Impuestos Reales)
     if (action === 'FACTURAR_ORDEN') {
-      const {
-        orden_id,
-        propina = 0,
-        descuento = 0,
-        motivo_descuento = '',
-        metodo_pago = 'EFECTIVO',
-        pago_efectivo = 0,
-        pago_datafono = 0,
-        pago_transferencia = 0,
-        pago_credito = 0,
-        comision_tarjeta = 0,
-        efectivo_recibido = 0,
-        cliente_nombre = '',
-        cliente_telefono = '',
-        pagos_detalle = [],
-      } = body;
-
-      const { data: ord } = await supabase.from('pos_ordenes').select('*').eq('id', orden_id).single();
-      const { data: itemsActivos } = await supabase
-        .from('pos_orden_items')
-        .select('*')
-        .eq('orden_id', orden_id)
-        .neq('estado_comanda', 'ANULADO');
-
-      if (!ord || !itemsActivos || itemsActivos.length === 0) {
-        return NextResponse.json({ success: false, error: 'La orden no tiene artículos activos para facturar.' }, { status: 400 });
-      }
-
-      const subtotalBruto = itemsActivos.reduce((acc, it) => acc + Number(it.subtotal || 0), 0);
-      const descNum = Math.max(0, Number(descuento || 0));
-      const propNum = Math.max(0, Number(propina || 0));
-      const domNum = Math.max(0, Number(ord.costo_domicilio || 0));
-      const granTotal = Math.max(0, Math.round(subtotalBruto - descNum + propNum + domNum));
-
-      const isConsumoInterno = metodo_pago === 'CONSUMO_INTERNO';
-      const areaConsumo = String(body.area_consumo || 'Personal / Interno').trim();
-
-      const pagosArray = Array.isArray(pagos_detalle) ? pagos_detalle : [];
-      let pEf = isConsumoInterno ? 0 : Number(pago_efectivo || 0);
-      let pDat = isConsumoInterno ? 0 : Number(pago_datafono || 0);
-      let pTr = isConsumoInterno ? 0 : Number(pago_transferencia || 0);
-      let pCred = isConsumoInterno ? 0 : Number(pago_credito || 0);
-      let efRecibidoTotal = Number(efectivo_recibido || 0);
-      let cambioTotal = 0;
-
-      if (!isConsumoInterno && pagosArray.length > 0) {
-        pEf = 0;
-        pDat = 0;
-        pTr = 0;
-        pCred = 0;
-        efRecibidoTotal = 0;
-        cambioTotal = 0;
-        for (const pg of pagosArray) {
-          const app = Number(pg.monto_aplicado || 0);
-          const rec = Number(pg.monto_recibido || app);
-          const cam = Number(pg.cambio_devuelto || Math.max(0, rec - app));
-          if (pg.metodo_pago === 'EFECTIVO') {
-            pEf += app;
-            efRecibidoTotal += rec;
-            cambioTotal += cam;
-          } else if (pg.metodo_pago === 'DATAFONO') {
-            pDat += app;
-          } else if (pg.metodo_pago === 'TRANSFERENCIA') {
-            pTr += app;
-          } else if (pg.metodo_pago === 'CREDITO') {
-            pCred += app;
-          }
-        }
-      } else if (!isConsumoInterno) {
-        if (metodo_pago === 'EFECTIVO' && pEf === 0) pEf = granTotal;
-        if (metodo_pago === 'DATAFONO' && pDat === 0) pDat = granTotal;
-        if ((metodo_pago === 'TRANSFERENCIA' || metodo_pago === 'TRANSFERENCIA_NEQUI') && pTr === 0) pTr = granTotal;
-        if (metodo_pago === 'CREDITO' && pCred === 0) pCred = granTotal;
-        cambioTotal =
-          metodo_pago === 'EFECTIVO' && Number(efectivo_recibido) > granTotal
-            ? Math.round(Number(efectivo_recibido) - granTotal)
-            : 0;
-        efRecibidoTotal = Number(efectivo_recibido || granTotal);
-      }
-
-      const finalClienteNombre = (cliente_nombre || ord.cliente_nombre || '').trim();
-      if ((pCred > 0 || isConsumoInterno) && !finalClienteNombre) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: isConsumoInterno
-              ? 'Debes indicar el nombre de la persona o área para el consumo interno.'
-              : 'Debes indicar el nombre del cliente para ventas a crédito.',
-          },
-          { status: 400 }
-        );
-      }
-
-      const nowIso = new Date().toISOString();
-      const { data: facturada, error: errFac } = await supabase
-        .from('pos_ordenes')
-        .update({
-          subtotal_bruto: Math.round(subtotalBruto),
-          descuento: descNum,
-          motivo_descuento: motivo_descuento || null,
-          propina: isConsumoInterno ? 0 : propNum,
-          gran_total: granTotal,
-          metodo_pago,
-          pago_efectivo: pEf,
-          pago_datafono: pDat,
-          pago_transferencia: pTr,
-          pago_credito: pCred,
-          comision_tarjeta: isConsumoInterno ? 0 : Number(comision_tarjeta || 0),
-          pagado_at: isConsumoInterno || (pCred > 0 && pEf === 0 && pDat === 0 && pTr === 0) ? null : nowIso,
-          cliente_nombre: finalClienteNombre || ord.cliente_nombre || null,
-          cliente_telefono: (cliente_telefono || ord.cliente_telefono || '').trim() || null,
-          observaciones: isConsumoInterno ? `CONSUMO INTERNO (${areaConsumo})` : ord.observaciones || null,
-          efectivo_recibido: isConsumoInterno ? 0 : efRecibidoTotal,
-          cambio_entregado: isConsumoInterno ? 0 : cambioTotal,
-          estado: 'FACTURADA',
-          ...(ord.canal_venta === 'DOMICILIO' ? { estado_domicilio: 'ENTREGADO' } : {}),
-          closed_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq('id', orden_id)
-        .select('*')
-        .single();
-      if (errFac) throw errFac;
-
-      // Persistir desglose de transacciones individuales en pos_orden_pagos (reemplazando parciales previos)
-      if (pagosArray.length > 0) {
-        await supabase.from('pos_orden_pagos').delete().eq('orden_id', orden_id);
-        await supabase.from('pos_orden_pagos').insert(
-          pagosArray.map((pg: any, idx: number) => ({
-            orden_id,
-            fecha: todayStr,
-            caja_nombre: cajaNombre,
-            numero_pago: Number(pg.numero_pago || idx + 1),
-            metodo_pago: pg.metodo_pago,
-            monto_aplicado: Number(pg.monto_aplicado || 0),
-            monto_recibido: Number(pg.monto_recibido || pg.monto_aplicado || 0),
-            cambio_devuelto: Number(pg.cambio_devuelto || 0),
-            propina_monto: Number(pg.propina_monto || 0),
-            items_pagados: Array.isArray(pg.items_pagados) ? pg.items_pagados : [],
-            nota: pg.nota || '',
-          }))
-        );
-      }
-
-      if (errFac) throw errFac;
-
-      // Registrar cargo en Libro Mayor de Créditos si aplica
-      if (pCred > 0) {
-        await supabase.from('pos_creditos_movimientos').insert({
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('rpc_facturar_orden', {
+        p_payload: {
+          ...body,
           fecha: todayStr,
-          cliente_nombre: finalClienteNombre,
-          cliente_telefono: (cliente_telefono || ord.cliente_telefono || '').trim() || null,
-          tipo: 'CARGO_CREDITO',
-          orden_id: ord.id,
-          orden_consecutivo: ord.consecutivo,
-          monto: pCred,
-          metodo_pago: 'CREDITO',
+          periodo_id: `per-${todayStr.slice(0, 7)}`,
           caja_nombre: cajaNombre,
           cajero_nombre: cajeroNombre,
-          observaciones: `Factura ${ord.consecutivo} cargada a crédito`,
-        });
+        },
+      });
+      if (rpcErr) throw rpcErr;
+
+      const isConsumoInterno = body.metodo_pago === 'CONSUMO_INTERNO';
+      if (!isConsumoInterno && !rpcRes?.already_invoiced) {
+        invalidateVentasCache();
+        await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
       }
 
-      // Liberar mesa si aplica
-      if (ord.mesa_numero) {
-        await supabase
-          .from('pos_mesas')
-          .update({
-            estado: 'LIBRE',
-            orden_activa_id: null,
-            mesero_actual: null,
-            abierta_at: null,
-            precuenta_impresa_count: 0,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('numero', ord.mesa_numero);
-      }
-
-      // Auditoría si hubo descuento manual
-      if (descNum > 0) {
-        await supabase.from('pos_auditoria_eventos').insert({
-          fecha: todayStr,
-          caja_nombre: cajaNombre,
-          usuario_cajero: cajeroNombre,
-          tipo_alerta: 'DESCUENTO_MANUAL',
-          nivel_riesgo: descNum >= 30000 ? 'ALTO' : 'MEDIO',
-          orden_consecutivo: ord.consecutivo,
-          mesa_numero: ord.mesa_numero,
-          valor_afectado: descNum,
-          descripcion: `Descuento manual de $${descNum.toLocaleString('es-CO')} en ${ord.consecutivo}. Motivo: ${motivo_descuento || 'No indicado'}`,
-        });
-      }
-
-      // Descontar existencia en productos_venta y registrar movimiento
-      for (const it of itemsActivos) {
-        if (!it.producto_id) continue;
-        const { data: prodRow } = await supabase
-          .from('productos_venta')
-          .select('existencia')
-          .eq('id', it.producto_id)
-          .maybeSingle();
-        if (prodRow) {
-          const ant = Number(prodRow.existencia || 0);
-          const cant = Number(it.cantidad || 1);
-          const nueva = Math.max(0, ant - cant);
-          await supabase.from('productos_venta').update({ existencia: nueva }).eq('id', it.producto_id);
-          await supabase.from('pos_inventario_movimientos').insert({
-            fecha: todayStr,
-            producto_id: it.producto_id,
-            codigo_producto: it.codigo_producto,
-            nombre_producto: it.nombre_producto,
-            tipo: 'VENTA',
-            cantidad_delta: -cant,
-            existencia_anterior: ant,
-            existencia_nueva: nueva,
-            motivo: isConsumoInterno ? `Consumo Interno (${finalClienteNombre})` : `Venta ${ord.consecutivo}`,
-            usuario: cajeroNombre,
-          });
-        }
-      }
-
-      if (isConsumoInterno) {
-        // Consumo interno: NO suma a ventas_diarias ni al cuadre de caja; sí registra en consumos + bitácora
-        await supabase.from('pos_auditoria_eventos').insert({
-          fecha: todayStr,
-          caja_nombre: cajaNombre,
-          usuario_cajero: cajeroNombre,
-          tipo_alerta: 'CONSUMO_INTERNO_REGISTRADO',
-          nivel_riesgo: 'BAJO',
-          orden_consecutivo: ord.consecutivo,
-          mesa_numero: ord.mesa_numero,
-          valor_afectado: granTotal,
-          descripcion: `Consumo Interno valorizado en $${granTotal.toLocaleString('es-CO')} asignado a ${finalClienteNombre} (${areaConsumo}). Cobrado en caja: $0.`,
-        });
-        const consumoInserts = itemsActivos.map((it: any) => ({
-          fecha: todayStr,
-          tipo: 'CONSUMO',
-          nombre_insumo: it.nombre_producto,
-          categoria: it.categoria || 'Consumo Interno',
-          cantidad: Number(it.cantidad || 1),
-          unidad: it.unidad || 'Und',
-          costo_unitario: Number(it.precio_unitario || 0),
-          valor_total: Number(it.subtotal || 0),
-          observaciones: `Consumo POS (${ord.consecutivo}) • ${finalClienteNombre} (${areaConsumo})`,
-        }));
-        await supabase.from('registros_costeo_cocina').insert(consumoInserts);
-        return NextResponse.json({ success: true, orden: facturada, items: itemsActivos });
-      }
-
-      // Impactar ventas_detalle y ventas_diarias en tiempo real (solo ventas comerciales)
-      const periodoId = `per-${todayStr.slice(0, 7)}`;
-      const detalleInserts = itemsActivos.map((it: any) => ({
-        periodo_id: periodoId,
-        fecha: todayStr,
-        archivo_origen: `POS-${cajaNombre}-${ord.consecutivo}`,
-        codigo_producto: it.codigo_producto,
-        nombre_producto: it.nombre_producto,
-        categoria: it.categoria,
-        unidad: it.unidad || 'Und',
-        cantidad: Number(it.cantidad || 1),
-        venta_bruta: Number(it.subtotal || 0),
-        descuento: 0,
-        venta_neta: Number(it.subtotal || 0),
-        impuesto: 0,
-        gran_total: Number(it.subtotal || 0),
-        valor_unitario: Number(it.precio_unitario || 0),
-      }));
-      await supabase.from('ventas_detalle').insert(detalleInserts);
-
-      // Upsert ventas_diarias del día acumulando las ventas facturadas en el POS
-      const { data: existingVtaDia } = await supabase
-        .from('ventas_diarias')
-        .select('*')
-        .eq('periodo_id', periodoId)
-        .eq('fecha', todayStr)
-        .maybeSingle();
-
-      const totalCantOrden = itemsActivos.reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
-      const ventaSinPropina = Math.max(0, granTotal - propNum);
-      if (existingVtaDia) {
-        await supabase
-          .from('ventas_diarias')
-          .update({
-            total_articulos: Number(existingVtaDia.total_articulos || 0) + totalCantOrden,
-            venta_bruta: Number(existingVtaDia.venta_bruta || 0) + subtotalBruto,
-            descuento: Number(existingVtaDia.descuento || 0) + descNum,
-            venta_neta: Number(existingVtaDia.venta_neta || 0) + ventaSinPropina,
-            gran_total: Number(existingVtaDia.gran_total || 0) + ventaSinPropina,
-          })
-          .eq('id', existingVtaDia.id);
-      } else {
-        const dt = new Date(`${todayStr}T12:00:00Z`);
-        const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        await supabase.from('ventas_diarias').insert({
-          periodo_id: periodoId,
-          fecha: todayStr,
-          archivo_origen: 'POS La Finca Tiempo Real',
-          dia_semana: dias[dt.getUTCDay()],
-          total_articulos: totalCantOrden,
-          venta_bruta: subtotalBruto,
-          descuento: descNum,
-          venta_neta: ventaSinPropina,
-          impuesto: 0,
-          gran_total: ventaSinPropina,
-          total_platos_distintos: itemsActivos.length,
-          ticket_promedio: ventaSinPropina,
-        });
-      }
-      invalidateVentasCache();
-      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
-
-      return NextResponse.json({ success: true, orden: facturada, items: itemsActivos });
+      return NextResponse.json({
+        success: true,
+        alreadyInvoiced: Boolean(rpcRes?.already_invoiced),
+        orden: rpcRes?.orden || null,
+        items: rpcRes?.items || [],
+      });
     }
 
-    // 8. Cierre Parcial o Cierre Total con Arqueo Ciego Antifraude
+    // 8. Cierre Parcial o Cierre Total con Arqueo Ciego estricto por sesion_caja_id (RPC)
     if (action === 'CIERRE_PARCIAL_TURNO' || action === 'CIERRE_TOTAL_CAJA') {
       const {
         sesion_id,
@@ -1184,118 +818,36 @@ export async function POST(request: NextRequest) {
         transferencias_contadas = 0,
         observaciones = '',
       } = body;
-
       const isTotal = action === 'CIERRE_TOTAL_CAJA';
 
-      // Sumar órdenes facturadas hoy en esa caja
-      const { data: ordenesHoy } = await supabase
-        .from('pos_ordenes')
-        .select('pago_efectivo, pago_datafono, pago_transferencia, propina, gran_total, canal_venta')
-        .eq('fecha', todayStr)
-        .eq('estado', 'FACTURADA')
-        .eq('caja_nombre', cajaNombre);
-
-      const { data: sesion } = sesion_id
-        ? await supabase.from('libro_caja_sesiones').select('*').eq('id', sesion_id).maybeSingle()
-        : { data: null };
-
-      const [{ data: salidasRows }, { data: abonosEfRows }, { data: devEfRows }, { data: entradasEfRows }] = await Promise.all([
-        supabase.from('libro_caja_registros').select('valor_pagado').eq('fecha', todayStr).eq('tipo_libro', 'CAJA_MENOR'),
-        supabase.from('pos_creditos_movimientos').select('monto').eq('fecha', todayStr).eq('tipo', 'ABONO').eq('metodo_pago', 'EFECTIVO'),
-        supabase.from('pos_devoluciones').select('valor_devuelto').eq('fecha', todayStr).eq('metodo_reembolso', 'EFECTIVO'),
-        supabase.from('pos_auditoria_eventos').select('valor_afectado').eq('fecha', todayStr).eq('tipo_alerta', 'ENTRADA_EFECTIVO_CAJA'),
-      ]);
-
-      const totalSalidasCaja = (salidasRows || []).reduce((acc, r) => acc + Number(r.valor_pagado || 0), 0);
-      const totalAbonosEfectivo = (abonosEfRows || []).reduce((acc, r) => acc + Number(r.monto || 0), 0);
-      const totalDevolucionesEfectivo = (devEfRows || []).reduce((acc, r) => acc + Number(r.valor_devuelto || 0), 0);
-      const totalEntradasEfectivo = (entradasEfRows || []).reduce((acc, r) => acc + Number(r.valor_afectado || 0), 0);
-
-      const baseInicial = Number(sesion?.efectivo_inicial || 0);
-      const ventasEfectivo = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.pago_efectivo || 0), 0);
-      const ventasDatafono = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.pago_datafono || 0), 0);
-      const ventasTransf = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.pago_transferencia || 0), 0);
-      const totalVendidoPos = (ordenesHoy || []).reduce((acc, o) => acc + Number(o.gran_total || 0), 0);
-
-      const efectivoEsperado = Math.max(
-        0,
-        Math.round(
-          baseInicial +
-            ventasEfectivo +
-            totalAbonosEfectivo +
-            totalEntradasEfectivo -
-            totalSalidasCaja -
-            totalDevolucionesEfectivo
-        )
-      );
-      const diferenciaEfectivo = Math.round(Number(efectivo_contado) - efectivoEsperado);
-
-      const nowCierreIso = new Date().toISOString();
-      const duracionMinutos = sesion?.hora_apertura
-        ? Math.max(0, Math.round((new Date(nowCierreIso).getTime() - new Date(sesion.hora_apertura).getTime()) / 60000))
-        : 0;
-
-      if (sesion?.id) {
-        await supabase
+      let targetSesionId = sesion_id;
+      if (!targetSesionId) {
+        const { data: openSes } = await supabase
           .from('libro_caja_sesiones')
-          .update({
-            efectivo_cierre: Number(efectivo_contado),
-            valor_datafonos: Number(datafonos_contados),
-            valor_otros_medios: Number(transferencias_contadas),
-            venta_pos: totalVendidoPos,
-            total_salidas: totalSalidasCaja,
-            diferencia_cuadre: diferenciaEfectivo,
-            estado: isTotal ? 'CERRADA_TOTAL' : 'CERRADA_PARCIAL',
-            tipo_cierre: isTotal ? 'TOTAL' : 'PARCIAL',
-            hora_cierre: nowCierreIso,
-            duracion_minutos: duracionMinutos,
-            observaciones: observaciones || null,
-          })
-          .eq('id', sesion.id);
+          .select('id')
+          .eq('fecha', todayStr)
+          .ilike('caja_nombre', cajaNombre)
+          .eq('estado', 'ABIERTA')
+          .order('hora_apertura', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        targetSesionId = openSes?.id;
+      }
+      if (!targetSesionId) {
+        return NextResponse.json({ success: false, error: 'No se encontró sesión de caja activa para cerrar.' }, { status: 400 });
       }
 
-      // Asegurar que no queden otras sesiones ABIERTA en la misma caja hoy
-      await supabase
-        .from('libro_caja_sesiones')
-        .update({
-          estado: isTotal ? 'CERRADA_TOTAL' : 'CERRADA_PARCIAL',
-          tipo_cierre: isTotal ? 'TOTAL' : 'PARCIAL',
-          hora_cierre: nowCierreIso,
-          duracion_minutos: duracionMinutos,
-        })
-        .eq('fecha', todayStr)
-        .eq('caja_nombre', cajaNombre)
-        .eq('estado', 'ABIERTA');
+      const { data: resumenObj, error: rpcErr } = await supabase.rpc('rpc_calcular_cierre_caja', {
+        p_sesion_id: targetSesionId,
+        p_tipo_cierre: isTotal ? 'TOTAL' : 'PARCIAL',
+        p_efectivo_contado: Number(efectivo_contado || 0),
+        p_datafonos_contados: Number(datafonos_contados || 0),
+        p_transferencias_contadas: Number(transferencias_contadas || 0),
+        p_observaciones: String(observaciones || ''),
+      });
+      if (rpcErr) throw rpcErr;
 
-      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR');
-
-      if (Math.abs(diferenciaEfectivo) > 2000) {
-        await supabase.from('pos_auditoria_eventos').insert({
-          fecha: todayStr,
-          caja_nombre: cajaNombre,
-          usuario_cajero: cajeroNombre,
-          tipo_alerta: 'DESCUADRE_ARQUEO_CIEGO',
-          nivel_riesgo: Math.abs(diferenciaEfectivo) >= 20000 ? 'CRITICO' : 'ALTO',
-          valor_afectado: Math.abs(diferenciaEfectivo),
-          descripcion: `${isTotal ? 'Cierre Total' : 'Cierre Parcial'} con diferencia de $${diferenciaEfectivo.toLocaleString('es-CO')} (Esperado: $${efectivoEsperado.toLocaleString('es-CO')} vs Contado: $${Number(efectivo_contado).toLocaleString('es-CO')}).`,
-        });
-      }
-
-      const resumenObj = {
-        tipoCierre: isTotal ? 'TOTAL' : 'PARCIAL',
-        baseInicial,
-        ventasEfectivo,
-        ventasDatafono,
-        ventasTransf,
-        totalAbonosEfectivo,
-        totalEntradasEfectivo,
-        totalDevolucionesEfectivo,
-        totalVendidoPos,
-        totalSalidasCaja,
-        efectivoEsperado,
-        efectivoContado: Number(efectivo_contado),
-        diferenciaEfectivo,
-      };
+      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
 
       return NextResponse.json({
         success: true,
@@ -1332,6 +884,8 @@ export async function POST(request: NextRequest) {
         const { error: errEnt } = await supabase.from('pos_auditoria_eventos').insert({
           fecha: todayStr,
           caja_nombre: cajaNombre,
+          caja_id: body.caja_id || null,
+          sesion_caja_id: body.sesion_caja_id || body.sesion_id || null,
           usuario_cajero: cajeroNombre,
           tipo_alerta: 'ENTRADA_EFECTIVO_CAJA',
           nivel_riesgo: 'BAJO',
@@ -1354,6 +908,7 @@ export async function POST(request: NextRequest) {
           periodo_id: periodoId,
           tipo_libro: 'CAJA_MENOR',
           caja_nombre: cajaNombre,
+          caja_id: body.caja_id || null,
           responsable_caja: cajeroNombre,
           usuario_registro: cajeroNombre,
           clasificacion: body.clasificacion || 'Gasto Operativo',
@@ -1361,7 +916,7 @@ export async function POST(request: NextRequest) {
           categoria: body.categoria || 'Salida Rápida POS',
           descripcion_beneficiario: body.descripcion_beneficiario || '',
           valor_pagado: valor,
-          sesion_id: body.sesion_id || null,
+          sesion_id: body.sesion_id || body.sesion_caja_id || null,
         });
         if (errSal) throw errSal;
         await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
@@ -1435,6 +990,8 @@ export async function POST(request: NextRequest) {
           monto: valor,
           metodo_pago,
           caja_nombre: cajaNombre,
+          caja_id: body.caja_id || null,
+          sesion_caja_id: body.sesion_caja_id || body.sesion_id || null,
           cajero_nombre: cajeroNombre,
           observaciones: observaciones || `Abono en ${metodo_pago}`,
         })
@@ -1444,77 +1001,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, abono });
     }
 
-    // 13. Devolución Post-Factura (descuenta del método de reembolso y ventas del día)
+    // 13. Devolución Post-Factura (RPC ACID + Anti sobre-devolución + reintegro stock)
     if (action === 'DEVOLVER_ITEM_FACTURADO') {
-      const { orden_id, item_id, cantidad_devuelta = 1, metodo_reembolso = 'EFECTIVO', motivo = '' } = body;
+      const { orden_id, item_id } = body;
       if (!orden_id || !item_id) {
         return NextResponse.json({ success: false, error: 'orden_id e item_id son requeridos' }, { status: 400 });
       }
-      const [{ data: ord }, { data: item }] = await Promise.all([
-        supabase.from('pos_ordenes').select('*').eq('id', orden_id).single(),
-        supabase.from('pos_orden_items').select('*').eq('id', item_id).single(),
-      ]);
-      if (!ord || !item) {
-        return NextResponse.json({ success: false, error: 'Factura o artículo no encontrado' }, { status: 404 });
-      }
-      const cantDev = Math.min(Number(item.cantidad || 1), Math.max(0.01, Number(cantidad_devuelta || 1)));
-      const valorDev = Math.round(cantDev * Number(item.precio_unitario || 0));
-
-      const { data: devRow, error: errDev } = await supabase
-        .from('pos_devoluciones')
-        .insert({
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('rpc_devolver_item_o_ticket', {
+        p_payload: {
+          ...body,
+          es_ticket_completo: false,
           fecha: todayStr,
-          orden_id: ord.id,
-          orden_consecutivo: ord.consecutivo,
-          item_id: item.id,
-          nombre_producto: item.nombre_producto,
-          cantidad_devuelta: cantDev,
-          valor_devuelto: valorDev,
-          metodo_reembolso,
-          motivo: motivo || 'Devolución en caja',
           caja_nombre: cajaNombre,
           cajero_nombre: cajeroNombre,
-        })
-        .select('*')
-        .single();
-      if (errDev) throw errDev;
-
-      if (metodo_reembolso === 'CREDITO' && ord.cliente_nombre) {
-        await supabase.from('pos_creditos_movimientos').insert({
-          fecha: todayStr,
-          cliente_nombre: ord.cliente_nombre,
-          cliente_telefono: ord.cliente_telefono || null,
-          tipo: 'ABONO',
-          orden_id: ord.id,
-          orden_consecutivo: ord.consecutivo,
-          monto: valorDev,
-          metodo_pago: 'CREDITO',
-          caja_nombre: cajaNombre,
-          cajero_nombre: cajeroNombre,
-          observaciones: `Nota crédito por devolución de ${cantDev}x ${item.nombre_producto}`,
-        });
-      }
-
-      // Descontar de ventas_diarias si existe registro del día
-      const periodoId = `per-${todayStr.slice(0, 7)}`;
-      const { data: vtaDia } = await supabase
-        .from('ventas_diarias')
-        .select('*')
-        .eq('periodo_id', periodoId)
-        .eq('fecha', todayStr)
-        .maybeSingle();
-      if (vtaDia) {
-        await supabase
-          .from('ventas_diarias')
-          .update({
-            venta_neta: Math.max(0, Number(vtaDia.venta_neta || 0) - valorDev),
-            gran_total: Math.max(0, Number(vtaDia.gran_total || 0) - valorDev),
-          })
-          .eq('id', vtaDia.id);
-        invalidateVentasCache();
-      }
-
-      return NextResponse.json({ success: true, devolucion: devRow });
+        },
+      });
+      if (rpcErr) throw rpcErr;
+      invalidateVentasCache();
+      return NextResponse.json({ success: true, devolucion: rpcRes?.devolucion || null });
     }
 
     // 14. Actualizar Cantidad / Precio Especial / Mayoreo (F11) sobre ítem abierto
@@ -1603,75 +1107,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // 15D. Devolución completa de un ticket facturado
+    // 15D. Devolución completa de un ticket facturado (RPC ACID)
     if (action === 'DEVOLVER_TICKET_COMPLETO') {
-      const { orden_id, metodo_reembolso = 'EFECTIVO', motivo = 'Devolución completa de ticket' } = body;
+      const { orden_id } = body;
       if (!orden_id) {
         return NextResponse.json({ success: false, error: 'orden_id requerido' }, { status: 400 });
       }
-      const [{ data: ord }, { data: items }] = await Promise.all([
-        supabase.from('pos_ordenes').select('*').eq('id', orden_id).single(),
-        supabase.from('pos_orden_items').select('*').eq('orden_id', orden_id).neq('estado_comanda', 'ANULADO'),
-      ]);
-      if (!ord) {
-        return NextResponse.json({ success: false, error: 'Factura no encontrada' }, { status: 404 });
-      }
-      const activos = items || [];
-      let totalDevuelto = 0;
-      for (const it of activos) {
-        const cant = Number(it.cantidad || 1);
-        const val = Math.round(cant * Number(it.precio_unitario || 0));
-        totalDevuelto += val;
-        await supabase.from('pos_devoluciones').insert({
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('rpc_devolver_item_o_ticket', {
+        p_payload: {
+          ...body,
+          es_ticket_completo: true,
           fecha: todayStr,
-          orden_id: ord.id,
-          orden_consecutivo: ord.consecutivo,
-          item_id: it.id,
-          nombre_producto: it.nombre_producto,
-          cantidad_devuelta: cant,
-          valor_devuelto: val,
-          metodo_reembolso,
-          motivo,
           caja_nombre: cajaNombre,
           cajero_nombre: cajeroNombre,
-        });
-      }
-      if (metodo_reembolso === 'CREDITO' && ord.cliente_nombre && totalDevuelto > 0) {
-        await supabase.from('pos_creditos_movimientos').insert({
-          fecha: todayStr,
-          cliente_nombre: ord.cliente_nombre,
-          cliente_telefono: ord.cliente_telefono || null,
-          tipo: 'ABONO',
-          orden_id: ord.id,
-          orden_consecutivo: ord.consecutivo,
-          monto: totalDevuelto,
-          metodo_pago: 'CREDITO',
-          caja_nombre: cajaNombre,
-          cajero_nombre: cajeroNombre,
-          observaciones: `Nota crédito por devolución completa de ${ord.consecutivo}`,
-        });
-      }
-      if (totalDevuelto > 0) {
-        const periodoId = `per-${todayStr.slice(0, 7)}`;
-        const { data: vtaDia } = await supabase
-          .from('ventas_diarias')
-          .select('*')
-          .eq('periodo_id', periodoId)
-          .eq('fecha', todayStr)
-          .maybeSingle();
-        if (vtaDia) {
-          await supabase
-            .from('ventas_diarias')
-            .update({
-              venta_neta: Math.max(0, Number(vtaDia.venta_neta || 0) - totalDevuelto),
-              gran_total: Math.max(0, Number(vtaDia.gran_total || 0) - totalDevuelto),
-            })
-            .eq('id', vtaDia.id);
-          invalidateVentasCache();
-        }
-      }
+        },
+      });
+      if (rpcErr) throw rpcErr;
+      invalidateVentasCache();
       await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
-      return NextResponse.json({ success: true, totalDevuelto });
+      return NextResponse.json({ success: true, totalDevuelto: Number(rpcRes?.totalDevuelto || 0) });
     }
 
     // 15E. Cambiar canal de una orden abierta (Mostrador -> Mesa o Domicilio, conservando insumos)

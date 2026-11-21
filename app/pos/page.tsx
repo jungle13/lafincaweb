@@ -317,30 +317,30 @@ export default function ElianaPosPage() {
   const applyPosPayload = useCallback((data: Record<string, unknown>) => {
     setMesas((data.mesas as PosMesa[]) || []);
     setOrdenes((data.ordenes as PosOrden[]) || []);
-    setProductos((data.productos as ProductoVenta[]) || []);
+    if (Array.isArray(data.productos)) setProductos(data.productos as ProductoVenta[]);
     setSesionActiva((data.sesionActiva as SesionCaja) || null);
     setSalidasDiaCaja(Number(data.salidasDiaCaja || 0));
     setAbonosEfectivoHoy(Number(data.abonosEfectivoHoy || 0));
     setEntradasEfectivoHoy(Number(data.entradasEfectivoHoy || 0));
     setDevolucionesEfectivoHoy(Number(data.devolucionesEfectivoHoy || 0));
     setEventosTurno((data.eventosTurno as EventoTurno[]) || []);
-    setCreditosClientes((data.creditosClientes as ClienteCreditoResumen[]) || []);
+    if (Array.isArray(data.creditosClientes)) setCreditosClientes(data.creditosClientes as ClienteCreditoResumen[]);
     setDevolucionesDia((data.devolucionesDia as DevolucionDia[]) || []);
     setCorteDepartamentos((data.corteDepartamentos as CorteDepartamento[]) || []);
     setFlujoEfectivoDetallado((data.flujoEfectivoDetallado as FlujoEfectivoRow[]) || []);
     setConsumosInternosHoy((data.consumosInternosHoy as PosOrden[]) || []);
     setGananciaEstimadaHoy(Number(data.gananciaEstimadaHoy || 0));
-    setMovimientosInventario((data.movimientosInventario as InventarioMovimiento[]) || []);
+    if (Array.isArray(data.movimientosInventario)) setMovimientosInventario(data.movimientosInventario as InventarioMovimiento[]);
     if (Array.isArray(data.operarios)) setOperarios(data.operarios as OperarioPos[]);
     if (Array.isArray(data.categorias)) setCategorias(data.categorias as PosCategoria[]);
     if (Array.isArray(data.cajasAbiertasHoy)) setCajasAbiertasHoy(data.cajasAbiertasHoy as string[]);
     setJornadaCerradaTotal(Boolean(data.jornadaCerradaTotal));
   }, []);
 
-  const fetchPosState = useCallback(async () => {
+  const fetchPosState = useCallback(async (scope: 'live' | 'full' = 'live') => {
     const fechaHoy = getColombiaDateStr();
     try {
-      const res = await fetch(`/api/pos?fecha=${fechaHoy}&caja=${encodeURIComponent(cajaNombre)}`);
+      const res = await fetch(`/api/pos?fecha=${fechaHoy}&caja=${encodeURIComponent(cajaNombre)}&scope=${scope}`);
       const data = await res.json();
       if (data.success) {
         applyPosPayload(data);
@@ -365,7 +365,7 @@ export default function ElianaPosPage() {
   }, [cajaNombre, posConfig.rolTerminal, posConfig.ipCajaPrincipal, applyPosPayload, notify]);
 
   useEffect(() => {
-    fetchPosState();
+    void fetchPosState('full');
   }, [fetchPosState]);
 
   // Sincronización periódica multi-caja en vistas compartidas (Mesas, Domicilios, Ventas)
@@ -373,7 +373,7 @@ export default function ElianaPosPage() {
     if (activeTab !== 'MESAS' && activeTab !== 'DOMICILIOS' && activeTab !== 'VENTAS_DIA') return;
     const timer = setInterval(() => {
       if (navigator.onLine) {
-        void fetchPosState();
+        void fetchPosState('live');
       }
     }, 10000);
     return () => clearInterval(timer);
@@ -384,6 +384,8 @@ export default function ElianaPosPage() {
       const fullPayload = {
         action,
         caja_nombre: cajaNombre,
+        caja_id: boundCaja?.id || null,
+        sesion_caja_id: sesionActiva?.id || null,
         cajero_nombre: cajeroNombre,
         ...payload,
       };
@@ -416,7 +418,7 @@ export default function ElianaPosPage() {
       if (!data.success) throw new Error(data.error || 'Error en operación POS');
       return data;
     },
-    [cajaNombre, cajeroNombre, posConfig.ipCajaPrincipal, offlineQueue, notify]
+    [cajaNombre, boundCaja?.id, sesionActiva?.id, cajeroNombre, posConfig.ipCajaPrincipal, offlineQueue, notify]
   );
 
   const syncOfflineQueue = useCallback(async () => {
@@ -2840,7 +2842,7 @@ export default function ElianaPosPage() {
             setBusyAction(true);
             try {
               await executePosAction('GUARDAR_PRODUCTO_POS', payload);
-              await fetchPosState();
+              await fetchPosState('full');
               notify('ok', 'Producto guardado correctamente.');
             } catch (e: unknown) {
               notify('err', e instanceof Error ? e.message : 'Error guardando producto');
@@ -2852,7 +2854,7 @@ export default function ElianaPosPage() {
             setBusyAction(true);
             try {
               await executePosAction('ELIMINAR_PRODUCTO_POS', { id });
-              await fetchPosState();
+              await fetchPosState('full');
               notify('ok', 'Producto eliminado del catálogo.');
             } catch (e: unknown) {
               notify('err', e instanceof Error ? e.message : 'Error eliminando producto');
@@ -2873,7 +2875,7 @@ export default function ElianaPosPage() {
             setBusyAction(true);
             try {
               await executePosAction('AJUSTAR_INVENTARIO_POS', payload);
-              await fetchPosState();
+              await fetchPosState('full');
               notify('ok', 'Movimiento de inventario registrado.');
             } catch (e: unknown) {
               notify('err', e instanceof Error ? e.message : 'Error actualizando inventario');
@@ -2928,6 +2930,7 @@ export default function ElianaPosPage() {
         <PosCheckoutModal
           ordenActiva={ordenActiva}
           itemsActivos={itemsActivos}
+          productos={productos}
           operarios={operarios}
           creditosClientes={creditosClientes}
           habilitaPropinas={posConfig.habilitaPropinas}
@@ -3411,7 +3414,7 @@ export default function ElianaPosPage() {
             setBusyAction(true);
             try {
               await executePosAction('REGISTRAR_ABONO_CREDITO', payload);
-              await fetchPosState();
+              await fetchPosState('full');
               notify('ok', `Abono de ${formatMoney(payload.monto)} registrado.`);
             } catch (e: unknown) {
               notify('err', e instanceof Error ? e.message : 'Error registrando abono');

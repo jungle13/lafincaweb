@@ -22,6 +22,8 @@ export interface PosOrdenItem {
   unidad: string;
   precio_unitario: number;
   subtotal: number;
+  tarifa_impuesto?: number;
+  impuesto_valor?: number;
   notas_comanda: string | null;
   estado_comanda: 'PENDIENTE' | 'COMANDADO' | 'ENTREGADO' | 'ANULADO';
 }
@@ -116,6 +118,8 @@ export interface ProductoVenta {
   costo_unitario?: number;
   precio_total: number;
   precio_neto: number;
+  tarifa_impoconsumo?: number;
+  tarifa_iva?: number;
   precio_mayoreo?: number;
   existencia?: number;
   inv_minimo?: number;

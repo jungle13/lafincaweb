@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Printer,
   RotateCcw,
@@ -245,26 +245,33 @@ export default function PosSalesHistoryView({
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [ordenesFacturadas]);
 
+  const submittingReturnRef = useRef(false);
+
   const handleConfirmReturn = async () => {
-    if (!ordenActiva) return;
-    if (devFullTicket) {
-      await onDevolverTicketCompleto({
+    if (!ordenActiva || submittingReturnRef.current) return;
+    submittingReturnRef.current = true;
+    try {
+      if (devFullTicket) {
+        await onDevolverTicketCompleto({
+          orden_id: ordenActiva.id,
+          metodo_reembolso: devMetodo,
+          motivo: devMotivo,
+        });
+        setDevFullTicket(false);
+        return;
+      }
+      if (!devItem) return;
+      await onDevolverItem({
         orden_id: ordenActiva.id,
+        item_id: devItem.id,
+        cantidad_devuelta: devCantidad,
         metodo_reembolso: devMetodo,
         motivo: devMotivo,
       });
-      setDevFullTicket(false);
-      return;
+      setDevItem(null);
+    } finally {
+      submittingReturnRef.current = false;
     }
-    if (!devItem) return;
-    await onDevolverItem({
-      orden_id: ordenActiva.id,
-      item_id: devItem.id,
-      cantidad_devuelta: devCantidad,
-      metodo_reembolso: devMetodo,
-      motivo: devMotivo,
-    });
-    setDevItem(null);
   };
 
   return (
