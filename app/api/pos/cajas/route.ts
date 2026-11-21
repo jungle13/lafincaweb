@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit } from '@/lib/authServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || 'local';
+    const rl = checkRateLimit(`pos-cajas:${ip}`, 15, 300_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: `Demasiados intentos. Espera ${rl.retryAfterSec}s.` },
+        { status: 429 }
+      );
+    }
     const body = await req.json();
     const action = String(body?.action || 'VINCULAR_Y_VALIDAR_CAJA');
 

@@ -30,23 +30,33 @@ struct LanStore {
 }
 
 impl LanStore {
+    fn write_atomic(&self, content: &str) {
+        if let Some(parent) = self.file_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let tmp_path = self.file_path.with_extension("json.tmp");
+        if let Ok(mut file) = fs::File::create(&tmp_path) {
+            if file.write_all(content.as_bytes()).is_ok() {
+                let _ = file.sync_all();
+                let _ = fs::rename(&tmp_path, &self.file_path);
+            }
+        }
+    }
+
     fn read_state(&self) -> String {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         fs::read_to_string(&self.file_path).unwrap_or_else(|_| {
             r#"{"success":true,"mesas":[],"ordenes":[],"productos":[],"sesiones":[],"salidasDiaCaja":0,"eventosTurno":[],"creditosClientes":[],"devolucionesDia":[],"pendingOps":[]}"#.to_string()
         })
     }
 
     fn write_state(&self, content: &str) {
-        let _guard = self.lock.lock().unwrap();
-        if let Some(parent) = self.file_path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let _ = fs::write(&self.file_path, content);
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        self.write_atomic(content);
     }
 
     fn append_pending_op(&self, op_json: serde_json::Value) {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         let raw = fs::read_to_string(&self.file_path).unwrap_or_else(|_| "{}".to_string());
         let mut root: serde_json::Value =
             serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
@@ -60,29 +70,90 @@ impl LanStore {
         if let Some(ops) = arr {
             ops.push(op_json);
         }
-        if let Some(parent) = self.file_path.parent() {
-            let _ = fs::create_dir_all(parent);
+        if let Ok(serialized) = serde_json::to_string(&root) {
+            self.write_atomic(&serialized);
         }
-        let _ = fs::write(&self.file_path, serde_json::to_string(&root).unwrap_or_default());
     }
 }
 
-fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
-    let mut buffer = [0u8; 65536];
-    let n = match stream.read(&mut buffer) {
-        Ok(bytes) if bytes > 0 => bytes,
-        _ => return,
-    };
-    let req = String::from_utf8_lossy(&buffer[..n]);
-    let first_line = req.lines().next().unwrap_or("");
+fn read_http_request(stream: &mut TcpStream) -> Option<(String, String, String, String)> {
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let mut raw: Vec<u8> = Vec::with_capacity(8192);
+    let mut chunk = [0u8; 4096];
+    let mut header_end: Option<usize> = None;
+
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                raw.extend_from_slice(&chunk[..n]);
+                if raw.len() > 5 * 1024 * 1024 {
+                    return None;
+                }
+                if header_end.is_none() {
+                    if let Some(pos) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+                        header_end = Some(pos + 4);
+                        break;
+                    }
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    let h_end = header_end?;
+    let headers_str = String::from_utf8_lossy(&raw[..h_end]).to_string();
+    let mut content_length: usize = 0;
+    let mut origin = String::new();
+    for line in headers_str.lines() {
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("content-length:") {
+            if let Ok(len) = line.split(':').nth(1).unwrap_or("0").trim().parse::<usize>() {
+                content_length = len.min(5 * 1024 * 1024);
+            }
+        } else if lower.starts_with("origin:") {
+            origin = line.splitn(2, ':').nth(1).unwrap_or("").trim().to_string();
+        }
+    }
+
+    while raw.len() < h_end + content_length {
+        match stream.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                raw.extend_from_slice(&chunk[..n]);
+                if raw.len() > 5 * 1024 * 1024 {
+                    return None;
+                }
+            }
+        }
+    }
+
+    let first_line = headers_str.lines().next().unwrap_or("");
     let parts: Vec<&str> = first_line.split_whitespace().collect();
     if parts.len() < 2 {
-        return;
+        return None;
     }
-    let method = parts[0];
-    let path = parts[1];
+    let body_end = (h_end + content_length).min(raw.len());
+    let body = String::from_utf8_lossy(&raw[h_end..body_end]).trim().to_string();
+    Some((parts[0].to_string(), parts[1].to_string(), origin, body))
+}
 
-    let body = req.split("\r\n\r\n").nth(1).unwrap_or("").trim();
+fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
+    let (method, path, origin, body) = match read_http_request(&mut stream) {
+        Some(parsed) => parsed,
+        None => return,
+    };
+
+    let allowed_origin = if origin.starts_with("http://localhost:")
+        || origin.starts_with("http://127.0.0.1:")
+        || origin == "tauri://localhost"
+        || origin == "http://tauri.localhost"
+        || origin.ends_with(".vercel.app")
+    {
+        origin
+    } else {
+        "http://localhost:3000".to_string()
+    };
 
     let (status, resp_body) = if method == "OPTIONS" {
         ("204 No Content", String::new())
@@ -92,11 +163,11 @@ fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
         ("200 OK", store.read_state())
     } else if method == "POST" && path == "/lan/sync-cache" {
         if !body.is_empty() {
-            store.write_state(body);
+            store.write_state(&body);
         }
         ("200 OK", r#"{"success":true}"#.to_string())
     } else if method == "POST" && path == "/lan/action" {
-        if let Ok(val) = serde_json::from_str::<serde_json::Value>(body) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
             store.append_pending_op(val);
             ("200 OK", r#"{"success":true,"lanQueued":true}"#.to_string())
         } else {
@@ -107,8 +178,9 @@ fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
     };
 
     let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: {}\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         status,
+        allowed_origin,
         resp_body.len(),
         resp_body
     );
@@ -128,10 +200,15 @@ fn start_lan_server(store: LanStore) {
 
 #[tauri::command]
 fn get_local_ip() -> String {
-    if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
-        if socket.connect("8.8.8.8:80").is_ok() {
-            if let Ok(addr) = socket.local_addr() {
-                return addr.ip().to_string();
+    for target in ["192.168.1.1:80", "10.0.0.1:80", "8.8.8.8:80"] {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
+            if socket.connect(target).is_ok() {
+                if let Ok(addr) = socket.local_addr() {
+                    let ip = addr.ip().to_string();
+                    if ip != "127.0.0.1" && ip != "0.0.0.0" {
+                        return ip;
+                    }
+                }
             }
         }
     }

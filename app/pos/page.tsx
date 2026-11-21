@@ -70,6 +70,7 @@ import PosTerminalSettingsModal from '@/components/pos/PosTerminalSettingsModal'
 import PosProductsModule from '@/components/pos/PosProductsModule';
 import PosInventoryModule from '@/components/pos/PosInventoryModule';
 import PosCheckoutModal from '@/components/pos/PosCheckoutModal';
+import PosSupervisorPinModal from '@/components/pos/PosSupervisorPinModal';
 import { PosExitConfirmModal, PosOpenShiftGate } from '@/components/pos/PosShiftGateModal';
 import ElianaBrandLogo from '@/components/brand/ElianaBrandLogo';
 import { formatDurationHMS, isTauriDesktop } from '@/lib/empresaConfig';
@@ -255,6 +256,12 @@ export default function ElianaPosPage() {
   const captureInputRef = useRef<HTMLInputElement | null>(null);
   const buscarInputRef = useRef<HTMLInputElement | null>(null);
   const verificadorInputRef = useRef<HTMLInputElement | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [failedPrints, setFailedPrints] = useState<Array<{ id: string; ticket: ThermalTicketData; error: string }>>([]);
+  const [supervisorPrompt, setSupervisorPrompt] = useState<{
+    actionLabel: string;
+    resolve: (pin: string | null) => void;
+  } | null>(null);
 
   const cajaNombre = boundCaja?.nombre || posConfig.nombreCaja || 'CAJA PRINCIPAL';
   const cajeroNombre = sesionActiva?.cajero_nombre || fallbackUser;
@@ -262,9 +269,32 @@ export default function ElianaPosPage() {
     '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
   const notify = useCallback((type: 'ok' | 'err', text: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ type, text });
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }, []);
+
+  const requestSupervisorPin = useCallback((actionLabel: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      setSupervisorPrompt({ actionLabel, resolve });
+    });
+  }, []);
+
+  const safePrintTicket = useCallback(
+    async (ticket: ThermalTicketData) => {
+      const res = await printThermalTicket(ticket);
+      if (!res.ok) {
+        const errMsg = res.error || 'Error de conexión con impresora térmica';
+        setFailedPrints((prev) => [
+          ...prev,
+          { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ticket, error: errMsg },
+        ]);
+        notify('err', `Error imprimiendo: ${errMsg}`);
+      }
+      return res;
+    },
+    [notify]
+  );
 
   const focusCapture = useCallback(() => {
     setTimeout(() => captureInputRef.current?.focus(), 40);
@@ -340,7 +370,9 @@ export default function ElianaPosPage() {
   const fetchPosState = useCallback(async (scope: 'live' | 'full' = 'live') => {
     const fechaHoy = getColombiaDateStr();
     try {
-      const res = await fetch(`/api/pos?fecha=${fechaHoy}&caja=${encodeURIComponent(cajaNombre)}&scope=${scope}`);
+      const res = await fetch(`/api/pos?fecha=${fechaHoy}&caja=${encodeURIComponent(cajaNombre)}&scope=${scope}`, {
+        signal: AbortSignal.timeout(10000),
+      });
       const data = await res.json();
       if (data.success) {
         applyPosPayload(data);
@@ -368,7 +400,21 @@ export default function ElianaPosPage() {
     void fetchPosState('full');
   }, [fetchPosState]);
 
-  // Sincronización periódica multi-caja en vistas compartidas (Mesas, Domicilios, Ventas)
+  // Sincronización periódica multi-caja en vistas compartidas (Mesas, Domicilios, Ventas) y al recuperar foco
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        void fetchPosState('live');
+      }
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [fetchPosState]);
+
   useEffect(() => {
     if (activeTab !== 'MESAS' && activeTab !== 'DOMICILIOS' && activeTab !== 'VENTAS_DIA') return;
     const timer = setInterval(() => {
@@ -381,13 +427,20 @@ export default function ElianaPosPage() {
 
   const executePosAction = useCallback(
     async (action: string, payload: Record<string, unknown>) => {
-      const fullPayload = {
+      const needsIdemp = action === 'REGISTRAR_PAGO_PARCIAL' || action === 'MOVIMIENTO_EFECTIVO_CAJA';
+      const idempKey =
+        needsIdemp && !payload.idempotency_key && typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : payload.idempotency_key;
+
+      const fullPayload: Record<string, unknown> = {
         action,
         caja_nombre: cajaNombre,
         caja_id: boundCaja?.id || null,
         sesion_caja_id: sesionActiva?.id || null,
         cajero_nombre: cajeroNombre,
         ...payload,
+        ...(idempKey ? { idempotency_key: idempKey } : {}),
       };
 
       if (!navigator.onLine) {
@@ -409,16 +462,26 @@ export default function ElianaPosPage() {
         return { success: true, offline: true };
       }
 
-      const res = await fetch('/api/pos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fullPayload),
-      });
-      const data = await res.json();
+      const sendReq = async (bodyObj: Record<string, unknown>) => {
+        const res = await fetch('/api/pos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyObj),
+          signal: AbortSignal.timeout(12000),
+        });
+        return res.json();
+      };
+
+      let data = await sendReq(fullPayload);
+      if (!data.success && data.code === 'SUPERVISOR_PIN_REQUIRED') {
+        const pin = await requestSupervisorPin(action);
+        if (!pin) throw new Error('Operación cancelada: requiere PIN de Supervisor.');
+        data = await sendReq({ ...fullPayload, supervisor_pin: pin });
+      }
       if (!data.success) throw new Error(data.error || 'Error en operación POS');
       return data;
     },
-    [cajaNombre, boundCaja?.id, sesionActiva?.id, cajeroNombre, posConfig.ipCajaPrincipal, offlineQueue, notify]
+    [cajaNombre, boundCaja?.id, sesionActiva?.id, cajeroNombre, posConfig.ipCajaPrincipal, offlineQueue, notify, requestSupervisorPin]
   );
 
   const syncOfflineQueue = useCallback(async () => {
@@ -844,7 +907,7 @@ export default function ElianaPosPage() {
           const porEstacion = (res.porEstacion || {}) as Record<string, PosOrdenItem[]>;
           for (const [est, its] of Object.entries(porEstacion)) {
             if (its.length > 0) {
-              await printThermalTicket({
+              await safePrintTicket({
                 titulo: `COMANDA - ${est}`,
                 consecutivo: ordenActiva.consecutivo,
                 fecha: new Date().toLocaleString('es-CO'),
@@ -877,7 +940,7 @@ export default function ElianaPosPage() {
             porEst[est].push(it);
           }
           for (const [est, its] of Object.entries(porEst)) {
-            await printThermalTicket({
+            await safePrintTicket({
               titulo: `REENVÍO COMANDA - ${est}`,
               consecutivo: ordenActiva.consecutivo,
               fecha: new Date().toLocaleString('es-CO'),
@@ -918,7 +981,7 @@ export default function ElianaPosPage() {
       const propinaSug = posConfig.habilitaPropinas
         ? Math.round(ordenActiva.subtotal_bruto * (posConfig.porcentajePropinaSugerida / 100))
         : 0;
-      await printThermalTicket({
+      await safePrintTicket({
         titulo: 'PRECUENTA',
         subtitulo: 'Documento informativo - No es factura',
         consecutivo: ordenActiva.consecutivo,
@@ -1048,7 +1111,7 @@ export default function ElianaPosPage() {
         localStorage.setItem(LAST_PAYMENT_KEY, JSON.stringify(memory));
       }
 
-      await printThermalTicket(ticketData);
+      await safePrintTicket(ticketData);
 
       setShowCobroModal(false);
       setOrdenActivaId(null);
@@ -1125,7 +1188,7 @@ export default function ElianaPosPage() {
     if (!lastPayment.ticketData) {
       return notify('err', 'Aún no hay un ticket reciente en esta caja.');
     }
-    await printThermalTicket({
+    await safePrintTicket({
       ...lastPayment.ticketData,
       subtitulo: `COPIA DE TICKET (${lastPayment.consecutivo})`,
     });
@@ -2012,6 +2075,55 @@ export default function ElianaPosPage() {
 
   return (
     <div className="fixed inset-0 z-[9999] w-screen h-screen bg-zinc-100 text-zinc-900 flex flex-col overflow-hidden select-none font-sans">
+
+      {failedPrints.length > 0 && (
+        <div className="bg-red-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <Printer className="w-4 h-4 shrink-0" />
+            <span>
+              Error de impresora ({failedPrints.length} pendiente{failedPrints.length > 1 ? 's' : ''}): {failedPrints[0].error}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const pending = [...failedPrints];
+                setFailedPrints([]);
+                for (const item of pending) {
+                  await safePrintTicket(item.ticket);
+                }
+              }}
+              className="px-3 py-1 rounded bg-white text-red-700 hover:bg-red-50 text-xs font-bold cursor-pointer"
+            >
+              Reintentar Impresión ({failedPrints.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFailedPrints([])}
+              className="px-2 py-1 rounded bg-red-700 hover:bg-red-800 text-white text-xs font-semibold cursor-pointer"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {supervisorPrompt && (
+        <PosSupervisorPinModal
+          actionLabel={supervisorPrompt.actionLabel}
+          onConfirm={(pin) => {
+            const res = supervisorPrompt.resolve;
+            setSupervisorPrompt(null);
+            res(pin);
+          }}
+          onCancel={() => {
+            const res = supervisorPrompt.resolve;
+            setSupervisorPrompt(null);
+            res(null);
+          }}
+        />
+      )}
 
       {forceCloseMode && (
         <div className="bg-amber-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between gap-3 shrink-0">
@@ -3201,7 +3313,7 @@ export default function ElianaPosPage() {
           devolucionesDia={devolucionesDia}
           busyAction={busyAction}
           onReimprimirOrden={async (orden) => {
-            await printThermalTicket({
+            await safePrintTicket({
               titulo: 'COPIA DE FACTURA POS',
               consecutivo: orden.consecutivo,
               fecha: orden.fecha,

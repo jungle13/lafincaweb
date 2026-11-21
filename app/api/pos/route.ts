@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { invalidateVentasCache } from '@/lib/ventasCache';
 import { recalcularHojaDiaria } from '@/services/libroCajaService';
-import { AUTH_COOKIE_NAME, validateAdminCredentials, verifyAuthToken } from '@/lib/authServer';
+import { AUTH_COOKIE_NAME, getAuthEnforcementMode, normalizeSystemRole, validateAdminCredentials, verifyAuthToken } from '@/lib/authServer';
+import { verifySupervisorPin } from '@/lib/supervisorAuth';
 import { formatColombiaTime, getColombiaDateStr } from '@/lib/dateUtils';
 
 export const dynamic = 'force-dynamic';
@@ -417,6 +418,46 @@ export async function POST(request: NextRequest) {
     const cajaNombre = body.caja_nombre || 'Caja 1';
     const cajeroNombre = body.cajero_nombre || 'CAJERO';
 
+    const mainToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+    const reqSession = await verifyAuthToken(mainToken);
+    const reqRole = reqSession ? normalizeSystemRole(String(reqSession.role), reqSession.username) : null;
+    const isEnforce = getAuthEnforcementMode() === 'enforce';
+
+    const requireSupervisor = async (): Promise<
+      { ok: true; autorizadoPor: string | null } | { ok: false; response: NextResponse }
+    > => {
+      if (reqRole === 'ADMIN' || reqRole === 'GESTOR') {
+        return { ok: true, autorizadoPor: reqSession?.name || reqSession?.username || null };
+      }
+      if (!reqSession && !isEnforce) {
+        if (!body.supervisor_pin) return { ok: true, autorizadoPor: null };
+      }
+      const sup = await verifySupervisorPin(body.supervisor_pin);
+      if (!sup.ok) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              success: false,
+              code: 'SUPERVISOR_PIN_REQUIRED',
+              error: 'Se requiere PIN de Supervisor o Administrador para autorizar esta operación.',
+            },
+            { status: 403 }
+          ),
+        };
+      }
+      return { ok: true, autorizadoPor: sup.supervisorName };
+    };
+
+    const requireManagerRole = (): NextResponse | null => {
+      if (reqRole === 'ADMIN' || reqRole === 'GESTOR') return null;
+      if (!reqSession && !isEnforce) return null;
+      return NextResponse.json(
+        { success: false, error: 'Acceso denegado: requiere rol ADMIN o GESTOR.' },
+        { status: 403 }
+      );
+    };
+
     // 1. Abrir turno de caja (por Caja + Contraseña de Caja vinculada al equipo, o fallback usuario)
     if (action === 'ABRIR_TURNO_CAJA') {
       const efectivoInicial = Number(body.efectivo_inicial ?? body.base_inicial ?? 0);
@@ -737,6 +778,17 @@ export async function POST(request: NextRequest) {
       if (!orden_id) {
         return NextResponse.json({ success: false, error: 'Falta orden_id' }, { status: 400 });
       }
+      const idempKey = typeof body.idempotency_key === 'string' && body.idempotency_key.trim() ? body.idempotency_key.trim() : null;
+      if (idempKey) {
+        const { data: existingPago } = await supabase
+          .from('pos_orden_pagos')
+          .select('*')
+          .eq('idempotency_key', idempKey)
+          .maybeSingle();
+        if (existingPago) {
+          return NextResponse.json({ success: true, deduplicated: true, pago: existingPago });
+        }
+      }
       const { data: prevPagos } = await supabase
         .from('pos_orden_pagos')
         .select('numero_pago')
@@ -760,10 +812,17 @@ export async function POST(request: NextRequest) {
           propina_monto: Number(propina_monto || 0),
           items_pagados: Array.isArray(items_pagados) ? items_pagados : [],
           nota: String(nota || '').trim(),
+          idempotency_key: idempKey,
         })
         .select('*')
         .single();
-      if (errIns) throw errIns;
+      if (errIns) {
+        if ((errIns as any)?.code === '23505' && idempKey) {
+          const { data: dupPago } = await supabase.from('pos_orden_pagos').select('*').eq('idempotency_key', idempKey).maybeSingle();
+          return NextResponse.json({ success: true, deduplicated: true, pago: dupPago });
+        }
+        throw errIns;
+      }
       return NextResponse.json({ success: true, pago: inserted });
     }
 
@@ -901,6 +960,17 @@ export async function POST(request: NextRequest) {
           .eq('fecha', todayStr)
           .eq('tipo_libro', 'CAJA_MENOR');
 
+        const idempKey = typeof body.idempotency_key === 'string' && body.idempotency_key.trim() ? body.idempotency_key.trim() : null;
+        if (idempKey) {
+          const { data: existingReg } = await supabase
+            .from('libro_caja_registros')
+            .select('id')
+            .eq('idempotency_key', idempKey)
+            .maybeSingle();
+          if (existingReg) {
+            return NextResponse.json({ success: true, deduplicated: true, tipo, monto: valor });
+          }
+        }
         const { error: errSal } = await supabase.from('libro_caja_registros').insert({
           fecha: todayStr,
           dia_mes: diaMes,
@@ -917,6 +987,7 @@ export async function POST(request: NextRequest) {
           descripcion_beneficiario: body.descripcion_beneficiario || '',
           valor_pagado: valor,
           sesion_id: body.sesion_id || body.sesion_caja_id || null,
+          idempotency_key: idempKey,
         });
         if (errSal) throw errSal;
         await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
@@ -927,6 +998,8 @@ export async function POST(request: NextRequest) {
 
     // 11. Anular / Eliminar ticket completo abierto (y liberar mesa si aplica)
     if (action === 'ANULAR_ORDEN_COMPLETA') {
+      const auth = await requireSupervisor();
+      if (!auth.ok) return auth.response;
       const { orden_id, motivo } = body;
       if (!orden_id) {
         return NextResponse.json({ success: false, error: 'orden_id requerido' }, { status: 400 });
@@ -961,7 +1034,10 @@ export async function POST(request: NextRequest) {
       await supabase.from('pos_auditoria_eventos').insert({
         fecha: todayStr,
         caja_nombre: cajaNombre,
+        caja_id: body.caja_id || null,
+        sesion_caja_id: body.sesion_caja_id || body.sesion_id || null,
         usuario_cajero: cajeroNombre,
+        autorizado_por: auth.autorizadoPor,
         tipo_alerta: 'ANULACION_ORDEN_COMPLETA',
         nivel_riesgo: Number(orden.gran_total || 0) > 0 ? 'MEDIO' : 'BAJO',
         orden_consecutivo: orden.consecutivo,
@@ -1001,8 +1077,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, abono });
     }
 
-    // 13. Devolución Post-Factura (RPC ACID + Anti sobre-devolución + reintegro stock)
+    // 13. Devolución Post-Factura (RPC ACID + Anti sobre-devolución + reintegro stock + PIN supervisor)
     if (action === 'DEVOLVER_ITEM_FACTURADO') {
+      const auth = await requireSupervisor();
+      if (!auth.ok) return auth.response;
       const { orden_id, item_id } = body;
       if (!orden_id || !item_id) {
         return NextResponse.json({ success: false, error: 'orden_id e item_id son requeridos' }, { status: 400 });
@@ -1027,8 +1105,20 @@ export async function POST(request: NextRequest) {
       if (!orden_id || !item_id) {
         return NextResponse.json({ success: false, error: 'orden_id e item_id son requeridos' }, { status: 400 });
       }
+      const { data: itemActual } = await supabase
+        .from('pos_orden_items')
+        .select('precio_unitario, nombre_producto, cantidad')
+        .eq('id', item_id)
+        .single();
       const cantNum = Math.max(0.01, Number(cantidad || 1));
       const precioNum = Math.max(0, Math.round(Number(precio_unitario || 0)));
+      const precioCambio = itemActual && Math.round(Number(itemActual.precio_unitario || 0)) !== precioNum;
+      let autorizadoPor: string | null = null;
+      if (precioCambio) {
+        const auth = await requireSupervisor();
+        if (!auth.ok) return auth.response;
+        autorizadoPor = auth.autorizadoPor;
+      }
       const subtotal = Math.round(cantNum * precioNum);
 
       const { error: errUpd } = await supabase
@@ -1041,6 +1131,21 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', item_id);
       if (errUpd) throw errUpd;
+
+      if (precioCambio && itemActual) {
+        await supabase.from('pos_auditoria_eventos').insert({
+          fecha: todayStr,
+          caja_nombre: cajaNombre,
+          caja_id: body.caja_id || null,
+          sesion_caja_id: body.sesion_caja_id || body.sesion_id || null,
+          usuario_cajero: cajeroNombre,
+          autorizado_por: autorizadoPor,
+          tipo_alerta: 'CAMBIO_PRECIO_MANUAL',
+          nivel_riesgo: 'MEDIO',
+          valor_afectado: Math.abs(precioNum - Number(itemActual.precio_unitario || 0)),
+          descripcion: `Cambio de precio en ${itemActual.nombre_producto}: $${Number(itemActual.precio_unitario || 0)} -> $${precioNum}.`,
+        });
+      }
 
       const updated = await recalcularTotalesOrden(orden_id);
       return NextResponse.json({ success: true, ...(updated || {}) });
@@ -1107,8 +1212,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // 15D. Devolución completa de un ticket facturado (RPC ACID)
+    // 15D. Devolución completa de un ticket facturado (RPC ACID + PIN supervisor)
     if (action === 'DEVOLVER_TICKET_COMPLETO') {
+      const auth = await requireSupervisor();
+      if (!auth.ok) return auth.response;
       const { orden_id } = body;
       if (!orden_id) {
         return NextResponse.json({ success: false, error: 'orden_id requerido' }, { status: 400 });
@@ -1225,16 +1332,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Canal destino no soportado' }, { status: 400 });
     }
 
-    // 16. CRUD Productos desde F3 Productos del POS (Bloqueado para OPERATIVO_POS)
+    // 16. CRUD Productos desde F3 Productos del POS (Solo ADMIN / GESTOR)
     if (action === 'GUARDAR_PRODUCTO_POS') {
-      const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-      const session = await verifyAuthToken(token);
-      if (session && String(session.role).toUpperCase() === 'OPERATIVO_POS') {
-        return NextResponse.json(
-          { success: false, error: 'No tienes permisos para crear o editar productos.' },
-          { status: 403 }
-        );
-      }
+      const denied = requireManagerRole();
+      if (denied) return denied;
       const {
         id,
         codigo,
@@ -1276,14 +1377,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'ELIMINAR_PRODUCTO_POS') {
-      const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-      const session = await verifyAuthToken(token);
-      if (session && String(session.role).toUpperCase() === 'OPERATIVO_POS') {
-        return NextResponse.json(
-          { success: false, error: 'No tienes permisos para eliminar productos.' },
-          { status: 403 }
-        );
-      }
+      const denied = requireManagerRole();
+      if (denied) return denied;
       const { id } = body;
       if (!id) return NextResponse.json({ success: false, error: 'id requerido' }, { status: 400 });
       const { error } = await supabase.from('productos_venta').update({ activo: false }).eq('id', id);
@@ -1291,8 +1386,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // 17. Entradas, Mermas y Conteo Físico de Inventario desde F4 Inventario
+    // 17. Entradas, Mermas y Conteo Físico de Inventario desde F4 Inventario (Solo ADMIN / GESTOR)
     if (action === 'AJUSTAR_INVENTARIO_POS') {
+      const denied = requireManagerRole();
+      if (denied) return denied;
       const { producto_id, tipo = 'ENTRADA', cantidad = 0, motivo = '' } = body;
       if (!producto_id) {
         return NextResponse.json({ success: false, error: 'producto_id requerido' }, { status: 400 });

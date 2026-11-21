@@ -58,18 +58,21 @@ export function isTauriDesktop(): boolean {
 async function invokeTauri<T = unknown>(
   cmd: string,
   args?: Record<string, unknown>
-): Promise<T | null> {
-  if (!isTauriDesktop()) return null;
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  if (!isTauriDesktop()) return { ok: false, error: 'Entorno web sin puente Tauri' };
   try {
     const w = window as unknown as TauriWindowLike;
     const core = w.__TAURI__?.core || w.__TAURI_INTERNALS__;
     if (core?.invoke) {
-      return await core.invoke<T>(cmd, args);
+      const data = await core.invoke<T>(cmd, args);
+      return { ok: true, data };
     }
+    return { ok: false, error: 'Bridge Tauri no disponible' };
   } catch (err) {
-    console.warn(`[ElianaBridge] Error invocando comando ${cmd}:`, err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[ElianaBridge] Error invocando comando ${cmd}:`, msg);
+    return { ok: false, error: msg };
   }
-  return null;
 }
 
 /**
@@ -164,7 +167,7 @@ export function formatThermalTicket(
 export async function printThermalTicket(
   ticket: ThermalTicketData,
   printerIpOverride?: string
-): Promise<{ ok: boolean; mode: 'tauri' | 'browser' }> {
+): Promise<{ ok: boolean; mode: 'tauri' | 'browser'; error?: string; rawText?: string }> {
   const cfg = loadElianaPosConfig();
   const rawText = formatThermalTicket(ticket, cfg);
   const printerIp = printerIpOverride || cfg.ipImpresora || '127.0.0.1:9100';
@@ -174,7 +177,8 @@ export async function printThermalTicket(
       printerIp,
       content: rawText,
     });
-    if (res) return { ok: true, mode: 'tauri' };
+    if (res.ok) return { ok: true, mode: 'tauri' };
+    return { ok: false, mode: 'tauri', error: res.error, rawText };
   }
 
   if (typeof window !== 'undefined') {
@@ -206,16 +210,16 @@ export async function printThermalTicket(
 export async function openCashDrawer(
   printerIpOverride?: string,
   modelOverride?: ModeloCajon
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   const cfg = loadElianaPosConfig();
   if (isTauriDesktop()) {
-    await invokeTauri('open_cash_drawer', {
+    const res = await invokeTauri('open_cash_drawer', {
       printerIp: printerIpOverride || cfg.ipImpresora || '127.0.0.1:9100',
       model: modelOverride || cfg.modeloCajon || 'EPSON_STD',
     });
-    return true;
+    return res.ok ? { ok: true } : { ok: false, error: res.error };
   }
-  return false;
+  return { ok: false, error: 'Disponible solo en aplicativo de escritorio' };
 }
 
 /**
@@ -230,8 +234,8 @@ export async function readScaleWeightOnce(
   const model = modelOverride || cfg.modeloBascula || 'TORREY_MFQ';
 
   if (isTauriDesktop()) {
-    const kg = await invokeTauri<number>('read_scale_weight', { portName, model });
-    return typeof kg === 'number' ? kg : null;
+    const res = await invokeTauri<number>('read_scale_weight', { portName, model });
+    return res.ok && typeof res.data === 'number' ? res.data : null;
   }
 
   try {
@@ -268,8 +272,8 @@ export async function readScaleWeightOnce(
  */
 export async function getLocalLanIp(): Promise<string> {
   if (isTauriDesktop()) {
-    const ip = await invokeTauri<string>('get_local_ip');
-    if (ip) return ip;
+    const res = await invokeTauri<string>('get_local_ip');
+    if (res.ok && res.data) return res.data;
   }
   return '127.0.0.1';
 }

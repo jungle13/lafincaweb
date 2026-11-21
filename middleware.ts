@@ -15,15 +15,28 @@ const PUBLIC_API_PREFIXES = [
   '/api/telegram/webhook',
 ];
 
-function unauthorizedResponse(route: string, hint: string) {
+const ADMIN_ONLY_API_PREFIXES = [
+  '/api/compras',
+  '/api/ventas',
+  '/api/costeo-diario',
+  '/api/operarios',
+  '/api/admin-pos',
+  '/api/proveedores',
+  '/api/catalogo',
+  '/api/recetas',
+  '/api/crm',
+  '/api/periodos',
+];
+
+function unauthorizedResponse(route: string, hint: string, status = 401) {
   return NextResponse.json(
     {
-      error: 'No autorizado',
-      code: 'AUTH_REQUIRED',
+      error: status === 403 ? 'Acceso denegado para tu rol' : 'No autorizado',
+      code: status === 403 ? 'FORBIDDEN_ROLE' : 'AUTH_REQUIRED',
       route,
       hint,
     },
-    { status: 401 }
+    { status }
   );
 }
 
@@ -51,6 +64,19 @@ export async function middleware(req: NextRequest) {
       adminSession.role === 'OPERATIVO_POS' ||
       adminSession.role === 'admin')
   ) {
+    if (
+      adminSession.role === 'OPERATIVO_POS' &&
+      ADMIN_ONLY_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+    ) {
+      logSecurityAudit(pathname, req.method, 'FORBIDDEN_OPERATIVO_POS', `user=${adminSession.username}`);
+      if (mode === 'enforce') {
+        return unauthorizedResponse(
+          pathname,
+          'Tu rol OPERATIVO_POS no tiene permisos para módulos administrativos.',
+          403
+        );
+      }
+    }
     return NextResponse.next();
   }
 

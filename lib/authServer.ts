@@ -46,7 +46,29 @@ function getAuthSecret(): string {
 }
 
 export function getAuthEnforcementMode(): AuthEnforcementMode {
-  return process.env.AUTH_ENFORCEMENT === 'enforce' ? 'enforce' : 'audit';
+  if (process.env.AUTH_ENFORCEMENT === 'audit') return 'audit';
+  if (process.env.AUTH_ENFORCEMENT === 'enforce') return 'enforce';
+  return process.env.NODE_ENV === 'production' ? 'enforce' : 'audit';
+}
+
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+export function checkRateLimit(
+  key: string,
+  maxAttempts = 10,
+  windowMs = 300_000
+): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  const cur = rateLimitStore.get(key);
+  if (!cur || now > cur.resetAt) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, retryAfterSec: 0 };
+  }
+  if (cur.count >= maxAttempts) {
+    return { allowed: false, retryAfterSec: Math.max(1, Math.ceil((cur.resetAt - now) / 1000)) };
+  }
+  cur.count += 1;
+  return { allowed: true, retryAfterSec: 0 };
 }
 
 function toBase64Url(bytes: Uint8Array): string {

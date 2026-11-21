@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   AUTH_COOKIE_NAME,
+  checkRateLimit,
   normalizeSystemRole,
   signAuthToken,
   validateAdminCredentials,
@@ -18,6 +19,15 @@ function getSupabase() {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || 'local';
+    const rl = checkRateLimit(`login:${ip}`, 12, 300_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: `Demasiados intentos. Espera ${rl.retryAfterSec}s.` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const username = String(body?.username || '').trim();
     const password = String(body?.password || '').trim();
