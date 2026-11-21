@@ -8,8 +8,11 @@ import {
   validateAdminCredentials,
   type SystemRole,
 } from '@/lib/authServer';
+import { createLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
+
+const logger = createLogger('api.auth.login');
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -109,7 +112,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    console.error('[POST /api/auth/login] Error:', error);
+    logger.error('login_failed', error);
     return NextResponse.json(
       { success: false, error: 'Error procesando inicio de sesión' },
       { status: 500 }

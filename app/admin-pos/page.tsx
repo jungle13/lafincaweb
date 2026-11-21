@@ -15,9 +15,11 @@ import {
   Monitor,
   ShieldAlert,
   Unlink,
+  Activity,
 } from 'lucide-react';
+import PosMonitoringDashboard from '@/components/pos/PosMonitoringDashboard';
 
-type AdminTab = 'CAJAS' | 'PERSONAL' | 'MESAS' | 'CLIENTES' | 'CATEGORIAS';
+type AdminTab = 'MONITOREO' | 'CAJAS' | 'PERSONAL' | 'MESAS' | 'CLIENTES' | 'CATEGORIAS';
 
 interface CajaAdmin {
   id: string;
@@ -180,6 +182,7 @@ export default function AdminPosPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {(
             [
+              { id: 'MONITOREO', label: 'Torre de Control', icon: Activity },
               { id: 'CAJAS', label: `Cajas (${cajas.length})`, icon: Monitor },
               { id: 'PERSONAL', label: `Personal (${operarios.length})`, icon: Users },
               { id: 'MESAS', label: `Zonas (${zonas.length}) y Mesas (${mesas.length})`, icon: MapPin },
@@ -213,6 +216,9 @@ export default function AdminPosPage() {
           </div>
         ) : (
           <>
+            {/* TAB MONITOREO: TORRE DE CONTROL */}
+            {tab === 'MONITOREO' && <PosMonitoringDashboard />}
+
             {/* TAB 0: CAJAS / TERMINALES POS */}
             {tab === 'CAJAS' && (
               <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">

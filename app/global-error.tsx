@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 export default function GlobalError({
   error,
@@ -9,6 +9,20 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    fetch('/api/telemetry/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        scope: 'app.global-error',
+        message: error?.message || 'Error crítico del sistema',
+        stack: error?.stack,
+        digest: error?.digest,
+        pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+      }),
+    }).catch(() => {});
+  }, [error]);
   return (
     <html lang="es">
       <body className="min-h-screen bg-zinc-100 flex items-center justify-center p-4">

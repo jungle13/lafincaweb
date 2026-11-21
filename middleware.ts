@@ -12,6 +12,8 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth/logout',
   '/api/auth/me',
   '/api/empresa',
+  '/api/health',
+  '/api/telemetry/client-error',
   '/api/telegram/webhook',
 ];
 

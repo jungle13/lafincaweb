@@ -32,6 +32,9 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Run Rust unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
       - name: Generate Tauri icons from Logo
         run: npx --yes @tauri-apps/cli@^2 icon public/Logo.png --fit contain
 

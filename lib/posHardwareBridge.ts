@@ -156,9 +156,18 @@ export function formatThermalTicket(
 
   lines.push(line);
   lines.push(center(ticket.footer || cfg.mensajePieTicket || '¡Gracias por su compra!'));
-  lines.push('\n\n\n');
 
-  return lines.join('\n');
+  const fitted = lines.flatMap((l) => {
+    if (l.length <= cols) return [l];
+    const chunks: string[] = [];
+    for (let i = 0; i < l.length; i += cols) {
+      chunks.push(l.slice(i, i + cols));
+    }
+    return chunks;
+  });
+  fitted.push('\n\n\n');
+
+  return fitted.join('\n');
 }
 
 /**
@@ -384,4 +393,35 @@ export function useBarcodeScanner(onScan: (code: string) => void, enabled = true
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onScan, enabled]);
+}
+
+export interface DesktopDiagnostics {
+  localIp: string;
+  lanServerRunning: boolean;
+  lanPort: number;
+  lanBindError: string | null;
+  lanStorePath: string;
+  pendingOpsCount: number;
+  stateFileBytes: number;
+  serialPorts: string[];
+}
+
+export async function getDesktopDiagnostics(): Promise<
+  { ok: true; data: DesktopDiagnostics } | { ok: false; error: string }
+> {
+  return invokeTauri<DesktopDiagnostics>('get_desktop_diagnostics');
+}
+
+export async function testPrinterConnection(
+  printerIp: string
+): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const cleanIp = (printerIp || '').trim();
+  if (!cleanIp) {
+    return { ok: false, error: 'No hay IP de impresora configurada.' };
+  }
+  const res = await invokeTauri<string>('test_printer_connection', { printerIp: cleanIp });
+  if (res.ok) {
+    return { ok: true, message: res.data };
+  }
+  return { ok: false, error: res.error };
 }

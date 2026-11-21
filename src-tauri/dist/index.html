@@ -17,12 +17,13 @@
         text-align: center;
       }
       .box {
-        max-width: 420px;
+        max-width: 440px;
         width: 90%;
         padding: 32px;
         background: #ffffff;
         border: 1px solid #e4e4e7;
         border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
       }
       h2 {
         margin: 0 0 8px 0;
@@ -34,12 +35,35 @@
         margin: 0;
         font-size: 13px;
         color: #52525b;
+        line-height: 1.5;
+      }
+      .badge {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: #f4f4f5;
+        color: #3f3f46;
+        border: 1px solid #e4e4e7;
+      }
+      .badge.ok {
+        background: #ecfdf5;
+        color: #065f46;
+        border-color: #a7f3d0;
+      }
+      .badge.err {
+        background: #fef2f2;
+        color: #991b1b;
+        border-color: #fecaca;
       }
       .actions {
         margin-top: 18px;
         display: flex;
         gap: 8px;
         justify-content: center;
+        flex-wrap: wrap;
       }
       button {
         padding: 9px 16px;
@@ -64,27 +88,89 @@
   <body>
     <div class="box">
       <h2>Eliana POS</h2>
-      <p id="status">Iniciando terminal de punto de venta...</p>
+      <p id="status">Verificando conexión con el servidor...</p>
+      <div id="lanBadge" class="badge">Servicio LAN local: verificando...</div>
       <div class="actions">
-        <button onclick="go()">Reintentar conexión</button>
+        <button onclick="go()">Reintentar ahora</button>
         <button class="secondary" onclick="changeServer()">Cambiar servidor</button>
       </div>
     </div>
     <script>
       const DEFAULT_URL = 'https://lafincaweb.vercel.app/pos';
+      let retryTimer = null;
+
       function getUrl() {
         return localStorage.getItem('eliana_pos_server_url') || DEFAULT_URL;
       }
+
+      function getHealthUrl(targetUrl) {
+        try {
+          const parsed = new URL(targetUrl);
+          return parsed.origin + '/api/health';
+        } catch {
+          return 'https://lafincaweb.vercel.app/api/health';
+        }
+      }
+
+      async function checkLocalLan() {
+        const el = document.getElementById('lanBadge');
+        try {
+          const res = await fetch('http://127.0.0.1:4545/lan/health', {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(1500),
+          });
+          if (res.ok) {
+            el.className = 'badge ok';
+            el.textContent = 'Servicio LAN local (:4545): Activo';
+            return;
+          }
+        } catch {}
+        el.className = 'badge err';
+        el.textContent = 'Servicio LAN local (:4545): Sin respuesta';
+      }
+
       function changeServer() {
-        const next = window.prompt('URL del servidor del negocio (ej. https://mi-negocio.vercel.app/pos):', getUrl());
+        const next = window.prompt(
+          'URL del servidor del negocio (ej. https://mi-negocio.vercel.app/pos):',
+          getUrl()
+        );
         if (next && next.trim()) {
           localStorage.setItem('eliana_pos_server_url', next.trim());
           go();
         }
       }
-      function go() {
-        window.location.replace(getUrl());
+
+      async function go() {
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = null;
+        }
+        const statusEl = document.getElementById('status');
+        const target = getUrl();
+        const healthUrl = getHealthUrl(target);
+        statusEl.textContent = 'Conectando con el servidor en la nube...';
+
+        try {
+          const res = await fetch(healthUrl, {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(5000),
+          });
+          if (res.ok || res.status === 503) {
+            window.location.replace(target);
+            return;
+          }
+          statusEl.textContent =
+            'El servidor respondió con estado ' + res.status + '. Reintentando en 10s...';
+        } catch {
+          statusEl.textContent =
+            'Sin conexión a internet o servidor inaccesible. Reintentando automáticamente en 10s...';
+        }
+
+        checkLocalLan();
+        retryTimer = setTimeout(go, 10000);
       }
+
+      checkLocalLan();
       go();
     </script>
   </body>

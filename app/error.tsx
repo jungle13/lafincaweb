@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 export default function AppError({
   error,
@@ -9,6 +9,20 @@ export default function AppError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    fetch('/api/telemetry/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        scope: 'app.error',
+        message: error?.message || 'Error inesperado de renderizado',
+        stack: error?.stack,
+        digest: error?.digest,
+        pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+      }),
+    }).catch(() => {});
+  }, [error]);
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">
       <div className="bg-white border border-red-200 rounded-2xl max-w-md w-full p-6 shadow-md space-y-4 text-center">

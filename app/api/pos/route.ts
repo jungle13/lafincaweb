@@ -5,9 +5,12 @@ import { recalcularHojaDiaria } from '@/services/libroCajaService';
 import { AUTH_COOKIE_NAME, getAuthEnforcementMode, normalizeSystemRole, validateAdminCredentials, verifyAuthToken } from '@/lib/authServer';
 import { verifySupervisorPin } from '@/lib/supervisorAuth';
 import { formatColombiaTime, getColombiaDateStr } from '@/lib/dateUtils';
+import { createLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+const logger = createLogger('api.pos');
 
 function inferEstacionComanda(categoria: string, nombre: string): 'COCINA_PARRILLA' | 'BEBIDAS_BAR' | 'POSTRES_ENTRADAS' {
   const c = `${categoria || ''} ${nombre || ''}`.toLowerCase();
@@ -402,7 +405,7 @@ export async function GET(request: Request) {
       cajasAbiertasHoy,
     });
   } catch (err: any) {
-    console.error('Error en GET /api/pos:', err);
+    logger.error('get_pos_failed', err);
     return NextResponse.json(
       { success: false, error: err?.message || 'Error consultando POS' },
       { status: 500 }
@@ -1441,7 +1444,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: false, error: 'Acción POS no reconocida' }, { status: 400 });
   } catch (err: any) {
-    console.error('Error en POST /api/pos:', err);
+    logger.error('post_pos_failed', err);
     return NextResponse.json(
       { success: false, error: err?.message || 'Error procesando operación POS' },
       { status: 500 }

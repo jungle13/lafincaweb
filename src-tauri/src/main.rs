@@ -12,6 +12,19 @@ use tauri::{Emitter, Manager, State, WindowEvent};
 
 struct OpenShiftState(Arc<AtomicBool>);
 
+#[derive(Clone, Default)]
+struct LanServerHealth {
+    running: bool,
+    port: u16,
+    bind_error: Option<String>,
+    store_path: String,
+}
+
+struct LanHealthState {
+    health: Arc<Mutex<LanServerHealth>>,
+    store: LanStore,
+}
+
 #[tauri::command]
 fn set_open_shift_state(is_open: bool, state: State<'_, OpenShiftState>) {
     state.0.store(is_open, Ordering::SeqCst);
@@ -48,6 +61,17 @@ impl LanStore {
         fs::read_to_string(&self.file_path).unwrap_or_else(|_| {
             r#"{"success":true,"mesas":[],"ordenes":[],"productos":[],"sesiones":[],"salidasDiaCaja":0,"eventosTurno":[],"creditosClientes":[],"devolucionesDia":[],"pendingOps":[]}"#.to_string()
         })
+    }
+
+    fn stats(&self) -> (usize, u64) {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let bytes = fs::metadata(&self.file_path).map(|m| m.len()).unwrap_or(0);
+        let raw = fs::read_to_string(&self.file_path).unwrap_or_default();
+        let pending = serde_json::from_str::<serde_json::Value>(&raw)
+            .ok()
+            .and_then(|v| v.get("pendingOps").and_then(|p| p.as_array()).map(|a| a.len()))
+            .unwrap_or(0);
+        (pending, bytes)
     }
 
     fn write_state(&self, content: &str) {
@@ -187,12 +211,24 @@ fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
     let _ = stream.write_all(response.as_bytes());
 }
 
-fn start_lan_server(store: LanStore) {
-    thread::spawn(move || {
-        if let Ok(listener) = TcpListener::bind("0.0.0.0:4545") {
+fn start_lan_server(store: LanStore, health_state: Arc<Mutex<LanServerHealth>>) {
+    thread::spawn(move || match TcpListener::bind("0.0.0.0:4545") {
+        Ok(listener) => {
+            if let Ok(mut h) = health_state.lock() {
+                h.running = true;
+                h.port = 4545;
+                h.bind_error = None;
+            }
             for stream in listener.incoming().flatten() {
                 let s = store.clone();
                 thread::spawn(move || handle_lan_connection(stream, s));
+            }
+        }
+        Err(e) => {
+            if let Ok(mut h) = health_state.lock() {
+                h.running = false;
+                h.port = 4545;
+                h.bind_error = Some(format!("No se pudo abrir puerto LAN 4545: {}", e));
             }
         }
     });
@@ -215,6 +251,71 @@ fn get_local_ip() -> String {
     "127.0.0.1".to_string()
 }
 
+fn encode_cp850(text: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(text.len());
+    for ch in text.chars() {
+        let byte = match ch {
+            '\u{0000}'..='\u{007F}' => ch as u8,
+            'á' => 0xA0,
+            'é' => 0x82,
+            'í' => 0xA1,
+            'ó' => 0xA2,
+            'ú' => 0xA3,
+            'Á' => 0xB5,
+            'É' => 0x90,
+            'Í' => 0xD6,
+            'Ó' => 0xE0,
+            'Ú' => 0xE9,
+            'ñ' => 0xA4,
+            'Ñ' => 0xA5,
+            'ü' => 0x81,
+            'Ü' => 0x9A,
+            '¿' => 0xA8,
+            '¡' => 0xAD,
+            '°' => 0xF8,
+            _ => b'?',
+        };
+        out.push(byte);
+    }
+    out
+}
+
+#[tauri::command]
+fn test_printer_connection(printer_ip: String) -> Result<String, String> {
+    let addr = if printer_ip.contains(':') {
+        printer_ip
+    } else {
+        format!("{}:9100", printer_ip)
+    };
+    let parsed = addr
+        .parse()
+        .map_err(|e| format!("Dirección inválida ({}): {}", addr, e))?;
+    TcpStream::connect_timeout(&parsed, Duration::from_secs(2))
+        .map_err(|e| format!("Sin respuesta de impresora {}: {}", addr, e))?;
+    Ok(format!("Conexión TCP exitosa con {}", addr))
+}
+
+#[tauri::command]
+fn get_desktop_diagnostics(state: State<'_, LanHealthState>) -> serde_json::Value {
+    let local_ip = get_local_ip();
+    let health = state.health.lock().map(|h| h.clone()).unwrap_or_default();
+    let (pending_ops, state_bytes) = state.store.stats();
+    let serial_ports: Vec<String> = serialport::available_ports()
+        .map(|ports| ports.into_iter().map(|p| p.port_name).collect())
+        .unwrap_or_default();
+
+    serde_json::json!({
+        "localIp": local_ip,
+        "lanServerRunning": health.running,
+        "lanPort": health.port,
+        "lanBindError": health.bind_error,
+        "lanStorePath": health.store_path,
+        "pendingOpsCount": pending_ops,
+        "stateFileBytes": state_bytes,
+        "serialPorts": serial_ports,
+    })
+}
+
 #[tauri::command]
 fn print_escpos_ticket(printer_ip: String, content: String) -> Result<String, String> {
     let addr = if printer_ip.contains(':') {
@@ -229,8 +330,9 @@ fn print_escpos_ticket(printer_ip: String, content: String) -> Result<String, St
     )
     .map_err(|e| format!("No se pudo conectar con impresora {}: {}", addr, e))?;
 
-    let mut payload: Vec<u8> = vec![0x1B, 0x40];
-    payload.extend_from_slice(content.as_bytes());
+    // ESC @ (init) + ESC t 2 (PC850 Multilingual) + texto CP850 + GS V B 0 (corte)
+    let mut payload: Vec<u8> = vec![0x1B, 0x40, 0x1B, 0x74, 0x02];
+    payload.extend_from_slice(&encode_cp850(&content));
     payload.extend_from_slice(&[0x1D, 0x56, 0x42, 0x00]);
 
     stream
@@ -323,11 +425,22 @@ fn main() {
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| PathBuf::from("."));
+            let file_path = data_dir.join("eliana_pos_lan_state.json");
             let store = LanStore {
-                file_path: data_dir.join("eliana_pos_lan_state.json"),
+                file_path: file_path.clone(),
                 lock: Arc::new(Mutex::new(())),
             };
-            start_lan_server(store);
+            let health = Arc::new(Mutex::new(LanServerHealth {
+                running: false,
+                port: 4545,
+                bind_error: None,
+                store_path: file_path.to_string_lossy().to_string(),
+            }));
+            app.manage(LanHealthState {
+                health: health.clone(),
+                store: store.clone(),
+            });
+            start_lan_server(store, health);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -336,8 +449,42 @@ fn main() {
             open_cash_drawer,
             read_scale_weight,
             set_open_shift_state,
-            allow_close_app
+            allow_close_app,
+            test_printer_connection,
+            get_desktop_diagnostics
         ])
         .run(tauri::generate_context!())
         .expect("Error iniciando ELIANA POS");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encode_cp850_spanish_chars() {
+        let encoded = encode_cp850("ñÑáéíóú¿");
+        assert_eq!(encoded, vec![0xA4, 0xA5, 0xA0, 0x82, 0xA1, 0xA2, 0xA3, 0xA8]);
+    }
+
+    #[test]
+    fn test_lan_store_atomic_write_and_append() {
+        let tmp_file = std::env::temp_dir().join(format!(
+            "eliana_pos_test_{}.json",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&tmp_file);
+        let store = LanStore {
+            file_path: tmp_file.clone(),
+            lock: Arc::new(Mutex::new(())),
+        };
+        store.write_state(r#"{"pendingOps":[]}"#);
+        store.append_pending_op(serde_json::json!({"id": "op-1", "tipo": "COBRAR"}));
+        let (pending, bytes) = store.stats();
+        assert_eq!(pending, 1);
+        assert!(bytes > 10);
+        let content = store.read_state();
+        assert!(content.contains("op-1"));
+        let _ = fs::remove_file(&tmp_file);
+    }
 }
