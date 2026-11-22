@@ -314,7 +314,7 @@ export default function ElianaPosPage() {
       const res = await fetch(`/api/pos/cajas?device_id=${encodeURIComponent(devId)}&ip=${encodeURIComponent(ip)}`);
       const data = await res.json();
       if (data.success) {
-        const bound = (data.boundCaja as PosCaja | null) || null;
+        const bound = ((data.boundCaja || data.caja) as PosCaja | null) || null;
         setBoundCaja(bound);
         setCajasLibres((data.cajasLibres as PosCaja[]) || []);
         if (bound?.nombre) {

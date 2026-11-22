@@ -31,10 +31,12 @@ export async function GET(req: NextRequest) {
           updateIp.ip_local = ipLocal;
         }
         await supabase.from('pos_cajas').update(updateIp).eq('id', boundCaja.id);
+        const resolvedCaja = { ...boundCaja, ip_local: ipLocal || boundCaja.ip_local };
         return NextResponse.json({
           success: true,
           bound: true,
-          caja: { ...boundCaja, ip_local: ipLocal || boundCaja.ip_local },
+          caja: resolvedCaja,
+          boundCaja: resolvedCaja,
         });
       }
     }
