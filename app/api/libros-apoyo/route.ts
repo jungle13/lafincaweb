@@ -6,6 +6,7 @@ import {
   extractResponsableFromSoporte,
 } from '@/services/libroCajaService';
 import { crearNotificacionCajaMenor } from '@/services/notificacionesService';
+import { formatColombiaTime, getColombiaDateStr } from '@/lib/dateUtils';
 import {
   AUTH_COOKIE_NAME,
   CAJERO_COOKIE_NAME,
@@ -19,12 +20,279 @@ export const dynamic = 'force-dynamic';
 
 const cachedLibroCaja = new Map<string, { data: any; expiry: number }>();
 
+async function buildPosDiaResumenYBitacora(fecha: string, sesionesPeriodo: any[], registrosPeriodo: any[]) {
+  const [ordenesRes, eventosRes] = await Promise.all([
+    supabase
+      .from('pos_ordenes')
+      .select(
+        'id, consecutivo, sesion_caja_id, caja_nombre, cajero_nombre, gran_total, pago_efectivo, pago_datafono, pago_transferencia, pago_credito, estado, created_at, closed_at'
+      )
+      .eq('fecha', fecha)
+      .eq('estado', 'PAGADA'),
+    supabase
+      .from('pos_auditoria_eventos')
+      .select(
+        'id, sesion_caja_id, caja_nombre, usuario_cajero, autorizado_por, tipo_alerta, nivel_riesgo, orden_consecutivo, valor_afectado, descripcion, created_at'
+      )
+      .eq('fecha', fecha)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const ordenes = ordenesRes.data || [];
+  const eventos = eventosRes.data || [];
+  const sesionesDia = (sesionesPeriodo || []).filter((s: any) => s.fecha === fecha);
+  const registrosDia = (registrosPeriodo || []).filter((r: any) => r.fecha === fecha);
+
+  const porSesion: Record<
+    string,
+    {
+      cantidadOrdenes: number;
+      ventasEfectivo: number;
+      cntEfectivo: number;
+      ventasDatafono: number;
+      cntDatafono: number;
+      ventasTransferencia: number;
+      cntTransferencia: number;
+      ventasCredito: number;
+      cntCredito: number;
+      totalVendido: number;
+      entradasEfectivo: number;
+      salidasEfectivo: number;
+    }
+  > = {};
+
+  const ensureSes = (sid: string) => {
+    if (!porSesion[sid]) {
+      porSesion[sid] = {
+        cantidadOrdenes: 0,
+        ventasEfectivo: 0,
+        cntEfectivo: 0,
+        ventasDatafono: 0,
+        cntDatafono: 0,
+        ventasTransferencia: 0,
+        cntTransferencia: 0,
+        ventasCredito: 0,
+        cntCredito: 0,
+        totalVendido: 0,
+        entradasEfectivo: 0,
+        salidasEfectivo: 0,
+      };
+    }
+    return porSesion[sid];
+  };
+
+  let efMonto = 0;
+  let efCnt = 0;
+  let datMonto = 0;
+  let datCnt = 0;
+  let trMonto = 0;
+  let trCnt = 0;
+  let crMonto = 0;
+  let crCnt = 0;
+  let totalVendidoPos = 0;
+
+  for (const o of ordenes) {
+    const tot = Number(o.gran_total || 0);
+    const ef = Number(o.pago_efectivo || 0);
+    const dat = Number(o.pago_datafono || 0);
+    const tr = Number(o.pago_transferencia || 0);
+    const cr = Number(o.pago_credito || 0);
+    totalVendidoPos += tot;
+    if (ef > 0) {
+      efMonto += ef;
+      efCnt += 1;
+    }
+    if (dat > 0) {
+      datMonto += dat;
+      datCnt += 1;
+    }
+    if (tr > 0) {
+      trMonto += tr;
+      trCnt += 1;
+    }
+    if (cr > 0) {
+      crMonto += cr;
+      crCnt += 1;
+    }
+
+    if (o.sesion_caja_id) {
+      const s = ensureSes(o.sesion_caja_id);
+      s.cantidadOrdenes += 1;
+      s.totalVendido += tot;
+      if (ef > 0) {
+        s.ventasEfectivo += ef;
+        s.cntEfectivo += 1;
+      }
+      if (dat > 0) {
+        s.ventasDatafono += dat;
+        s.cntDatafono += 1;
+      }
+      if (tr > 0) {
+        s.ventasTransferencia += tr;
+        s.cntTransferencia += 1;
+      }
+      if (cr > 0) {
+        s.ventasCredito += cr;
+        s.cntCredito += 1;
+      }
+    }
+  }
+
+  let entradasEfectivo = 0;
+  for (const ev of eventos) {
+    if (ev.tipo_alerta === 'ENTRADA_EFECTIVO_CAJA') {
+      const val = Number(ev.valor_afectado || 0);
+      entradasEfectivo += val;
+      if (ev.sesion_caja_id) {
+        ensureSes(ev.sesion_caja_id).entradasEfectivo += val;
+      }
+    }
+  }
+
+  let salidasEfectivo = 0;
+  let costosInsumos = 0;
+  let gastosOperativos = 0;
+  let turnosNomina = 0;
+  let prestamosAnticipos = 0;
+
+  for (const r of registrosDia) {
+    const val = Number(r.valor_pagado || 0);
+    salidasEfectivo += val;
+    const cl = String(r.clasificacion || '').toLowerCase();
+    if (cl.includes('insumo') || cl.includes('costo')) costosInsumos += val;
+    else if (cl.includes('nómina') || cl.includes('nomina') || cl.includes('turno')) turnosNomina += val;
+    else if (cl.includes('préstamo') || cl.includes('prestamo') || cl.includes('anticipo')) prestamosAnticipos += val;
+    else gastosOperativos += val;
+
+    if (r.sesion_id) {
+      ensureSes(r.sesion_id).salidasEfectivo += val;
+    }
+  }
+
+  // Base inicial de la primera sesión del día (evita duplicar en relevos de la misma caja)
+  const sesionesOrdenadas = [...sesionesDia].sort((a, b) =>
+    String(a.hora_apertura || '').localeCompare(String(b.hora_apertura || ''))
+  );
+  const baseInicial =
+    sesionesOrdenadas.length > 0 ? Number(sesionesOrdenadas[0].efectivo_inicial || 0) : 0;
+
+  const ultimaCerrada = [...sesionesOrdenadas]
+    .reverse()
+    .find((s: any) => s.estado !== 'ABIERTA' && Number(s.efectivo_cierre || 0) > 0);
+  const efectivoContado = ultimaCerrada ? Number(ultimaCerrada.efectivo_cierre || 0) : null;
+  const efectivoEsperado = baseInicial + efMonto + entradasEfectivo - salidasEfectivo;
+  const diferenciaEfectivo = efectivoContado !== null ? efectivoContado - efectivoEsperado : 0;
+
+  // Bitácora cronológica unificada
+  const bitacoraDia: Array<{
+    id: string;
+    ts: string;
+    hora: string;
+    tipo: 'TURNO' | 'ENTRADA' | 'SALIDA' | 'AUDITORIA';
+    titulo: string;
+    detalle: string;
+    usuario: string;
+    monto?: number;
+    soporte?: string;
+    riesgo?: string;
+  }> = [];
+
+  for (const s of sesionesOrdenadas) {
+    if (s.hora_apertura) {
+      bitacoraDia.push({
+        id: `open-${s.id}`,
+        ts: s.hora_apertura,
+        hora: formatColombiaTime(s.hora_apertura),
+        tipo: 'TURNO',
+        titulo: `Apertura Turno #${s.numero_turno || 1} (${s.caja_nombre || 'Caja'})`,
+        detalle: `Base inicial: $${Math.round(Number(s.efectivo_inicial || 0)).toLocaleString('es-CO')}`,
+        usuario: s.cajero_nombre || 'Cajero',
+        monto: Number(s.efectivo_inicial || 0),
+      });
+    }
+    if (s.hora_cierre && s.estado !== 'ABIERTA') {
+      const diff = Number(s.diferencia_cuadre || 0);
+      bitacoraDia.push({
+        id: `close-${s.id}`,
+        ts: s.hora_cierre,
+        hora: formatColombiaTime(s.hora_cierre),
+        tipo: 'TURNO',
+        titulo: `${s.estado === 'CERRADA_TOTAL' ? 'Cierre Total' : 'Cierre Parcial'} Turno #${s.numero_turno || 1}`,
+        detalle: `Contado: $${Math.round(Number(s.efectivo_cierre || 0)).toLocaleString('es-CO')} · Diferencia: ${diff >= 0 ? '+' : ''}$${Math.round(diff).toLocaleString('es-CO')}`,
+        usuario: s.cajero_nombre || 'Cajero',
+        monto: Number(s.efectivo_cierre || 0),
+      });
+    }
+  }
+
+  for (const r of registrosDia) {
+    const ts = r.created_at || `${fecha}T12:00:00Z`;
+    bitacoraDia.push({
+      id: `sal-${r.id}`,
+      ts,
+      hora: formatColombiaTime(ts),
+      tipo: 'SALIDA',
+      titulo: `${r.clasificacion || 'Salida'}: ${r.concepto}`,
+      detalle: r.descripcion_beneficiario
+        ? `Beneficiario: ${r.descripcion_beneficiario} (${r.categoria || ''})`
+        : r.categoria || '',
+      usuario: r.responsable_caja || r.usuario_registro || 'Caja',
+      monto: Number(r.valor_pagado || 0),
+      soporte: r.soporte_factura || undefined,
+    });
+  }
+
+  for (const ev of eventos) {
+    const isEnt = ev.tipo_alerta === 'ENTRADA_EFECTIVO_CAJA';
+    bitacoraDia.push({
+      id: `ev-${ev.id}`,
+      ts: ev.created_at,
+      hora: formatColombiaTime(ev.created_at),
+      tipo: isEnt ? 'ENTRADA' : 'AUDITORIA',
+      titulo: isEnt ? 'Entrada de Efectivo (F7)' : String(ev.tipo_alerta || 'EVENTO POS'),
+      detalle: ev.descripcion || '',
+      usuario: ev.usuario_cajero || 'POS',
+      monto: ev.valor_afectado ? Number(ev.valor_afectado) : undefined,
+      riesgo: ev.nivel_riesgo || undefined,
+    });
+  }
+
+  bitacoraDia.sort((a, b) => b.ts.localeCompare(a.ts));
+
+  return {
+    posDiaResumen: {
+      fecha,
+      cantidadOrdenes: ordenes.length,
+      totalVendidoPos,
+      ventasEfectivo: { monto: efMonto, cantidad: efCnt },
+      ventasDatafono: { monto: datMonto, cantidad: datCnt },
+      ventasTransferencia: { monto: trMonto, cantidad: trCnt },
+      ventasCredito: { monto: crMonto, cantidad: crCnt },
+      baseInicial,
+      entradasEfectivo,
+      salidasEfectivo,
+      salidasDesglose: {
+        costosInsumos,
+        gastosOperativos,
+        turnosNomina,
+        prestamosAnticipos,
+      },
+      efectivoEsperado,
+      efectivoContado,
+      diferenciaEfectivo,
+      porSesion,
+    },
+    bitacoraDia,
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const periodoId = searchParams.get('periodo_id') || 'per-2026-10';
     const tipoLibro = searchParams.get('tipo_libro') || 'CAJA_MENOR';
-    const cacheKey = `${periodoId}|${tipoLibro}`;
+    const fechaParam = searchParams.get('fecha') || getColombiaDateStr();
+    const cacheKey = `${periodoId}|${tipoLibro}|${fechaParam}`;
 
     const hit = cachedLibroCaja.get(cacheKey);
     if (hit && Date.now() < hit.expiry) {
@@ -32,12 +300,20 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await obtenerDatosLibroCaja(periodoId, tipoLibro);
+    const { posDiaResumen, bitacoraDia } = await buildPosDiaResumenYBitacora(
+      fechaParam,
+      data.sesiones || [],
+      data.registros || []
+    );
+
     const payload = {
       success: true,
       ...data,
+      posDiaResumen,
+      bitacoraDia,
     };
 
-    cachedLibroCaja.set(cacheKey, { data: payload, expiry: Date.now() + 15000 });
+    cachedLibroCaja.set(cacheKey, { data: payload, expiry: Date.now() + 10000 });
     return NextResponse.json(payload);
   } catch (error: any) {
     console.error('[GET /api/libros-apoyo] Error:', error);

@@ -7,7 +7,7 @@ export interface LibroCajaRegistro {
   orden_item: number;
   tipo_libro: string;
   periodo_id: string;
-  clasificacion: 'Costo / Insumo' | 'Gasto Operativo' | 'Turno / Nómina' | string;
+  clasificacion: 'Costo / Insumo' | 'Gasto Operativo' | 'Turno / Nómina' | 'Préstamo / Anticipo' | string;
   categoria: string;
   concepto: string;
   descripcion_beneficiario: string;
@@ -19,6 +19,10 @@ export interface LibroCajaRegistro {
   caja_nombre?: string;
   es_ajuste?: boolean;
   sesion_id?: string | null;
+  insumo_id?: string | null;
+  cantidad?: number | null;
+  unidad_medida?: string | null;
+  costo_unitario?: number | null;
   created_at?: string;
 }
 
@@ -81,6 +85,7 @@ export interface LibroCajaKPIs {
   totalCostosInsumos: number;
   totalGastosOperativos: number;
   totalTurnosNomina: number;
+  totalPrestamosAnticipos?: number;
   totalAjustesMes: number;
   totalRegistros: number;
   totalDiasActivos: number;
@@ -207,6 +212,7 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
   let totalCostosInsumos = 0;
   let totalGastosOperativos = 0;
   let totalTurnosNomina = 0;
+  let totalPrestamosAnticipos = 0;
   let totalAjustesMes = 0;
 
   const catMap = new Map<string, { clasificacion: string; cantidad: number; total: number }>();
@@ -223,6 +229,8 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
       totalCostosInsumos += val;
     } else if (cl.includes('nómina') || cl.includes('nomina') || cl.includes('turno')) {
       totalTurnosNomina += val;
+    } else if (cl.includes('préstamo') || cl.includes('prestamo') || cl.includes('anticipo')) {
+      totalPrestamosAnticipos += val;
     } else {
       totalGastosOperativos += val;
     }
@@ -242,7 +250,7 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
     if (r.concepto) conceptosSet.add(r.concepto);
   }
 
-  const totalSalidasMes = totalCostosInsumos + totalGastosOperativos + totalTurnosNomina;
+  const totalSalidasMes = totalCostosInsumos + totalGastosOperativos + totalTurnosNomina + totalPrestamosAnticipos;
 
   const porCategoria = Array.from(catMap.entries())
     .map(([categoria, stats]) => ({
@@ -267,6 +275,7 @@ export async function obtenerDatosLibroCaja(periodoId: string = 'per-2026-10', t
     totalCostosInsumos,
     totalGastosOperativos,
     totalTurnosNomina,
+    totalPrestamosAnticipos,
     totalAjustesMes,
     totalRegistros: registros.length,
     totalDiasActivos: diariosActivos.length,

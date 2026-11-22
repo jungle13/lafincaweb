@@ -70,7 +70,51 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const fecha = searchParams.get('fecha') || getColombiaDateStr();
     const cajaNombre = searchParams.get('caja') || 'Caja 1';
-    const scope = searchParams.get('scope') === 'live' ? 'live' : 'full';
+    const rawScope = searchParams.get('scope');
+    const scope = rawScope === 'live' ? 'live' : 'full';
+
+    if (rawScope === 'salidas_catalog') {
+      const [insumosRes, empleadosRes, recientesRes] = await Promise.all([
+        supabase
+          .from('catalogo_insumos')
+          .select('id, codigo, nombre, categoria, unidad_medida, costo_unitario_kg')
+          .eq('activo', true)
+          .order('nombre', { ascending: true }),
+        supabase
+          .from('libro_caja_usuarios')
+          .select('id, nombre_cajero, username, cargo_area')
+          .eq('activo', true)
+          .order('nombre_cajero', { ascending: true }),
+        supabase
+          .from('libro_caja_registros')
+          .select('clasificacion, categoria, concepto')
+          .eq('tipo_libro', 'CAJA_MENOR')
+          .order('created_at', { ascending: false })
+          .limit(60),
+      ]);
+
+      const conceptosSet = new Set<string>();
+      const categoriasExtraSet = new Set<string>();
+      for (const r of recientesRes.data || []) {
+        if (r.concepto && String(r.concepto).trim()) conceptosSet.add(String(r.concepto).trim());
+        if (
+          r.clasificacion === 'Gasto Operativo' &&
+          r.categoria &&
+          String(r.categoria).trim() &&
+          r.categoria !== 'Salida Rápida POS'
+        ) {
+          categoriasExtraSet.add(String(r.categoria).trim());
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        insumos: insumosRes.data || [],
+        empleados: empleadosRes.data || [],
+        conceptosGastoRecientes: Array.from(conceptosSet).slice(0, 30),
+        categoriasGastoRecientes: Array.from(categoriasExtraSet).slice(0, 15),
+      });
+    }
 
     const [
       { data: mesas, error: errM },
@@ -932,11 +976,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // 9.5 Creación rápida de insumo desde el modal F8 de Caja
+    if (action === 'CREAR_INSUMO_RAPIDO_POS') {
+      const nombre = String(body.nombre || '').trim();
+      if (!nombre) {
+        return NextResponse.json({ success: false, error: 'El nombre del insumo es obligatorio.' }, { status: 400 });
+      }
+      const unidadMedida = String(body.unidad_medida || 'Und').trim() || 'Und';
+      const categoria = String(body.categoria || 'INSUMOS VARIOS').trim() || 'INSUMOS VARIOS';
+      const costoUnitario = Math.max(0, Math.round(Number(body.costo_unitario_kg || 0)));
+
+      // Anti-duplicados (case-insensitive)
+      const { data: existingList } = await supabase
+        .from('catalogo_insumos')
+        .select('id, codigo, nombre, categoria, unidad_medida, costo_unitario_kg')
+        .eq('activo', true)
+        .ilike('nombre', nombre)
+        .limit(1);
+
+      if (existingList && existingList.length > 0) {
+        return NextResponse.json({ success: true, insumo: existingList[0], deduplicated: true });
+      }
+
+      const esPeso = ['kg', 'lb', 'gr', 'g', 'kilo', 'libra'].includes(unidadMedida.toLowerCase());
+      const { data: createdInsumo, error: errIns } = await supabase
+        .from('catalogo_insumos')
+        .insert({
+          codigo: `INS-${Date.now().toString().slice(-6)}`,
+          nombre,
+          categoria,
+          unidad_medida: unidadMedida,
+          tipo_medida: esPeso ? 'KGS_Y_UNIDADES' : 'UNIDADES',
+          es_carne: categoria.toUpperCase().includes('CARNE'),
+          peso_estandar_porcion_kg: 1,
+          costo_unitario_kg: costoUnitario,
+          stock_minimo_kg: 1,
+          activo: true,
+        })
+        .select('id, codigo, nombre, categoria, unidad_medida, costo_unitario_kg')
+        .single();
+
+      if (errIns) throw errIns;
+      return NextResponse.json({ success: true, insumo: createdInsumo });
+    }
+
     // 10. Entradas (F7) y Salidas (F8) rápidas de efectivo en caja
     if (action === 'MOVIMIENTO_EFECTIVO_CAJA') {
       const { tipo, monto, concepto } = body;
       const valor = Math.max(0, Math.round(Number(monto || 0)));
-      if (!valor || !concepto) {
+      if (!valor || !String(concepto || '').trim()) {
         return NextResponse.json({ success: false, error: 'Monto y concepto son obligatorios' }, { status: 400 });
       }
       const isEntrada = tipo === 'ENTRADA';
@@ -955,26 +1043,91 @@ export async function POST(request: NextRequest) {
           descripcion: `Entrada de efectivo (+$${valor.toLocaleString('es-CO')}) en ${cajaNombre}: ${String(concepto).trim()} (${cajeroNombre}).`,
         });
         if (errEnt) throw errEnt;
-      } else {
-        const diaMes = Number(todayStr.split('-')[2] || 1);
-        const { count: regCount } = await supabase
-          .from('libro_caja_registros')
-          .select('*', { count: 'exact', head: true })
-          .eq('fecha', todayStr)
-          .eq('tipo_libro', 'CAJA_MENOR');
+        return NextResponse.json({ success: true, tipo, monto: valor });
+      }
 
-        const idempKey = typeof body.idempotency_key === 'string' && body.idempotency_key.trim() ? body.idempotency_key.trim() : null;
-        if (idempKey) {
-          const { data: existingReg } = await supabase
-            .from('libro_caja_registros')
-            .select('id')
-            .eq('idempotency_key', idempKey)
-            .maybeSingle();
-          if (existingReg) {
-            return NextResponse.json({ success: true, deduplicated: true, tipo, monto: valor });
-          }
+      const clasificacion = String(body.clasificacion || 'Gasto Operativo').trim();
+      const beneficiario = String(body.descripcion_beneficiario || body.beneficiario || '').trim();
+      let categoria = String(body.categoria || 'Varios / Otro').trim();
+      const insumoId = body.insumo_id ? String(body.insumo_id).trim() : null;
+      const cantidad = body.cantidad !== undefined && body.cantidad !== null ? Number(body.cantidad) : null;
+      const unidadMedida = body.unidad_medida ? String(body.unidad_medida).trim() : null;
+
+      if (clasificacion === 'Turno / Nómina' || clasificacion === 'Préstamo / Anticipo') {
+        if (!beneficiario) {
+          return NextResponse.json(
+            { success: false, error: `El nombre del empleado es obligatorio para ${clasificacion}.` },
+            { status: 400 }
+          );
         }
-        const { error: errSal } = await supabase.from('libro_caja_registros').insert({
+        if (clasificacion === 'Préstamo / Anticipo') {
+          categoria = 'Anticipo / Préstamo Empleado';
+        } else if (!body.categoria) {
+          categoria = 'Pago de Turno';
+        }
+      } else if (clasificacion === 'Costo / Insumo') {
+        if (!unidadMedida || !cantidad || cantidad <= 0) {
+          return NextResponse.json(
+            { success: false, error: 'Para compra de insumos debes ingresar unidad de medida y cantidad mayor a 0.' },
+            { status: 400 }
+          );
+        }
+        if (!body.categoria) {
+          categoria = 'Compra Insumo POS';
+        }
+      }
+
+      const costoUnitario =
+        clasificacion === 'Costo / Insumo' && cantidad && cantidad > 0
+          ? Math.round(valor / cantidad)
+          : null;
+
+      const idempKey = typeof body.idempotency_key === 'string' && body.idempotency_key.trim() ? body.idempotency_key.trim() : null;
+      if (idempKey) {
+        const { data: existingReg } = await supabase
+          .from('libro_caja_registros')
+          .select('*')
+          .eq('idempotency_key', idempKey)
+          .maybeSingle();
+        if (existingReg) {
+          return NextResponse.json({
+            success: true,
+            deduplicated: true,
+            tipo,
+            monto: Number(existingReg.valor_pagado || valor),
+            recibo: {
+              consecutivo: existingReg.soporte_factura || 'RC-00000',
+              fecha: existingReg.fecha,
+              hora: formatColombiaTime(existingReg.created_at),
+              cajaNombre: existingReg.caja_nombre || cajaNombre,
+              cajeroNombre: existingReg.responsable_caja || cajeroNombre,
+              clasificacion: existingReg.clasificacion,
+              categoria: existingReg.categoria,
+              concepto: existingReg.concepto,
+              beneficiario: existingReg.descripcion_beneficiario || '',
+              cantidad: existingReg.cantidad ?? null,
+              unidadMedida: existingReg.unidad_medida ?? null,
+              costoUnitario: existingReg.costo_unitario ?? null,
+              valor: Number(existingReg.valor_pagado || valor),
+            },
+          });
+        }
+      }
+
+      const { data: rcCode, error: rpcRcErr } = await supabase.rpc('rpc_siguiente_recibo_caja');
+      if (rpcRcErr) throw rpcRcErr;
+      const reciboConsecutivo = String(rcCode || `RC-${Date.now().toString().slice(-5)}`);
+
+      const diaMes = Number(todayStr.split('-')[2] || 1);
+      const { count: regCount } = await supabase
+        .from('libro_caja_registros')
+        .select('*', { count: 'exact', head: true })
+        .eq('fecha', todayStr)
+        .eq('tipo_libro', 'CAJA_MENOR');
+
+      const { data: insertedReg, error: errSal } = await supabase
+        .from('libro_caja_registros')
+        .insert({
           fecha: todayStr,
           dia_mes: diaMes,
           orden_item: (regCount || 0) + 1,
@@ -984,19 +1137,53 @@ export async function POST(request: NextRequest) {
           caja_id: body.caja_id || null,
           responsable_caja: cajeroNombre,
           usuario_registro: cajeroNombre,
-          clasificacion: body.clasificacion || 'Gasto Operativo',
+          clasificacion,
           concepto: String(concepto).trim(),
-          categoria: body.categoria || 'Salida Rápida POS',
-          descripcion_beneficiario: body.descripcion_beneficiario || '',
+          categoria,
+          descripcion_beneficiario: beneficiario,
           valor_pagado: valor,
+          soporte_factura: reciboConsecutivo,
+          insumo_id: insumoId,
+          cantidad,
+          unidad_medida: unidadMedida,
+          costo_unitario: costoUnitario,
           sesion_id: body.sesion_id || body.sesion_caja_id || null,
           idempotency_key: idempKey,
-        });
-        if (errSal) throw errSal;
-        await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
+        })
+        .select('*')
+        .single();
+      if (errSal) throw errSal;
+
+      if (clasificacion === 'Costo / Insumo' && insumoId && costoUnitario && costoUnitario > 0) {
+        await supabase
+          .from('catalogo_insumos')
+          .update({ costo_unitario_kg: costoUnitario })
+          .eq('id', insumoId)
+          .eq('costo_unitario_kg', 0);
       }
 
-      return NextResponse.json({ success: true, tipo, monto: valor });
+      await recalcularHojaDiaria(todayStr, 'CAJA_MENOR').catch(() => {});
+
+      return NextResponse.json({
+        success: true,
+        tipo,
+        monto: valor,
+        recibo: {
+          consecutivo: reciboConsecutivo,
+          fecha: todayStr,
+          hora: formatColombiaTime(insertedReg?.created_at || new Date().toISOString()),
+          cajaNombre,
+          cajeroNombre,
+          clasificacion,
+          categoria,
+          concepto: String(concepto).trim(),
+          beneficiario,
+          cantidad,
+          unidadMedida,
+          costoUnitario,
+          valor,
+        },
+      });
     }
 
     // 11. Anular / Eliminar ticket completo abierto (y liberar mesa si aplica)

@@ -170,15 +170,97 @@ export function formatThermalTicket(
   return fitted.join('\n');
 }
 
-/**
- * Envía el ticket a la impresora térmica nativa en Tauri o usa diálogo de impresión del navegador.
- */
-export async function printThermalTicket(
-  ticket: ThermalTicketData,
+export interface ReciboCajaTicketData {
+  consecutivo: string;
+  fecha: string;
+  hora: string;
+  cajaNombre: string;
+  cajeroNombre: string;
+  clasificacion: string;
+  categoria?: string;
+  concepto: string;
+  beneficiario?: string;
+  cantidad?: number | null;
+  unidadMedida?: string | null;
+  costoUnitario?: number | null;
+  valor: number;
+}
+
+function fitLinesToCols(lines: string[], cols: number): string {
+  const fitted = lines.flatMap((l) => {
+    if (l.length <= cols) return [l];
+    const chunks: string[] = [];
+    for (let i = 0; i < l.length; i += cols) {
+      chunks.push(l.slice(i, i + cols));
+    }
+    return chunks;
+  });
+  fitted.push('\n\n\n');
+  return fitted.join('\n');
+}
+
+export function formatReciboCajaTicket(
+  recibo: ReciboCajaTicketData,
+  configOverride?: ElianaPosConfig
+): string {
+  const cfg = configOverride || loadElianaPosConfig();
+  const cols = cfg.anchoTicketMm === 58 ? 32 : 42;
+  const line = '-'.repeat(cols);
+  const center = (txt: string) => {
+    const clean = txt.slice(0, cols);
+    const pad = Math.max(0, Math.floor((cols - clean.length) / 2));
+    return ' '.repeat(pad) + clean;
+  };
+
+  const lines: string[] = [
+    center(cfg.nombreComercial || 'Eliana POS'),
+    cfg.nit ? center(`NIT: ${cfg.nit}`) : '',
+    cfg.direccion ? center(cfg.direccion) : '',
+    line,
+    center('RECIBO DE CAJA'),
+    center(`No. ${recibo.consecutivo}`),
+    line,
+    `Fecha: ${recibo.fecha} ${recibo.hora}`,
+    `Caja:  ${recibo.cajaNombre}`,
+    `Entrega: ${recibo.cajeroNombre}`,
+    `Tipo:  ${recibo.clasificacion}`,
+  ].filter(Boolean);
+
+  if (recibo.categoria) {
+    lines.push(`Categ.: ${recibo.categoria}`);
+  }
+  if (recibo.beneficiario) {
+    lines.push(`Benef.: ${recibo.beneficiario}`);
+  }
+  lines.push(line);
+  lines.push(`Concepto: ${recibo.concepto}`);
+  if (recibo.cantidad && recibo.unidadMedida) {
+    lines.push(`Cant.: ${recibo.cantidad} ${recibo.unidadMedida}`);
+    if (recibo.costoUnitario) {
+      lines.push(`Costo Unit.: $${Math.round(recibo.costoUnitario).toLocaleString('es-CO')}`);
+    }
+  }
+  lines.push(line);
+  lines.push(`VALOR ENTREGADO: $${Math.round(recibo.valor).toLocaleString('es-CO')} COP`);
+
+  if (recibo.clasificacion.toLowerCase().includes('préstamo') || recibo.clasificacion.toLowerCase().includes('prestamo') || recibo.clasificacion.toLowerCase().includes('anticipo')) {
+    lines.push('Soporte de anticipo/prestamo a empleado.');
+  }
+
+  lines.push('');
+  lines.push('Recibi conforme: ________________');
+  lines.push('C.C. / Firma:    ________________');
+  lines.push(`Entregado por: ${recibo.cajeroNombre}`);
+
+  return fitLinesToCols(lines, cols);
+}
+
+async function sendRawTicketOutput(
+  title: string,
+  rawText: string,
+  cfg: ElianaPosConfig,
   printerIpOverride?: string
 ): Promise<{ ok: boolean; mode: 'tauri' | 'browser'; error?: string; rawText?: string }> {
-  const cfg = loadElianaPosConfig();
-  const rawText = formatThermalTicket(ticket, cfg);
   const printerIp = printerIpOverride || cfg.ipImpresora || '127.0.0.1:9100';
 
   if (isTauriDesktop()) {
@@ -197,7 +279,7 @@ export async function printThermalTicket(
       win.document.write(`
         <html>
           <head>
-            <title>${ticket.titulo}</title>
+            <title>${title}</title>
             <style>
               @page { size: ${mm}mm auto; margin: 2mm; }
               body { font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; margin: 0; padding: 6px; }
@@ -211,6 +293,27 @@ export async function printThermalTicket(
     }
   }
   return { ok: true, mode: 'browser' };
+}
+
+export async function printReciboCaja(
+  recibo: ReciboCajaTicketData,
+  printerIpOverride?: string
+): Promise<{ ok: boolean; mode: 'tauri' | 'browser'; error?: string; rawText?: string }> {
+  const cfg = loadElianaPosConfig();
+  const rawText = formatReciboCajaTicket(recibo, cfg);
+  return sendRawTicketOutput(`Recibo ${recibo.consecutivo}`, rawText, cfg, printerIpOverride);
+}
+
+/**
+ * Envía el ticket a la impresora térmica nativa en Tauri o usa diálogo de impresión del navegador.
+ */
+export async function printThermalTicket(
+  ticket: ThermalTicketData,
+  printerIpOverride?: string
+): Promise<{ ok: boolean; mode: 'tauri' | 'browser'; error?: string; rawText?: string }> {
+  const cfg = loadElianaPosConfig();
+  const rawText = formatThermalTicket(ticket, cfg);
+  return sendRawTicketOutput(ticket.titulo, rawText, cfg, printerIpOverride);
 }
 
 /**

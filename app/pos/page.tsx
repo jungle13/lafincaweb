@@ -68,6 +68,7 @@ import PosCreditsModal from '@/components/pos/PosCreditsModal';
 import PosSalesHistoryView from '@/components/pos/PosSalesHistoryView';
 import PosTerminalSettingsModal from '@/components/pos/PosTerminalSettingsModal';
 import PosProductsModule from '@/components/pos/PosProductsModule';
+import PosCashFlowModal from '@/components/pos/PosCashFlowModal';
 import PosInventoryModule from '@/components/pos/PosInventoryModule';
 import PosCheckoutModal from '@/components/pos/PosCheckoutModal';
 import PosSupervisorPinModal from '@/components/pos/PosSupervisorPinModal';
@@ -249,9 +250,6 @@ export default function ElianaPosPage() {
   const [notaItemText, setNotaItemText] = useState('');
 
   const [cashFlowModal, setCashFlowModal] = useState<'ENTRADA' | 'SALIDA' | null>(null);
-  const [cashFlowMonto, setCashFlowMonto] = useState('');
-  const [cashFlowConcepto, setCashFlowConcepto] = useState('');
-  const [cashFlowClasif, setCashFlowClasif] = useState('Gasto Operativo');
 
   const captureInputRef = useRef<HTMLInputElement | null>(null);
   const buscarInputRef = useRef<HTMLInputElement | null>(null);
@@ -1245,34 +1243,6 @@ export default function ElianaPosPage() {
       }
     } catch (e: unknown) {
       notify('err', e instanceof Error ? e.message : 'Error creando domicilio');
-    } finally {
-      setBusyAction(false);
-    }
-  };
-
-  const handleRegistrarCashFlow = async () => {
-    if (!cashFlowModal) return;
-    const monto = Number(cashFlowMonto || 0);
-    if (monto <= 0 || !cashFlowConcepto.trim()) {
-      return notify('err', 'Ingresa monto válido y concepto.');
-    }
-    setBusyAction(true);
-    try {
-      await executePosAction('MOVIMIENTO_EFECTIVO_CAJA', {
-        tipo: cashFlowModal,
-        monto,
-        concepto: cashFlowConcepto.trim(),
-        clasificacion: cashFlowClasif,
-        sesion_id: sesionActiva?.id || null,
-      });
-      setCashFlowModal(null);
-      setCashFlowMonto('');
-      setCashFlowConcepto('');
-      await fetchPosState();
-      focusCapture();
-      notify('ok', `${cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida'} de ${formatMoney(monto)} registrada.`);
-    } catch (e: unknown) {
-      notify('err', e instanceof Error ? e.message : 'Error registrando movimiento');
     } finally {
       setBusyAction(false);
     }
@@ -3257,50 +3227,22 @@ export default function ElianaPosPage() {
         </div>
       )}
 
-      {/* Modal F7 / F8 sincronizado con Libro de Caja */}
+      {/* Modal F7 / F8 sincronizado con Libro de Caja y Recibo de Caja único */}
       {cashFlowModal && (
-        <div className="fixed inset-0 z-[10000] bg-zinc-950/55 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-zinc-300 max-w-md w-full p-5 space-y-3.5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-200 pb-2.5">
-              <h3 className="font-bold text-base text-zinc-900">{cashFlowModal === 'ENTRADA' ? 'F7 — Entrada de Efectivo' : 'F8 — Salida a Libro de Caja'}</h3>
-              <button onClick={() => setCashFlowModal(null)} className="p-1 text-zinc-500 cursor-pointer"><X className="w-5 h-5" /></button>
-            </div>
-            {cashFlowModal === 'SALIDA' && (
-              <div className="space-y-1.5">
-                <div className="text-xs font-bold text-zinc-600">Clasificación de la Salida:</div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {[
-                    { id: 'Gasto Operativo', sub: 'Servicios, Hielo, Varios' },
-                    { id: 'Costo / Insumo', sub: 'Compras de contado' },
-                    { id: 'Turno / Nómina', sub: 'Pagos a personal' },
-                  ].map((opt) => {
-                    const active = cashFlowClasif === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setCashFlowClasif(opt.id)}
-                        className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                          active
-                            ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs'
-                            : 'bg-zinc-50 text-zinc-800 border-zinc-300 hover:bg-zinc-100'
-                        }`}
-                      >
-                        <div className="font-bold text-xs">{opt.id}</div>
-                        <div className={`text-[10px] mt-0.5 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{opt.sub}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            <input autoFocus type="number" value={cashFlowMonto} onChange={(e) => setCashFlowMonto(e.target.value)} placeholder="Monto ($)" className={`w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-base font-bold ${noSpinnerClass}`} />
-            <input type="text" value={cashFlowConcepto} onChange={(e) => setCashFlowConcepto(e.target.value)} placeholder="Concepto / Beneficiario" className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm" />
-            <button onClick={handleRegistrarCashFlow} disabled={busyAction} className="w-full py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs cursor-pointer">
-              Registrar {cashFlowModal === 'ENTRADA' ? 'Entrada' : 'Salida en Libro de Caja'}
-            </button>
-          </div>
-        </div>
+        <PosCashFlowModal
+          mode={cashFlowModal}
+          sesionId={sesionActiva?.id || null}
+          busyAction={busyAction}
+          executePosAction={executePosAction}
+          onCompleted={async () => {
+            await fetchPosState();
+          }}
+          onClose={() => {
+            setCashFlowModal(null);
+            focusCapture();
+          }}
+          notify={notify}
+        />
       )}
 
       {/* ==================== F5: VENTAS Y DEVOLUCIONES (INTEGRADO) ==================== */}

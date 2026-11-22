@@ -42,7 +42,8 @@ import {
   Download,
   FileText,
   ChevronDown,
-  Settings
+  Settings,
+  Clock
 } from 'lucide-react';
 import { downloadCajaMenorResumenPdf } from '@/lib/exportCajaMenorPdf';
 import SheetTabsBar from '@/components/sheets/SheetTabsBar';
@@ -373,7 +374,12 @@ export default function LibrosApoyoContent({
   }, [activeMonthPrefix, registrosDelMes, diariosDelMes, kpis]);
 
   // Control para Contraer / Desplegar contenedor lateral izquierdo de Hojas por Fecha
-  const [isSidebarOpen, setIsSidebarOpen] = useState(!modoCajeroHermetico);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Datos enriquecidos del POS diario y Bitácora Cronológica
+  const [posDiaResumen, setPosDiaResumen] = useState<any>(null);
+  const [bitacoraDia, setBitacoraDia] = useState<any[]>([]);
+  const [bitacoraFiltro, setBitacoraFiltro] = useState<'TODOS' | 'TURNO' | 'MOVIMIENTO' | 'AUDITORIA'>('TODOS');
 
   // Sistema de Pestañas
   const [openTabs, setOpenTabs] = usePersistedState<string[]>('caja_open_tabs', []);
@@ -481,7 +487,8 @@ export default function LibrosApoyoContent({
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/libros-apoyo?periodo_id=per-2026-10&t=${Date.now()}`, {
+      const fechaQuery = activeTabId ? `&fecha=${encodeURIComponent(activeTabId)}` : '';
+      const res = await fetch(`/api/libros-apoyo?periodo_id=per-2026-10${fechaQuery}&t=${Date.now()}`, {
         cache: 'no-store',
       });
       const json = await res.json();
@@ -496,6 +503,8 @@ export default function LibrosApoyoContent({
       setCategoriasList(json.categorias || []);
       setResponsablesList(json.responsables?.length ? json.responsables : CAJEROS_OFICIALES);
       setConceptosSugeridos(json.conceptosSugeridos || []);
+      if (json.posDiaResumen) setPosDiaResumen(json.posDiaResumen);
+      if (Array.isArray(json.bitacoraDia)) setBitacoraDia(json.bitacoraDia);
 
       setCachedData(CACHE_KEY, {
         kpis: json.kpis,
@@ -513,7 +522,7 @@ export default function LibrosApoyoContent({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTabId]);
 
   useEffect(() => {
     loadData(Boolean(cached));
@@ -1580,94 +1589,8 @@ export default function LibrosApoyoContent({
           /* Con contenedor lateral contraíble/desplegable sin '+'                */
           /* =================================================================== */
           <div className="flex-1 flex overflow-hidden min-h-0">
-            {/* Contenedor Lateral Izquierdo de Hojas por Fecha (Contraíble) */}
-            {isSidebarOpen && (
-              <div
-                className="fixed inset-0 bg-slate-900/40 z-30 md:hidden"
-                onClick={() => setIsSidebarOpen(false)}
-              />
-            )}
-            <aside
-              className={`fixed md:static inset-y-0 left-0 z-40 md:z-auto transition-all duration-300 bg-white border-r border-slate-200 shrink-0 flex flex-col overflow-hidden shadow-2xl md:shadow-none ${
-                isSidebarOpen ? 'w-64 md:w-60' : 'w-0 border-r-0'
-              }`}
-            >
-              {isSidebarOpen && (
-                <>
-                  <div className="p-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                      <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
-                        Hojas por Fecha
-                      </span>
-                    </div>
-                    {/* Botón para contraer el panel */}
-                    <button
-                      type="button"
-                      onClick={() => setIsSidebarOpen(false)}
-                      className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer"
-                      title="Ocultar lista de días"
-                    >
-                      <PanelLeftClose className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-1.5 space-y-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTabId(null)}
-                      className="w-full text-left px-2.5 py-2 rounded-md transition-colors flex items-center justify-between text-slate-700 hover:bg-slate-100 cursor-pointer"
-                    >
-                      <span className="font-bold text-slate-900">Consolidado (Mes)</span>
-                      <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-
-                    {diariosDelMes.map((d) => {
-                      const isSelected = activeTabId === d.fecha;
-                      return (
-                        <button
-                          key={d.fecha}
-                          type="button"
-                          onClick={() => handleOpenDaySheet(d.fecha)}
-                          className={`w-full text-left px-2.5 py-2 rounded-md transition-colors flex items-center justify-between cursor-pointer ${
-                            isSelected
-                              ? 'bg-orange-50 border border-orange-200 text-slate-900 font-semibold'
-                              : 'text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <div className="text-xs truncate">
-                              Día {String(d.dia_mes).padStart(2, '0')} • {d.fecha.slice(5)}
-                            </div>
-                            <div className="text-[10px] text-slate-400 truncate">
-                              {d.responsables_dia || 'JOHANNA'}
-                            </div>
-                          </div>
-                          <span className="font-mono text-[11px] font-semibold text-slate-800 shrink-0">
-                            ${formatMoney(d.total_salidas)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </aside>
-
-            {/* Área Principal de la Hoja del Día */}
+            {/* Área Principal de la Hoja del Día (100% ancho, sin barra Hojas por Fecha) */}
             <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 space-y-4 min-w-0">
-              {/* Botón Flotante / Visible para Desplegar el Panel si está cerrado */}
-              {!isSidebarOpen && (
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-400 rounded-lg text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
-                >
-                  <PanelLeftOpen className="w-4 h-4 text-slate-600" />
-                  <span>Mostrar Hojas por Fecha</span>
-                </button>
-              )}
-
               {/* Encabezado del Día */}
               <div className="bg-white rounded-xl p-3.5 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                 <div>
@@ -1685,7 +1608,7 @@ export default function LibrosApoyoContent({
                     )}
                     {isFlujoPendienteRelevo && (
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                        CIERRE PARCIAL ({ultimaSesionDia?.cajero_nombre}) • ESPERANDO RELEVO
+                        CIERRE PARCIAL ({ultimaSesionDia?.cajero_nombre}) • ESPERANDO RELEVO EN POS
                       </span>
                     )}
                     {isFlujoCerradoTotal && (
@@ -1695,98 +1618,37 @@ export default function LibrosApoyoContent({
                     )}
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
-                    Un único flujo de caja por día con control de sesiones por usuario, cierres parciales (entrega de turno) y cierre total
+                    Vista de auditoría y flujo diario sincronizada con ELIANA POS (los cierres parciales, totales y arqueos se realizan exclusivamente desde el POS).
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Si el período está CERRADO: No permitir aperturas, cierres ni modificaciones */}
-                  {isCerrado ? (
-                    <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 font-semibold text-xs flex items-center gap-1.5 border border-slate-200">
-                      <Lock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Solo Lectura</span>
-                    </span>
-                  ) : (
-                    <>
-                  {/* Si el usuario actual tiene la sesión ABIERTA (o es Admin y hay sesión abierta) */}
-                  {sesionAbiertaDia && (isMyOpenSession || isAdmin) && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFlujoCierreTipo('PARCIAL');
-                          setIsCerrarFlujoModalOpen(true);
-                        }}
-                        className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
-                      >
-                        <CheckSquare className="w-3.5 h-3.5" />
-                        <span>Cierre Parcial (Entregar Turno)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFlujoCierreTipo('TOTAL');
-                          setIsCerrarFlujoModalOpen(true);
-                        }}
-                        className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Cierre Total del Día</span>
-                      </button>
-                    </>
-                  )}
-
-                  {/* Si no hay sesiones hoy o está en Cierre Parcial esperando relevo */}
-                  {!sesionAbiertaDia && !isFlujoCerradoTotal && (
+                  <span className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 font-semibold text-[11px] border border-emerald-200">
+                    Sincronizado con POS
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void loadData(false)}
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold text-xs cursor-pointer"
+                  >
+                    Actualizar
+                  </button>
+                  {isFlujoCerradoTotal && isAdmin && activeSesion && (
                     <button
                       type="button"
                       onClick={() => {
-                        setFlujoAperturaFecha(activeTabId);
-                        if (isFlujoPendienteRelevo && ultimaSesionDia?.efectivo_cierre) {
-                          setFlujoAperturaEfectivoInicial(formatMoney(ultimaSesionDia.efectivo_cierre));
-                        } else {
-                          setFlujoAperturaEfectivoInicial('500.000');
+                        if (confirm('¿Reabrir la última sesión de este flujo de caja para permitir nuevas salidas?')) {
+                          fetch('/api/libros-apoyo', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'REOPEN_FLUJO_CAJA', sesion_id: activeSesion.id, fecha: activeTabId }),
+                          }).then(() => loadData(true));
                         }
-                        setIsAbrirFlujoModalOpen(true);
                       }}
-                      className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-600 font-semibold text-xs cursor-pointer"
                     >
-                      <Wallet className="w-4 h-4" />
-                      <span>
-                        {isFlujoPendienteRelevo
-                          ? 'Recibir Turno (Relevo de Caja)'
-                          : 'Abrir Flujo de Caja'}
-                      </span>
+                      Reabrir (Admin)
                     </button>
-                  )}
-
-                  {/* Si el flujo ya fue cerrado totalmente */}
-                  {isFlujoCerradoTotal && (
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 border border-slate-200">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>Flujo Cerrado Total</span>
-                      </span>
-                      {isAdmin && activeSesion && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm('¿Reabrir la última sesión de este flujo de caja para permitir nuevas salidas?')) {
-                              fetch('/api/libros-apoyo', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ action: 'REOPEN_FLUJO_CAJA', sesion_id: activeSesion.id, fecha: activeTabId }),
-                              }).then(() => loadData(true));
-                            }
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-600 font-semibold text-xs cursor-pointer"
-                        >
-                          Reabrir (Admin)
-                        </button>
-                      )}
-                    </div>
-                  )}
-                    </>
                   )}
                 </div>
               </div>
@@ -1807,22 +1669,69 @@ export default function LibrosApoyoContent({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {sesionesDiaActivo.map((ses, idx) => {
+                    {sesionesDiaActivo.map((ses: any, idx) => {
                       const isThisOpen = ses.estado === 'ABIERTA';
                       const isParcial = ses.estado === 'CERRADA_PARCIAL';
-                      const datafonosTurno = Number(ses.valor_datafonos || 0);
-                      const efectivoTurno = Number(ses.efectivo_cierre || 0);
-                      const otrosMediosTurno = Number(ses.valor_otros_medios || 0);
-                      const salidasTurno = Number(ses.total_salidas || 0);
-                      // Sumatoria Total del Turno = Datáfonos + Efectivo + Demás Conceptos (Nequi) + Salidas
-                      const totalTurno = datafonosTurno + efectivoTurno + otrosMediosTurno + salidasTurno;
-                      const posTurno = Number(ses.venta_pos || 0);
-                      const diffTurno = posTurno > 0 ? (totalTurno - posTurno) : Number(ses.diferencia_cuadre || 0);
+                      const sesStats = posDiaResumen?.porSesion?.[ses.id];
+
+                      const baseIni = Number(ses.efectivo_inicial || 0);
+                      const vEfectivo = sesStats ? Number(sesStats.ventasEfectivo || 0) : 0;
+                      const cntEfectivo = sesStats ? Number(sesStats.cntEfectivo || 0) : 0;
+                      const vDatafono = sesStats ? Number(sesStats.ventasDatafono || 0) : Number(ses.valor_datafonos || 0);
+                      const cntDatafono = sesStats ? Number(sesStats.cntDatafono || 0) : 0;
+                      const vTransf = sesStats ? Number(sesStats.ventasTransferencia || 0) : Number(ses.valor_otros_medios || 0);
+                      const cntTransf = sesStats ? Number(sesStats.cntTransferencia || 0) : 0;
+                      const vCredito = sesStats ? Number(sesStats.ventasCredito || 0) : 0;
+                      const cntCredito = sesStats ? Number(sesStats.cntCredito || 0) : 0;
+                      const entradasSes = sesStats ? Number(sesStats.entradasEfectivo || 0) : 0;
+                      const salidasSes = sesStats ? Number(sesStats.salidasEfectivo || 0) : Number(ses.total_salidas || 0);
+
+                      const efectivoEsperadoSes = baseIni + vEfectivo + entradasSes - salidasSes;
+                      const efectivoContadoSes = Number(ses.efectivo_cierre || 0);
+                      const posTurno = sesStats ? Number(sesStats.totalVendido || 0) : Number(ses.venta_pos || 0);
+                      const cantOrdenesSes = sesStats ? Number(sesStats.cantidadOrdenes || 0) : 0;
+                      const diffTurno = isThisOpen
+                        ? 0
+                        : ses.diferencia_cuadre !== undefined && ses.diferencia_cuadre !== null
+                          ? Number(ses.diferencia_cuadre)
+                          : efectivoContadoSes - efectivoEsperadoSes;
+
+                      const horaOpen = ses.hora_apertura
+                        ? new Date(ses.hora_apertura).toLocaleTimeString('es-CO', {
+                            timeZone: 'America/Bogota',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : '—';
+                      const horaClose = ses.hora_cierre
+                        ? new Date(ses.hora_cierre).toLocaleTimeString('es-CO', {
+                            timeZone: 'America/Bogota',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'En curso';
+                      const minsDur =
+                        ses.duracion_minutos && Number(ses.duracion_minutos) > 0
+                          ? Number(ses.duracion_minutos)
+                          : ses.hora_apertura
+                            ? Math.max(
+                                1,
+                                Math.round(
+                                  ((ses.hora_cierre ? new Date(ses.hora_cierre).getTime() : Date.now()) -
+                                    new Date(ses.hora_apertura).getTime()) /
+                                    60_000
+                                )
+                              )
+                            : 0;
+                      const durStr =
+                        minsDur >= 60
+                          ? `${Math.floor(minsDur / 60)}h ${minsDur % 60}m`
+                          : `${minsDur}m`;
 
                       return (
                         <div
                           key={ses.id}
-                          className={`p-3 rounded-xl border text-xs flex flex-col justify-between gap-2.5 transition-all shadow-2xs ${
+                          className={`p-3.5 rounded-xl border text-xs flex flex-col justify-between gap-2.5 transition-all shadow-2xs ${
                             isThisOpen
                               ? 'bg-emerald-50/60 border-emerald-300'
                               : isParcial
@@ -1830,13 +1739,13 @@ export default function LibrosApoyoContent({
                               : 'bg-white border-slate-200 hover:border-slate-300'
                           }`}
                         >
-                          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <div className="flex items-start justify-between border-b border-slate-100 pb-2 gap-2">
                             <div className="min-w-0">
                               <span className="font-bold text-slate-900 block truncate text-xs">
                                 Turno #{ses.numero_turno || idx + 1} • {ses.cajero_nombre}
                               </span>
-                              <span className="text-[10px] text-slate-500 font-medium truncate block">
-                                {ses.caja_nombre || 'Caja Registradora'}
+                              <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                                {ses.caja_nombre || 'Caja Principal'} · Apertura {horaOpen} · Cierre {horaClose} · <strong>{durStr}</strong>
                               </span>
                             </div>
                             <span
@@ -1848,51 +1757,76 @@ export default function LibrosApoyoContent({
                                   : 'bg-slate-100 text-slate-700 border border-slate-200'
                               }`}
                             >
-                              {isThisOpen ? 'En Turno Activo' : isParcial ? 'Cierre Parcial' : 'Turno Cerrado'}
+                              {isThisOpen ? 'En Turno Activo' : isParcial ? 'Cierre Parcial' : 'Cierre Total'}
                             </span>
                           </div>
 
-                          {/* Sumatoria de Datáfonos, Efectivo, Demás conceptos (Nequi) y Salidas */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px] bg-slate-50/80 p-2 rounded-lg border border-slate-100">
+                          {/* Desglose completo de medios de pago, cantidades, base y movimientos */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[11px] bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
                             <div>
-                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">Datáfonos</span>
-                              <span className="font-bold text-indigo-700 block mt-0.5">${formatMoney(datafonosTurno)}</span>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">Base Inicial</span>
+                              <span className="font-bold text-slate-800 block mt-0.5">${formatMoney(baseIni)}</span>
                             </div>
                             <div>
-                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">Efectivo</span>
-                              <span className="font-bold text-slate-900 block mt-0.5">
-                                {isThisOpen ? 'En curso' : `$${formatMoney(efectivoTurno)}`}
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
+                                Ventas Efectivo ({cntEfectivo})
                               </span>
+                              <span className="font-bold text-emerald-700 block mt-0.5">${formatMoney(vEfectivo)}</span>
                             </div>
                             <div>
-                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">Demás conceptos (Nequi)</span>
-                              <span className="font-bold text-purple-700 block mt-0.5">${formatMoney(otrosMediosTurno)}</span>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
+                                Datáfonos ({cntDatafono})
+                              </span>
+                              <span className="font-bold text-indigo-700 block mt-0.5">${formatMoney(vDatafono)}</span>
                             </div>
                             <div>
-                              <span className="text-[9px] font-bold text-rose-700 uppercase block font-sans">(+) Salidas</span>
-                              <span className="font-bold text-rose-700 block mt-0.5">${formatMoney(salidasTurno)}</span>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
+                                Transferencias ({cntTransf})
+                              </span>
+                              <span className="font-bold text-purple-700 block mt-0.5">${formatMoney(vTransf)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
+                                Créditos ({cntCredito})
+                              </span>
+                              <span className="font-bold text-amber-700 block mt-0.5">${formatMoney(vCredito)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-rose-700 uppercase block font-sans">
+                                Entradas / Salidas
+                              </span>
+                              <span className="font-bold text-slate-900 block mt-0.5">
+                                +${formatMoney(entradasSes)} / -${formatMoney(salidasSes)}
+                              </span>
                             </div>
                           </div>
 
-                          {/* Total Turno y Comparativo POS */}
-                          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                          {/* Pie de cuadre exacto del turno */}
+                          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] gap-2">
                             <div>
                               <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
-                                Total Turno
+                                Venta POS ({cantOrdenesSes} facturas) · Esperado Caja: ${formatMoney(efectivoEsperadoSes)}
                               </span>
                               <span className="font-mono font-black text-xs text-slate-900">
-                                $ {formatMoney(totalTurno)}
+                                POS: ${formatMoney(posTurno)} · Contado: {isThisOpen ? 'En curso' : `$${formatMoney(efectivoContadoSes)}`}
                               </span>
                             </div>
-                            {posTurno > 0 && (
-                              <div className="text-right">
-                                <span className="text-[9px] font-bold text-slate-500 uppercase block font-sans">
-                                  POS Turno: ${formatMoney(posTurno)}
-                                </span>
-                                <span className={`font-mono font-black text-[11px] ${
-                                  diffTurno === 0 ? 'text-emerald-700' : diffTurno > 0 ? 'text-blue-700' : 'text-rose-700'
-                                }`}>
-                                  {diffTurno === 0 ? 'Exacto ($0)' : diffTurno > 0 ? `+${formatMoney(diffTurno)}` : `-${formatMoney(Math.abs(diffTurno))}`}
+                            {!isThisOpen && (
+                              <div className="text-right shrink-0">
+                                <span
+                                  className={`px-2 py-0.5 rounded font-mono font-black text-[11px] ${
+                                    diffTurno === 0
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : diffTurno > 0
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-rose-100 text-rose-800'
+                                  }`}
+                                >
+                                  {diffTurno === 0
+                                    ? 'CUADRADA ($0)'
+                                    : diffTurno > 0
+                                      ? `SOBRANTE +$${formatMoney(diffTurno)}`
+                                      : `FALTANTE -$${formatMoney(Math.abs(diffTurno))}`}
                                 </span>
                               </div>
                             )}
@@ -1905,113 +1839,132 @@ export default function LibrosApoyoContent({
               )}
 
               {/* ============================================================= */}
-              {/* PANEL DE CUADRE DE EFECTIVO DEL DÍA                           */}
+              {/* PANEL DE CUADRE DE EFECTIVO Y VENTAS POS DEL DÍA              */}
               {/* ============================================================= */}
-              <div className="bg-white rounded-xl p-4 border border-slate-200 space-y-3 shadow-2xs">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <div className="flex items-center gap-2">
-                    <Calculator className="w-4 h-4 text-slate-800" />
-                    <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
-                      Cuadre de Efectivo del Flujo del Día ({activeTabId})
-                    </h3>
-                  </div>
+              {(() => {
+                const baseDia = posDiaResumen ? Number(posDiaResumen.baseInicial || 0) : Number(activeSheet?.base_inicial || 0);
+                const vEf = posDiaResumen ? Number(posDiaResumen.ventasEfectivo?.monto || 0) : Number(activeSheet?.venta_efectivo_pos || 0);
+                const vEfCnt = posDiaResumen ? Number(posDiaResumen.ventasEfectivo?.cantidad || 0) : 0;
+                const vDat = posDiaResumen ? Number(posDiaResumen.ventasDatafono?.monto || 0) : datafonosDia;
+                const vDatCnt = posDiaResumen ? Number(posDiaResumen.ventasDatafono?.cantidad || 0) : 0;
+                const vTr = posDiaResumen ? Number(posDiaResumen.ventasTransferencia?.monto || 0) : otrosMediosDia;
+                const vTrCnt = posDiaResumen ? Number(posDiaResumen.ventasTransferencia?.cantidad || 0) : 0;
+                const vCr = posDiaResumen ? Number(posDiaResumen.ventasCredito?.monto || 0) : 0;
+                const vCrCnt = posDiaResumen ? Number(posDiaResumen.ventasCredito?.cantidad || 0) : 0;
+                const totalPosDia = posDiaResumen ? Number(posDiaResumen.totalVendidoPos || 0) : ventaPosReal;
+                const totalOrdenesDia = posDiaResumen ? Number(posDiaResumen.cantidadOrdenes || 0) : 0;
+                const entradasDia = posDiaResumen ? Number(posDiaResumen.entradasEfectivo || 0) : 0;
+                const salidasEfectivoDia = posDiaResumen ? Number(posDiaResumen.salidasEfectivo || 0) : salidasDia;
+                const esperadoDia = posDiaResumen ? Number(posDiaResumen.efectivoEsperado || 0) : baseDia + vEf + entradasDia - salidasEfectivoDia;
+                const contadoDia = posDiaResumen ? posDiaResumen.efectivoContado : (efectivoDia > 0 ? efectivoDia : null);
+                const diffDia = contadoDia !== null ? contadoDia - esperadoDia : 0;
 
-                  {isAdmin && !isCerrado && (
-                    <button
-                      type="button"
-                      onClick={handleSaveArqueo}
-                      disabled={savingArqueo}
-                      className="flex items-center gap-1 px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold cursor-pointer"
-                    >
-                      {savingArqueo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      <span>Guardar Arqueo Admin</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* 6 Columnas Oficiales del Flujo del Día: Efectivo, Datáfonos, Otros Medios, Salidas, Sumatoria Total, Ventas POS y Diferencia */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase block">
-                      (+) Efectivo
-                    </span>
-                    <span className="font-mono font-black text-sm text-slate-900 mt-1 block">
-                      $ {formatMoney(efectivoDia)}
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-sans block mt-0.5">
-                      Físico contado en caja
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase block">
-                      (+) Datáfonos
-                    </span>
-                    <span className="font-mono font-black text-sm text-indigo-700 mt-1 block">
-                      $ {formatMoney(datafonosDia)}
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-sans block mt-0.5">
-                      Vouchers / tarjetas
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase block">
-                      (+) Otros Medios
-                    </span>
-                    <span className="font-mono font-black text-sm text-purple-700 mt-1 block">
-                      $ {formatMoney(otrosMediosDia)}
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-sans block mt-0.5">
-                      Nequi / Transferencias
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-rose-700 uppercase block">
-                      (+) Salidas
-                    </span>
-                    <span className="font-mono font-black text-sm text-rose-700 mt-1 block">
-                      $ {formatMoney(salidasDia)}
-                    </span>
-                    <span className="text-[9px] text-rose-600 font-sans block mt-0.5">
-                      Pagadas en efectivo
-                    </span>
-                  </div>
-
-                  <div className="bg-orange-50/70 p-2.5 rounded-lg border border-orange-200">
-                    <span className="text-[10px] font-bold text-orange-900 uppercase block">
-                      (=) Sumatoria Total
-                    </span>
-                    <span className="font-mono font-black text-sm text-orange-800 mt-1 block">
-                      $ {formatMoney(sumatoriaTotalDia)}
-                    </span>
-                    <span className="text-[9px] text-orange-700 font-sans block mt-0.5">
-                      Flujo total recaudado
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-3 lg:col-span-1 bg-slate-900 text-white p-2.5 rounded-lg flex flex-col justify-between">
-                    <span className="text-[10px] font-bold text-slate-300 uppercase block">
-                      Ventas POS y Diferencia
-                    </span>
-                    <div className="mt-1">
-                      <div className="font-mono font-bold text-xs text-slate-200">
-                        POS: $ {formatMoney(ventaPosReal)}
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Bloque Izquierdo: Ecuación de Efectivo Físico en Caja */}
+                    <div className="bg-white rounded-xl p-4 border border-slate-200 space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Calculator className="w-4 h-4 text-slate-800" />
+                          <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                            Cuadre de Efectivo en Caja ({activeTabId})
+                          </h3>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-semibold">¿Concuerda el dinero físico?</span>
                       </div>
-                      <div className={`font-mono font-black text-xs mt-0.5 ${
-                        diferenciaCuadreDia === 0 ? 'text-emerald-400' : diferenciaCuadreDia > 0 ? 'text-blue-400' : 'text-rose-400'
-                      }`}>
-                        {diferenciaCuadreDia === 0
-                          ? 'CUADRADA ($0)'
-                          : diferenciaCuadreDia > 0
-                          ? `SOBRANTE +$${formatMoney(diferenciaCuadreDia)}`
-                          : `FALTANTE -$${formatMoney(Math.abs(diferenciaCuadreDia))}`}
+
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-600">(+) Base Inicial en Caja</span>
+                          <span className="font-mono font-bold text-slate-900">${formatMoney(baseDia)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-600">(+) Ventas en Efectivo POS ({vEfCnt} facturas)</span>
+                          <span className="font-mono font-bold text-emerald-700">+${formatMoney(vEf)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-600">(+) Entradas de Efectivo (F7)</span>
+                          <span className="font-mono font-bold text-blue-700">+${formatMoney(entradasDia)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-600">(-) Salidas / Recibos de Caja (F8)</span>
+                          <span className="font-mono font-bold text-rose-700">-${formatMoney(salidasEfectivoDia)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-2 px-2.5 rounded-lg bg-slate-100 font-bold">
+                          <span className="text-slate-900">(=) Efectivo Esperado en Caja</span>
+                          <span className="font-mono text-sm text-slate-900">${formatMoney(esperadoDia)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                          <span className="text-slate-700 font-semibold">Efectivo Físico Contado en Arqueo POS</span>
+                          <span className="font-mono font-bold text-slate-900">
+                            {contadoDia !== null ? `$${formatMoney(contadoDia)}` : 'Turno en curso'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {contadoDia !== null && (
+                        <div
+                          className={`p-2.5 rounded-lg text-xs font-bold flex items-center justify-between ${
+                            diffDia === 0
+                              ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                              : diffDia > 0
+                                ? 'bg-blue-50 text-blue-900 border border-blue-200'
+                                : 'bg-rose-50 text-rose-900 border border-rose-200'
+                          }`}
+                        >
+                          <span>Resultado del Arqueo</span>
+                          <span className="font-mono">
+                            {diffDia === 0
+                              ? 'CUADRADA ($0)'
+                              : diffDia > 0
+                                ? `SOBRANTE +$${formatMoney(diffDia)}`
+                                : `FALTANTE -$${formatMoney(Math.abs(diffDia))}`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bloque Derecho: Ventas Totales POS por Medio de Pago */}
+                    <div className="bg-white rounded-xl p-4 border border-slate-200 space-y-3 shadow-2xs flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                            Resumen Ventas POS por Medio de Pago
+                          </h3>
+                          <span className="text-[11px] font-bold text-slate-600">{totalOrdenesDia} facturas</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2.5 text-xs">
+                          <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200">
+                            <div className="text-[10px] font-bold text-emerald-800 uppercase">Efectivo ({vEfCnt})</div>
+                            <div className="font-mono font-black text-sm text-emerald-900 mt-0.5">${formatMoney(vEf)}</div>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-indigo-50/70 border border-indigo-200">
+                            <div className="text-[10px] font-bold text-indigo-800 uppercase">Datáfonos ({vDatCnt})</div>
+                            <div className="font-mono font-black text-sm text-indigo-900 mt-0.5">${formatMoney(vDat)}</div>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-purple-50/70 border border-purple-200">
+                            <div className="text-[10px] font-bold text-purple-800 uppercase">Transferencias ({vTrCnt})</div>
+                            <div className="font-mono font-black text-sm text-purple-900 mt-0.5">${formatMoney(vTr)}</div>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-amber-50/70 border border-amber-200">
+                            <div className="text-[10px] font-bold text-amber-800 uppercase">Créditos ({vCrCnt})</div>
+                            <div className="font-mono font-black text-sm text-amber-900 mt-0.5">${formatMoney(vCr)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-900 text-white flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-300 uppercase">Total Vendido POS del Día</div>
+                          <div className="text-[11px] text-slate-400">Suma de todos los medios de pago</div>
+                        </div>
+                        <div className="font-mono font-black text-lg">${formatMoney(totalPosDia)}</div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* ============================================================= */}
               {/* REGLAS ESTRICTAS DE FORMULARIO SEGÚN SESIÓN Y USUARIO          */}
@@ -2120,23 +2073,12 @@ export default function LibrosApoyoContent({
                   <div className="space-y-1">
                     <div className="font-bold text-amber-900 text-xs uppercase flex items-center gap-1.5">
                       <Wallet className="w-4 h-4 text-amber-700" />
-                      <span>Cierre Parcial Realizado por {ultimaSesionDia?.cajero_nombre} • Turno Disponible</span>
+                      <span>Cierre Parcial Realizado por {ultimaSesionDia?.cajero_nombre} • Esperando Relevo en POS</span>
                     </div>
                     <p className="text-xs text-amber-800">
-                      El turno anterior cerró su sesión reportando <strong>$ {formatMoney(ultimaSesionDia?.efectivo_cierre || 0)}</strong> en efectivo. Para empezar a registrar egresos en este flujo de caja, inicia tu sesión ingresando manualmente el efectivo con el que recibes la caja.
+                      El turno anterior cerró su sesión reportando <strong>$ {formatMoney(ultimaSesionDia?.efectivo_cierre || 0)}</strong> en efectivo. El siguiente cajero debe abrir el nuevo turno directamente desde el aplicativo <strong>ELIANA POS</strong>.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFlujoAperturaFecha(activeTabId);
-                      setFlujoAperturaEfectivoInicial(formatMoney(ultimaSesionDia?.efectivo_cierre || 200000));
-                      setIsAbrirFlujoModalOpen(true);
-                    }}
-                    className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-xs shrink-0 cursor-pointer shadow-sm"
-                  >
-                    Recibir Turno e Ingresar Efectivo Inicial
-                  </button>
                 </div>
               ) : !isFlujoCerradoTotal && sesionesDiaActivo.length === 0 ? (
                 /* CASO D: El flujo de este día aún no ha sido abierto por ningún cajero */
@@ -2267,6 +2209,7 @@ export default function LibrosApoyoContent({
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase">
                         <th className="py-2.5 px-3">#</th>
+                        <th className="py-2.5 px-3">Recibo</th>
                         <th className="py-2.5 px-3">Tipo / Clasificación</th>
                         <th className="py-2.5 px-3">Categoría</th>
                         <th className="py-2.5 px-3">Concepto</th>
@@ -2287,6 +2230,15 @@ export default function LibrosApoyoContent({
                         registrosDiaActivo.map((r, idx) => (
                           <tr key={r.id} className={`hover:bg-slate-50 ${r.es_ajuste ? 'bg-amber-50/50' : ''}`}>
                             <td className="py-2 px-3 font-mono text-slate-400">{idx + 1}</td>
+                            <td className="py-2 px-3 font-mono text-[11px] font-bold text-slate-800">
+                              {r.soporte_factura ? (
+                                <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                                  {r.soporte_factura}
+                                </span>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
                             <td className="py-2 px-3">
                               {r.es_ajuste ? (
                                 <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-900 font-bold text-[10px]">
@@ -2334,6 +2286,107 @@ export default function LibrosApoyoContent({
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* ============================================================= */}
+              {/* BITÁCORA CRONOLÓGICA DEL DÍA (POS + CAJA + AUDITORÍA)         */}
+              {/* ============================================================= */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+                <div className="p-3.5 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-slate-700" />
+                    <span className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                      Bitácora Cronológica del Día ({bitacoraDia.length} eventos)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {(
+                      [
+                        { id: 'TODOS', label: 'Todos' },
+                        { id: 'TURNO', label: 'Turnos' },
+                        { id: 'MOVIMIENTO', label: 'Entradas / Salidas' },
+                        { id: 'AUDITORIA', label: 'Auditoría POS' },
+                      ] as const
+                    ).map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setBitacoraFiltro(f.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition ${
+                          bitacoraFiltro === f.id
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {(() => {
+                  const filtrados = bitacoraDia.filter((ev) => {
+                    if (bitacoraFiltro === 'TODOS') return true;
+                    if (bitacoraFiltro === 'TURNO') return ev.tipo === 'TURNO';
+                    if (bitacoraFiltro === 'MOVIMIENTO')
+                      return ev.tipo === 'ENTRADA' || ev.tipo === 'SALIDA';
+                    return ev.tipo === 'AUDITORIA';
+                  });
+                  if (filtrados.length === 0) {
+                    return (
+                      <div className="p-6 text-center text-xs text-slate-400">
+                        No hay eventos cronológicos registrados para este filtro en {activeTabId}.
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                      {filtrados.map((ev) => (
+                        <div key={ev.id} className="px-4 py-3 flex items-start justify-between gap-3 hover:bg-slate-50/70">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <span className="font-mono text-[11px] font-bold text-slate-500 shrink-0 mt-0.5">
+                              {ev.hora || '—'}
+                            </span>
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                    ev.tipo === 'TURNO'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : ev.tipo === 'SALIDA'
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : ev.tipo === 'ENTRADA'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {ev.tipo}
+                                </span>
+                                {ev.soporte && (
+                                  <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[10px] font-bold text-slate-800">
+                                    {ev.soporte}
+                                  </span>
+                                )}
+                                <span className="text-xs font-bold text-slate-900">{ev.titulo}</span>
+                              </div>
+                              {ev.detalle && (
+                                <p className="text-[11px] text-slate-600">{ev.detalle}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {typeof ev.monto === 'number' && ev.monto > 0 && (
+                              <div className="font-mono font-bold text-xs text-slate-900">
+                                ${formatMoney(ev.monto)}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-slate-500">{ev.usuario}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
