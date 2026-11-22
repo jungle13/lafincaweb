@@ -6,6 +6,7 @@ import {
   printReciboCaja,
   type ReciboCajaTicketData,
 } from '@/lib/posHardwareBridge';
+import { posFetch } from '@/lib/posApiClient';
 
 export type SalidaClasificacion =
   | 'Gasto Operativo'
@@ -128,7 +129,7 @@ export default function PosCashFlowModal({
   useEffect(() => {
     if (mode !== 'SALIDA') return;
     let active = true;
-    fetch('/api/pos?scope=salidas_catalog', { cache: 'no-store' })
+    posFetch('/api/pos?scope=salidas_catalog', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (!active || !d?.success) return;

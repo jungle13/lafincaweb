@@ -42,6 +42,39 @@ function unauthorizedResponse(route: string, hint: string, status = 401) {
   );
 }
 
+function resolveCorsOrigin(req: NextRequest): string | null {
+  const origin = req.headers.get('origin') || '';
+  if (
+    origin === 'tauri://localhost' ||
+    origin === 'http://tauri.localhost' ||
+    origin === 'https://tauri.localhost' ||
+    origin.startsWith('http://localhost:') ||
+    origin.startsWith('http://127.0.0.1:')
+  ) {
+    return origin;
+  }
+  return null;
+}
+
+function applyCorsHeaders(res: NextResponse, origin: string | null): NextResponse {
+  if (!origin) return res;
+  res.headers.set('Access-Control-Allow-Origin', origin);
+  res.headers.set('Access-Control-Allow-Credentials', 'true');
+  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return res;
+}
+
+function extractBearerOrCookie(req: NextRequest, cookieName: string): string | undefined {
+  const cookieVal = req.cookies.get(cookieName)?.value;
+  if (cookieVal) return cookieVal;
+  const authHeader = req.headers.get('authorization') || '';
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return undefined;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -49,13 +82,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  const corsOrigin = resolveCorsOrigin(req);
+  if (req.method === 'OPTIONS') {
+    return applyCorsHeaders(new NextResponse(null, { status: 204 }), corsOrigin);
+  }
+
   // Rutas públicas explícitas (auth y webhook de Telegram con su propio secreto)
   if (PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return NextResponse.next();
+    return applyCorsHeaders(NextResponse.next(), corsOrigin);
   }
 
   const mode = getAuthEnforcementMode();
-  const adminToken = req.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const adminToken = extractBearerOrCookie(req, AUTH_COOKIE_NAME);
   const adminSession = await verifyAuthToken(adminToken);
 
   // Usuario con sesión principal válida (ADMIN, GESTOR, OPERATIVO_POS o legacy admin)
@@ -72,14 +110,17 @@ export async function middleware(req: NextRequest) {
     ) {
       logSecurityAudit(pathname, req.method, 'FORBIDDEN_OPERATIVO_POS', `user=${adminSession.username}`);
       if (mode === 'enforce') {
-        return unauthorizedResponse(
-          pathname,
-          'Tu rol OPERATIVO_POS no tiene permisos para módulos administrativos.',
-          403
+        return applyCorsHeaders(
+          unauthorizedResponse(
+            pathname,
+            'Tu rol OPERATIVO_POS no tiene permisos para módulos administrativos.',
+            403
+          ),
+          corsOrigin
         );
       }
     }
-    return NextResponse.next();
+    return applyCorsHeaders(NextResponse.next(), corsOrigin);
   }
 
   // Portal de cajeros (/api/libros-apoyo): permite POST (LOGIN_CAJERO se valida dentro del route) o cookie de cajero

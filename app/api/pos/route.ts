@@ -465,7 +465,9 @@ export async function POST(request: NextRequest) {
     const cajaNombre = body.caja_nombre || 'Caja 1';
     const cajeroNombre = body.cajero_nombre || 'CAJERO';
 
-    const mainToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+    const authHdr = request.headers.get('authorization') || '';
+    const bearerTok = authHdr.toLowerCase().startsWith('bearer ') ? authHdr.slice(7).trim() : undefined;
+    const mainToken = request.cookies.get(AUTH_COOKIE_NAME)?.value || bearerTok;
     const reqSession = await verifyAuthToken(mainToken);
     const reqRole = reqSession ? normalizeSystemRole(String(reqSession.role), reqSession.username) : null;
     const isEnforce = getAuthEnforcementMode() === 'enforce';
@@ -591,8 +593,7 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', targetCajaRow.id);
         }
-        const mainToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-        const mainSession = await verifyAuthToken(mainToken);
+        const mainSession = reqSession;
         resolvedCajeroNombre = mainSession?.name || effectiveCajaNombre;
         resolvedUsername = mainSession?.username || resolvedUsername;
       } else if (rawUser) {

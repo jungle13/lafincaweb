@@ -450,6 +450,40 @@ export async function lanPostAction<T = Record<string, unknown>>(
   }
 }
 
+export async function lanGetPendingOps(
+  ipCajaPrincipal: string
+): Promise<Array<Record<string, unknown>>> {
+  try {
+    const res = await fetch(`${normalizeLanBaseUrl(ipCajaPrincipal)}/lan/pending`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { pendingOps?: Array<Record<string, unknown>> };
+    return Array.isArray(data.pendingOps) ? data.pendingOps : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function lanAckPendingOps(
+  ipCajaPrincipal: string,
+  opIds: string[]
+): Promise<boolean> {
+  if (!opIds.length) return true;
+  try {
+    const res = await fetch(`${normalizeLanBaseUrl(ipCajaPrincipal)}/lan/pending/ack`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ opIds }),
+      signal: AbortSignal.timeout(2500),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Hook global para pistolas lectoras de código de barras (USB HID / emulación teclado).
  */

@@ -32,6 +32,11 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Install Node dependencies & Build standalone POS UI
+        run: |
+          npm ci
+          npm run pos:build:ui
+
       - name: Run Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 

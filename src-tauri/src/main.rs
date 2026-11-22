@@ -4,10 +4,10 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, State, WindowEvent};
 
 struct OpenShiftState(Arc<AtomicBool>);
@@ -42,6 +42,19 @@ struct LanStore {
     lock: Arc<Mutex<()>>,
 }
 
+static LAN_SEQ: AtomicU64 = AtomicU64::new(1);
+
+fn next_off_seq() -> u64 {
+    LAN_SEQ.fetch_add(1, Ordering::SeqCst)
+}
+
+fn now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
 impl LanStore {
     fn write_atomic(&self, content: &str) {
         if let Some(parent) = self.file_path.parent() {
@@ -59,7 +72,7 @@ impl LanStore {
     fn read_state(&self) -> String {
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         fs::read_to_string(&self.file_path).unwrap_or_else(|_| {
-            r#"{"success":true,"mesas":[],"ordenes":[],"productos":[],"sesiones":[],"salidasDiaCaja":0,"eventosTurno":[],"creditosClientes":[],"devolucionesDia":[],"pendingOps":[]}"#.to_string()
+            r#"{"success":true,"mesas":[],"ordenes":[],"productos":[],"sesiones":[],"salidasDiaCaja":0,"eventosTurno":[],"creditosClientes":[],"devolucionesDia":[],"pendingOps":[],"lanVersion":1}"#.to_string()
         })
     }
 
@@ -76,27 +89,372 @@ impl LanStore {
 
     fn write_state(&self, content: &str) {
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        // Preservar pendingOps locales si ya existen
+        let existing_raw = fs::read_to_string(&self.file_path).unwrap_or_default();
+        let existing_ops = serde_json::from_str::<serde_json::Value>(&existing_raw)
+            .ok()
+            .and_then(|v| v.get("pendingOps").cloned());
+
+        if let Ok(mut next_root) = serde_json::from_str::<serde_json::Value>(content) {
+            if let Some(ops) = existing_ops {
+                if ops.as_array().map(|a| !a.is_empty()).unwrap_or(false) {
+                    if let Some(obj) = next_root.as_object_mut() {
+                        obj.insert("pendingOps".to_string(), ops);
+                    }
+                }
+            }
+            if let Ok(merged) = serde_json::to_string(&next_root) {
+                self.write_atomic(&merged);
+                return;
+            }
+        }
         self.write_atomic(content);
     }
 
-    fn append_pending_op(&self, op_json: serde_json::Value) {
+    fn read_pending_ops(&self) -> String {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let raw = fs::read_to_string(&self.file_path).unwrap_or_else(|_| "{}".to_string());
+        let root: serde_json::Value =
+            serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
+        let ops = root
+            .get("pendingOps")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        serde_json::json!({ "success": true, "pendingOps": ops }).to_string()
+    }
+
+    fn ack_pending_ops(&self, op_ids: &[String]) -> usize {
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         let raw = fs::read_to_string(&self.file_path).unwrap_or_else(|_| "{}".to_string());
         let mut root: serde_json::Value =
             serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
-        let arr = root
-            .as_object_mut()
-            .and_then(|m| {
-                m.entry("pendingOps")
-                    .or_insert_with(|| serde_json::json!([]))
-                    .as_array_mut()
+        let mut remaining = 0usize;
+        if let Some(arr) = root.get_mut("pendingOps").and_then(|v| v.as_array_mut()) {
+            arr.retain(|item| {
+                let id = item.get("op_id").and_then(|v| v.as_str()).unwrap_or("");
+                !op_ids.iter().any(|ack| ack == id)
             });
-        if let Some(ops) = arr {
-            ops.push(op_json);
+            remaining = arr.len();
         }
         if let Ok(serialized) = serde_json::to_string(&root) {
             self.write_atomic(&serialized);
         }
+        remaining
+    }
+
+    fn apply_and_queue_action(&self, mut op_json: serde_json::Value) -> serde_json::Value {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let raw = fs::read_to_string(&self.file_path).unwrap_or_else(|_| {
+            r#"{"success":true,"mesas":[],"ordenes":[],"productos":[],"sesiones":[],"salidasDiaCaja":0,"eventosTurno":[],"creditosClientes":[],"devolucionesDia":[],"pendingOps":[],"lanVersion":1}"#.to_string()
+        });
+        let mut root: serde_json::Value =
+            serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
+
+        // Deduplicar por idempotency_key
+        let idemp = op_json
+            .get("idempotency_key")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if !idemp.is_empty() {
+            if let Some(ops) = root.get("pendingOps").and_then(|v| v.as_array()) {
+                if ops.iter().any(|o| {
+                    o.get("idempotency_key")
+                        .and_then(|k| k.as_str())
+                        .unwrap_or("")
+                        == idemp
+                }) {
+                    let ver = root.get("lanVersion").and_then(|v| v.as_u64()).unwrap_or(1);
+                    return serde_json::json!({ "success": true, "lanQueued": true, "deduplicated": true, "lanVersion": ver });
+                }
+            }
+        }
+
+        let seq = next_off_seq();
+        let ts = now_millis();
+        let op_id = format!("off-op-{}-{}", ts, seq);
+        let action = op_json
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let mut extra_resp = serde_json::Map::new();
+
+        if action == "ABRIR_TURNO_CAJA" {
+            let ses_id = format!("off-ses-{}-{}", ts, seq);
+            let caja_nombre = op_json
+                .get("caja_nombre")
+                .and_then(|v| v.as_str())
+                .unwrap_or("CAJA PRINCIPAL");
+            let cajero = op_json
+                .get("cajero_nombre")
+                .and_then(|v| v.as_str())
+                .unwrap_or("CAJERO");
+            let base = op_json
+                .get("efectivo_inicial")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let ses_obj = serde_json::json!({
+                "id": ses_id,
+                "caja_nombre": caja_nombre,
+                "cajero_nombre": cajero,
+                "efectivo_inicial": base,
+                "estado": "ABIERTA",
+                "numero_turno": 1
+            });
+            if let Some(obj) = root.as_object_mut() {
+                obj.insert("sesionActiva".to_string(), ses_obj.clone());
+                let arr = obj
+                    .entry("sesiones")
+                    .or_insert_with(|| serde_json::json!([]))
+                    .as_array_mut();
+                if let Some(a) = arr {
+                    a.push(ses_obj.clone());
+                }
+            }
+            if let Some(op_obj) = op_json.as_object_mut() {
+                op_obj.insert("temp_sesion_id".to_string(), serde_json::json!(ses_id));
+            }
+            extra_resp.insert("sesion".to_string(), ses_obj);
+        } else if action == "ABRIR_O_AGREGAR_ORDEN" {
+            let existing_id = op_json
+                .get("orden_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let mesa_num = op_json.get("mesa_numero").and_then(|v| v.as_i64());
+            let canal = op_json
+                .get("canal_venta")
+                .and_then(|v| v.as_str())
+                .unwrap_or("SALON_MESA");
+            let prod_id = op_json
+                .get("producto_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let prod_nombre = op_json
+                .get("nombre_producto")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Producto");
+            let cantidad = op_json
+                .get("cantidad")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+            let precio = op_json
+                .get("precio_unitario")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let subtotal = (cantidad * precio).round();
+            let item_obj = serde_json::json!({
+                "id": format!("off-item-{}-{}", ts, seq),
+                "producto_id": prod_id,
+                "nombre_producto": prod_nombre,
+                "cantidad": cantidad,
+                "precio_unitario": precio,
+                "subtotal": subtotal,
+                "estado_comanda": "PENDIENTE",
+                "notas": op_json.get("notas").cloned().unwrap_or(serde_json::json!(""))
+            });
+
+            let mut target_id = existing_id.clone();
+            let mut result_orden = serde_json::Value::Null;
+
+            if let Some(ordenes) = root.get_mut("ordenes").and_then(|v| v.as_array_mut()) {
+                if !target_id.is_empty() {
+                    if let Some(ord) = ordenes.iter_mut().find(|o| {
+                        o.get("id").and_then(|i| i.as_str()).unwrap_or("") == target_id
+                    }) {
+                        if let Some(items) = ord.get_mut("items").and_then(|i| i.as_array_mut()) {
+                            items.push(item_obj.clone());
+                            let sum: f64 = items
+                                .iter()
+                                .filter(|it| {
+                                    it.get("estado_comanda")
+                                        .and_then(|s| s.as_str())
+                                        .unwrap_or("")
+                                        != "ANULADO"
+                                })
+                                .map(|it| it.get("subtotal").and_then(|s| s.as_f64()).unwrap_or(0.0))
+                                .sum();
+                            if let Some(o_obj) = ord.as_object_mut() {
+                                o_obj.insert("subtotal_bruto".to_string(), serde_json::json!(sum));
+                                o_obj.insert("gran_total".to_string(), serde_json::json!(sum));
+                            }
+                        }
+                        result_orden = ord.clone();
+                    }
+                }
+
+                if result_orden.is_null() {
+                    target_id = format!("off-ord-{}-{}", ts, seq);
+                    let consecutivo = format!("OFF-{:04}", seq % 10000);
+                    let new_ord = serde_json::json!({
+                        "id": target_id,
+                        "consecutivo": consecutivo,
+                        "canal_venta": canal,
+                        "mesa_numero": mesa_num,
+                        "estado": "ABIERTA",
+                        "subtotal_bruto": subtotal,
+                        "gran_total": subtotal,
+                        "descuento": 0,
+                        "propina": 0,
+                        "items": [item_obj],
+                        "pagos": []
+                    });
+                    ordenes.insert(0, new_ord.clone());
+                    result_orden = new_ord;
+                }
+            }
+
+            if let Some(m_num) = mesa_num {
+                if let Some(mesas) = root.get_mut("mesas").and_then(|v| v.as_array_mut()) {
+                    for m in mesas.iter_mut() {
+                        if m.get("numero").and_then(|n| n.as_i64()) == Some(m_num) {
+                            if let Some(m_obj) = m.as_object_mut() {
+                                m_obj.insert("estado".to_string(), serde_json::json!("OCUPADA"));
+                                m_obj.insert("orden_activa_id".to_string(), serde_json::json!(target_id));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if existing_id.is_empty() {
+                if let Some(op_obj) = op_json.as_object_mut() {
+                    op_obj.insert("temp_orden_id".to_string(), serde_json::json!(target_id));
+                }
+            }
+            extra_resp.insert("orden".to_string(), result_orden);
+        } else if action == "ENVIAR_COMANDA" {
+            let ord_id = op_json.get("orden_id").and_then(|v| v.as_str()).unwrap_or("");
+            if let Some(ordenes) = root.get_mut("ordenes").and_then(|v| v.as_array_mut()) {
+                if let Some(ord) = ordenes
+                    .iter_mut()
+                    .find(|o| o.get("id").and_then(|i| i.as_str()).unwrap_or("") == ord_id)
+                {
+                    if let Some(items) = ord.get_mut("items").and_then(|i| i.as_array_mut()) {
+                        for it in items.iter_mut() {
+                            if it.get("estado_comanda").and_then(|s| s.as_str()) == Some("PENDIENTE")
+                            {
+                                if let Some(it_obj) = it.as_object_mut() {
+                                    it_obj.insert(
+                                        "estado_comanda".to_string(),
+                                        serde_json::json!("ENVIADO"),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if action == "FACTURAR_ORDEN" || action == "ANULAR_ORDEN_COMPLETA" {
+            let ord_id = op_json.get("orden_id").and_then(|v| v.as_str()).unwrap_or("");
+            let next_estado = if action == "FACTURAR_ORDEN" {
+                "PAGADA"
+            } else {
+                "ANULADA"
+            };
+            let mut mesa_to_free: Option<i64> = None;
+            if let Some(ordenes) = root.get_mut("ordenes").and_then(|v| v.as_array_mut()) {
+                if let Some(ord) = ordenes
+                    .iter_mut()
+                    .find(|o| o.get("id").and_then(|i| i.as_str()).unwrap_or("") == ord_id)
+                {
+                    mesa_to_free = ord.get("mesa_numero").and_then(|n| n.as_i64());
+                    if let Some(o_obj) = ord.as_object_mut() {
+                        o_obj.insert("estado".to_string(), serde_json::json!(next_estado));
+                        if action == "FACTURAR_ORDEN" {
+                            if let Some(mp) = op_json.get("metodo_pago").cloned() {
+                                o_obj.insert("metodo_pago".to_string(), mp);
+                            }
+                            if let Some(pe) = op_json.get("pago_efectivo").cloned() {
+                                o_obj.insert("pago_efectivo".to_string(), pe);
+                            }
+                            if let Some(pd) = op_json.get("pago_datafono").cloned() {
+                                o_obj.insert("pago_datafono".to_string(), pd);
+                            }
+                            if let Some(pt) = op_json.get("pago_transferencia").cloned() {
+                                o_obj.insert("pago_transferencia".to_string(), pt);
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(m_num) = mesa_to_free {
+                if let Some(mesas) = root.get_mut("mesas").and_then(|v| v.as_array_mut()) {
+                    for m in mesas.iter_mut() {
+                        if m.get("numero").and_then(|n| n.as_i64()) == Some(m_num) {
+                            if let Some(m_obj) = m.as_object_mut() {
+                                m_obj.insert("estado".to_string(), serde_json::json!("LIBRE"));
+                                m_obj.insert("orden_activa_id".to_string(), serde_json::Value::Null);
+                            }
+                        }
+                    }
+                }
+            }
+        } else if action == "MOVIMIENTO_EFECTIVO_CAJA" {
+            let tipo = op_json.get("tipo").and_then(|v| v.as_str()).unwrap_or("SALIDA");
+            let monto = op_json.get("monto").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            if tipo == "SALIDA" {
+                let prev = root
+                    .get("salidasDiaCaja")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                if let Some(obj) = root.as_object_mut() {
+                    obj.insert("salidasDiaCaja".to_string(), serde_json::json!(prev + monto));
+                }
+                let rc_off = format!("RC-OFF-{:04}", seq % 10000);
+                let recibo = serde_json::json!({
+                    "consecutivo": rc_off,
+                    "fecha": "OFFLINE",
+                    "hora": "LOCAL",
+                    "cajaNombre": op_json.get("caja_nombre").and_then(|v| v.as_str()).unwrap_or("CAJA"),
+                    "cajeroNombre": op_json.get("cajero_nombre").and_then(|v| v.as_str()).unwrap_or("CAJERO"),
+                    "clasificacion": op_json.get("clasificacion").and_then(|v| v.as_str()).unwrap_or("Gasto Operativo"),
+                    "categoria": op_json.get("categoria").and_then(|v| v.as_str()).unwrap_or(""),
+                    "concepto": op_json.get("concepto").and_then(|v| v.as_str()).unwrap_or(""),
+                    "beneficiario": op_json.get("descripcion_beneficiario").and_then(|v| v.as_str()).unwrap_or(""),
+                    "valor": monto
+                });
+                extra_resp.insert("recibo".to_string(), recibo);
+            }
+        }
+
+        if let Some(op_obj) = op_json.as_object_mut() {
+            op_obj.insert("op_id".to_string(), serde_json::json!(op_id));
+            op_obj.insert("queuedAt".to_string(), serde_json::json!(ts as u64));
+        }
+
+        let next_ver = root.get("lanVersion").and_then(|v| v.as_u64()).unwrap_or(0) + 1;
+        if let Some(obj) = root.as_object_mut() {
+            obj.insert("lanVersion".to_string(), serde_json::json!(next_ver));
+            let arr = obj
+                .entry("pendingOps")
+                .or_insert_with(|| serde_json::json!([]))
+                .as_array_mut();
+            if let Some(ops) = arr {
+                ops.push(op_json);
+            }
+        }
+
+        if let Ok(serialized) = serde_json::to_string(&root) {
+            self.write_atomic(&serialized);
+        }
+
+        let mut resp = serde_json::json!({
+            "success": true,
+            "lanQueued": true,
+            "lanVersion": next_ver,
+            "op_id": op_id
+        });
+        if let Some(resp_obj) = resp.as_object_mut() {
+            for (k, v) in extra_resp {
+                resp_obj.insert(k, v);
+            }
+        }
+        resp
     }
 }
 
@@ -162,21 +520,28 @@ fn read_http_request(stream: &mut TcpStream) -> Option<(String, String, String, 
     Some((parts[0].to_string(), parts[1].to_string(), origin, body))
 }
 
+fn is_allowed_lan_origin(origin: &str) -> bool {
+    origin.starts_with("http://localhost:")
+        || origin.starts_with("http://127.0.0.1:")
+        || origin.starts_with("http://192.168.")
+        || origin.starts_with("http://10.")
+        || origin.starts_with("http://172.")
+        || origin == "tauri://localhost"
+        || origin == "http://tauri.localhost"
+        || origin == "https://tauri.localhost"
+        || origin.ends_with(".vercel.app")
+}
+
 fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
     let (method, path, origin, body) = match read_http_request(&mut stream) {
         Some(parsed) => parsed,
         None => return,
     };
 
-    let allowed_origin = if origin.starts_with("http://localhost:")
-        || origin.starts_with("http://127.0.0.1:")
-        || origin == "tauri://localhost"
-        || origin == "http://tauri.localhost"
-        || origin.ends_with(".vercel.app")
-    {
+    let allowed_origin = if is_allowed_lan_origin(&origin) {
         origin
     } else {
-        "http://localhost:3000".to_string()
+        "http://tauri.localhost".to_string()
     };
 
     let (status, resp_body) = if method == "OPTIONS" {
@@ -185,6 +550,27 @@ fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
         ("200 OK", r#"{"ok":true,"service":"Eliana POS LAN"}"#.to_string())
     } else if method == "GET" && path == "/lan/state" {
         ("200 OK", store.read_state())
+    } else if method == "GET" && path == "/lan/pending" {
+        ("200 OK", store.read_pending_ops())
+    } else if method == "POST" && path == "/lan/pending/ack" {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
+            let ids: Vec<String> = val
+                .get("opIds")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let remaining = store.ack_pending_ops(&ids);
+            (
+                "200 OK",
+                serde_json::json!({ "success": true, "remaining": remaining }).to_string(),
+            )
+        } else {
+            ("400 Bad Request", r#"{"success":false,"error":"JSON invalido"}"#.to_string())
+        }
     } else if method == "POST" && path == "/lan/sync-cache" {
         if !body.is_empty() {
             store.write_state(&body);
@@ -192,8 +578,8 @@ fn handle_lan_connection(mut stream: TcpStream, store: LanStore) {
         ("200 OK", r#"{"success":true}"#.to_string())
     } else if method == "POST" && path == "/lan/action" {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
-            store.append_pending_op(val);
-            ("200 OK", r#"{"success":true,"lanQueued":true}"#.to_string())
+            let res = store.apply_and_queue_action(val);
+            ("200 OK", res.to_string())
         } else {
             ("400 Bad Request", r#"{"success":false,"error":"JSON invalido"}"#.to_string())
         }
@@ -478,13 +864,35 @@ mod tests {
             file_path: tmp_file.clone(),
             lock: Arc::new(Mutex::new(())),
         };
-        store.write_state(r#"{"pendingOps":[]}"#);
-        store.append_pending_op(serde_json::json!({"id": "op-1", "tipo": "COBRAR"}));
-        let (pending, bytes) = store.stats();
-        assert_eq!(pending, 1);
-        assert!(bytes > 10);
-        let content = store.read_state();
-        assert!(content.contains("op-1"));
+        store.write_state(r#"{"mesas":[{"numero":2,"estado":"LIBRE"}],"ordenes":[],"pendingOps":[]}"#);
+        let r1 = store.apply_and_queue_action(serde_json::json!({
+            "action": "ABRIR_O_AGREGAR_ORDEN",
+            "mesa_numero": 2,
+            "nombre_producto": "Punta de Anca",
+            "cantidad": 2,
+            "precio_unitario": 45000,
+            "idempotency_key": "k-1"
+        }));
+        assert_eq!(r1.get("success").and_then(|v| v.as_bool()), Some(true));
+        let ord_id = r1["orden"]["id"].as_str().unwrap().to_string();
+        assert_eq!(r1["orden"]["gran_total"].as_f64(), Some(90000.0));
+
+        let state_mid: serde_json::Value = serde_json::from_str(&store.read_state()).unwrap();
+        assert_eq!(state_mid["mesas"][0]["estado"].as_str(), Some("OCUPADA"));
+
+        let op_id = r1["op_id"].as_str().unwrap().to_string();
+        store.apply_and_queue_action(serde_json::json!({
+            "action": "FACTURAR_ORDEN",
+            "orden_id": ord_id,
+            "metodo_pago": "EFECTIVO",
+            "pago_efectivo": 90000
+        }));
+        let state_after: serde_json::Value = serde_json::from_str(&store.read_state()).unwrap();
+        assert_eq!(state_after["mesas"][0]["estado"].as_str(), Some("LIBRE"));
+        assert_eq!(state_after["ordenes"][0]["estado"].as_str(), Some("PAGADA"));
+
+        let remaining = store.ack_pending_ops(&[op_id]);
+        assert_eq!(remaining, 1);
         let _ = fs::remove_file(&tmp_file);
     }
 }

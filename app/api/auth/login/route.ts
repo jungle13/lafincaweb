@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import {
   AUTH_COOKIE_NAME,
   checkRateLimit,
@@ -97,9 +98,57 @@ export async function POST(req: NextRequest) {
       role: resolvedUser.role,
     });
 
+    // Generar catálogo de hashes offline para permitir inicio de sesión y PIN de supervisor sin internet en el .exe
+    let offlineUsers: Array<{
+      username: string;
+      name: string;
+      role: SystemRole;
+      passHash: string;
+      pinHash?: string;
+    }> = [];
+    try {
+      const supabase = getSupabase();
+      const { data: allUsers } = await supabase
+        .from('libro_caja_usuarios')
+        .select('username, nombre_cajero, rol, rol_sistema, password_pin, password_sistema, pos_pin, activo')
+        .eq('activo', true);
+
+      for (const u of allUsers || []) {
+        const uname = String(u.username || '').trim().toLowerCase();
+        const pass = String(u.password_sistema || u.password_pin || '').trim();
+        if (!uname || !pass) continue;
+        const role = normalizeSystemRole(u.rol_sistema || u.rol, uname);
+        const passHash = crypto.createHash('sha256').update(`${uname}:${pass}`).digest('hex');
+        const pinRaw = String(u.pos_pin || u.password_pin || pass).trim();
+        const pinHash = crypto.createHash('sha256').update(`pin:${uname}:${pinRaw}`).digest('hex');
+        offlineUsers.push({
+          username: uname,
+          name: String(u.nombre_cajero || uname).trim(),
+          role,
+          passHash,
+          pinHash,
+        });
+      }
+    } catch {
+      // fallback: al menos incluir el usuario actual autenticado
+      offlineUsers = [
+        {
+          username: resolvedUser.username,
+          name: resolvedUser.name,
+          role: resolvedUser.role,
+          passHash: crypto
+            .createHash('sha256')
+            .update(`${resolvedUser.username}:${password}`)
+            .digest('hex'),
+        },
+      ];
+    }
+
     const response = NextResponse.json({
       success: true,
       user: resolvedUser,
+      token,
+      offlineUsers,
     });
 
     response.cookies.set(AUTH_COOKIE_NAME, token, {

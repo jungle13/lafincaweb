@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "identifier": "com.eliana.pos",
   "build": {
+    "beforeBuildCommand": "npm run pos:build:ui",
     "frontendDist": "./dist",
     "devUrl": "http://localhost:3000/pos"
   },
