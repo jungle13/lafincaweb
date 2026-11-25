@@ -29,6 +29,11 @@ tsconfig.tsbuildinfo
 .vercel
 supabase/.temp/
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
 # Scratch & temporary local exports
 scratch/
 .archive/

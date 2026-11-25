@@ -640,7 +640,6 @@ export default function PosCashFlowModal({
                     <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
                     <input
                       ref={insumoInputRef}
-                      autoFocus
                       type="text"
                       value={insumoQuery}
                       onFocus={() => setShowInsumoDrop(true)}
@@ -848,7 +847,6 @@ export default function PosCashFlowModal({
                   <div className="relative">
                     <input
                       ref={beneficiarioRef}
-                      autoFocus
                       type="text"
                       value={beneficiario}
                       onFocus={() => setShowEmpDrop(true)}

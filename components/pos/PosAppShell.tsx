@@ -421,6 +421,11 @@ export default function PosAppShell({
         applyPosPayload(data);
         setIsOnline(true);
         setLanConnected(false);
+        try {
+          localStorage.setItem('eliana_pos_snapshot_v1', JSON.stringify(data));
+        } catch {
+          // ignore quota error
+        }
         if (posConfig.rolTerminal === 'PRINCIPAL') {
           const ops = await lanGetPendingOps(posConfig.ipCajaPrincipal);
           setPendingLanCount(ops.length);
@@ -439,7 +444,19 @@ export default function PosAppShell({
         const ops = await lanGetPendingOps(posConfig.ipCajaPrincipal);
         setPendingLanCount(ops.length);
       } else {
-        notify('err', 'Sin conexión al servidor ni a Caja Principal LAN.');
+        let restoredLocal = false;
+        try {
+          const rawSnap = localStorage.getItem('eliana_pos_snapshot_v1');
+          if (rawSnap) {
+            applyPosPayload(JSON.parse(rawSnap));
+            restoredLocal = true;
+          }
+        } catch {
+          // ignore parse error
+        }
+        if (!restoredLocal) {
+          notify('err', 'Sin conexión al servidor ni a Caja Principal LAN.');
+        }
       }
     } finally {
       setLoading(false);

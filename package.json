@@ -9,6 +9,11 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:codegen": "playwright codegen http://localhost:3000/pos",
+    "test:all": "npm run test:unit && cargo test --manifest-path src-tauri/Cargo.toml && npm run test:e2e",
     "bot": "node scripts/telegram-bot-polling.mjs",
     "pos:icons": "npx --yes @tauri-apps/cli@^2 icon src-tauri/icons/icon.png --fit contain",
     "pos:build:ui": "vite build --config vite.desktop.config.ts",
@@ -34,6 +39,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
